@@ -1,9 +1,18 @@
 package io.mersel.dss.signer.api.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.security.PrivateKey;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.RSAPrivateKey;
+
 /**
  * Kriptografik ve encoding işlemleri için yardımcı metodlar.
  */
 public final class CryptoUtils {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CryptoUtils.class);
 
     private CryptoUtils() {
         // Utility class - instantiation engellendi
@@ -51,6 +60,38 @@ public final class CryptoUtils {
             data[i / 2] = (byte) ((digit1 << 4) + digit2);
         }
         return data;
+    }
+
+    /**
+     * Private key tipine göre uygun signature algoritmasını döndürür.
+     * RSA ve EC (Elliptic Curve) key'leri destekler.
+     * 
+     * @param privateKey İmzalama için kullanılacak private key
+     * @return Signature algoritması (örn: "SHA256withRSA", "SHA256withECDSA")
+     */
+    public static String getSignatureAlgorithm(PrivateKey privateKey) {
+        if (privateKey instanceof RSAPrivateKey) {
+            LOGGER.debug("RSA private key algılandı, SHA256withRSA kullanılacak");
+            return "SHA256withRSA";
+        } else if (privateKey instanceof ECPrivateKey) {
+            LOGGER.debug("EC private key algılandı, SHA256withECDSA kullanılacak");
+            return "SHA256withECDSA";
+        } else {
+            // Fallback: Algorithm adından çıkarsama yap
+            String algorithm = privateKey.getAlgorithm();
+            LOGGER.warn("Bilinmeyen private key tipi: {}, algorithm: {}", 
+                privateKey.getClass().getName(), algorithm);
+            
+            if ("EC".equalsIgnoreCase(algorithm) || "ECDSA".equalsIgnoreCase(algorithm)) {
+                return "SHA256withECDSA";
+            } else if ("RSA".equalsIgnoreCase(algorithm)) {
+                return "SHA256withRSA";
+            }
+            
+            // Son çare: Default RSA
+            LOGGER.warn("Desteklenmeyen key tipi, SHA256withRSA kullanılacak");
+            return "SHA256withRSA";
+        }
     }
 }
 

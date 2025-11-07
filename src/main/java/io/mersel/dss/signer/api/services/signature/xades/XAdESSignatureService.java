@@ -20,7 +20,6 @@ import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
 import eu.europa.esig.dss.model.x509.CertificateToken;
-import io.mersel.dss.signer.api.services.certificate.CertificateValidatorService;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,11 +63,9 @@ public class XAdESSignatureService {
     private final XAdESDocumentPlacementService documentPlacement;
     private final XAdESLevelUpgradeService levelUpgradeService;
     private final CryptoSignerService cryptoSigner;
-    private final CertificateValidatorService certificateValidator;
     private final CertificateVerifier certificateVerifier;
     private final io.mersel.dss.signer.api.services.util.CompressionService compressionService;
     private final Semaphore semaphore;
-    private final List<X509Certificate> trustedRoots;
 
     public XAdESSignatureService(XAdESService xadesService,
             XAdESParametersBuilderService parametersBuilder,
@@ -76,22 +73,18 @@ public class XAdESSignatureService {
             XAdESDocumentPlacementService documentPlacement,
             XAdESLevelUpgradeService levelUpgradeService,
             CryptoSignerService cryptoSigner,
-            CertificateValidatorService certificateValidator,
             CertificateVerifier certificateVerifier,
             io.mersel.dss.signer.api.services.util.CompressionService compressionService,
-            Semaphore signatureSemaphore,
-            List<X509Certificate> trustedRootCertificates) {
+            Semaphore signatureSemaphore) {
         this.xadesService = xadesService;
         this.parametersBuilder = parametersBuilder;
         this.xmlProcessor = xmlProcessor;
         this.documentPlacement = documentPlacement;
         this.levelUpgradeService = levelUpgradeService;
         this.cryptoSigner = cryptoSigner;
-        this.certificateValidator = certificateValidator;
         this.certificateVerifier = certificateVerifier;
         this.compressionService = compressionService;
         this.semaphore = signatureSemaphore;
-        this.trustedRoots = trustedRootCertificates;
     }
 
     /**
@@ -118,24 +111,21 @@ public class XAdESSignatureService {
                 documentType = DocumentType.OtherXmlDocument;
             }
 
-            // 3. İmzalayan sertifikanın güvenilirliğini doğrula
-            certificateValidator.validateSignerTrust(material, trustedRoots);
-
-            // 4. Belgeyi parse et ve parametreleri oluştur
+            // 3. Belgeyi parse et ve parametreleri oluştur
             Document document = xmlProcessor.parseDocument(xmlBytes);
             DSSDocument dssDocument = new InMemoryDocument(xmlBytes, DEFAULT_XML_NAME,
                     MimeType.fromFileExtension("xml"));
             XAdESSignatureParameters parameters = parametersBuilder.buildParameters(
                     document, documentType, signatureId, material);
 
-            // 5. İmzalama sertifika zincirini doğrulayıcıya ekle
+            // 4. İmzalama sertifika zincirini doğrulayıcıya ekle
             addSigningCertificateChainToVerifier(material);
 
-            // 6. İmzayı oluştur
+            // 5. İmzayı oluştur
             SignResponse response = createSignature(document, dssDocument, parameters,
                     documentType, material);
 
-            // 7. Gerekirse ZIP'le
+            // 6. Gerekirse ZIP'le
             if (zipped) {
                 byte[] zippedBytes = compressionService.zipBytes(ZIP_ENTRY_NAME, response.getSignedDocument());
                 return new SignResponse(zippedBytes, response.getSignatureValue());

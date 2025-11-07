@@ -164,6 +164,9 @@ public class XadesController {
                 dto.getDocument().getInputStream());
             
             boolean useSoap12 = Boolean.TRUE.equals(dto.getSoap1Dot2());
+            
+            LOGGER.info("WS-Security imzalama isteği - soap1Dot2 parametresi: {}, useSoap12: {}", 
+                dto.getSoap1Dot2(), useSoap12);
 
             SignResponse result = wsSecuritySignatureService.signSoapEnvelope(
                 soapDocument,
@@ -173,7 +176,7 @@ public class XadesController {
                 signingPin
             );
 
-            LOGGER.info("WS-Security imzası başarıyla oluşturuldu");
+            LOGGER.info("WS-Security imzası başarıyla oluşturuldu (SOAP {})", useSoap12 ? "1.2" : "1.1");
 
             return ResponseEntity.ok()
                 .header("x-signature-value", result.getSignatureValue())

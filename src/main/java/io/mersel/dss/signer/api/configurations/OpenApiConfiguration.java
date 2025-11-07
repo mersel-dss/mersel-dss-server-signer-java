@@ -14,8 +14,8 @@ public class OpenApiConfiguration {
     public OpenAPI CustomOpenApiBean() {
         return new OpenAPI().components(new Components())
                 .info(new Info()
-                        .title("MERSEL YAZILIM A.S. - Signature API")
-                        .version("v1.0.0")
-                        .description("İmza işlemleri için kullanılabilir. [https://mersel.io](https://mersel.io)"));
+                        .title("mersel-dss - Java Signer API - Serverside")
+                        .version("v0.1.0")
+                        .description("[https://github.com/mersel-dss/mersel-dss-server-signer-java](https://github.com/mersel-dss/mersel-dss-server-signer-java)"));
     }
 }

@@ -4,6 +4,7 @@ import com.itextpdf.text.pdf.*;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.util.CryptoUtils;
 import org.apache.commons.io.IOUtils;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.DERSet;
@@ -167,7 +168,9 @@ public class PAdESSignatureService {
                 .setSignedAttributeGenerator(
                     new DefaultSignedAttributeTableGenerator(attributeTable));
 
-        ContentSigner contentSigner = new JcaContentSignerBuilder("SHA256withRSA")
+        // Dinamik algoritma seçimi (RSA veya EC key'e göre)
+        String signatureAlgorithm = CryptoUtils.getSignatureAlgorithm(material.getPrivateKey());
+        ContentSigner contentSigner = new JcaContentSignerBuilder(signatureAlgorithm)
             .build(material.getPrivateKey());
 
         // Generate CMS signed data
