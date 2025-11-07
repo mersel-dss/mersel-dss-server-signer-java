@@ -2,7 +2,6 @@ package io.mersel.dss.signer.api.controllers;
 
 import java.util.UUID;
 
-import io.mersel.dss.signer.api.dtos.SignTestUserEnvelopeDto;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
@@ -99,41 +98,6 @@ public class XadesController {
 
         } catch (Exception e) {
             LOGGER.error("XAdES imzası oluşturulurken hata", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
-        }
-    }
-
-    @Operation(
-        summary = "Test kullanıcı zarf belgelerini imzalar",
-        description = "Önceden yapılandırılmış test şirketi kullanıcı kayıt belgelerini imzalar"
-    )
-    @RequestMapping(value = "/v1/signuserenvelopetestcompany", method = RequestMethod.POST,
-        consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", 
-            content = @Content(schema = @Schema(type = "string", format = "binary"))),
-        @ApiResponse(responseCode = "400", 
-            content = @Content(schema = @Schema(implementation = ErrorModel.class))),
-        @ApiResponse(responseCode = "500")
-    })
-    public ResponseEntity<?> signTestUserEnvelope(@ModelAttribute SignTestUserEnvelopeDto dto) {
-        try {
-            if (dto.getDocument() == null) {
-                LOGGER.warn("Geçersiz istek: belge eksik");
-                return ResponseEntity.badRequest()
-                    .body(new ErrorModel("INVALID_INPUT", "Belge zorunludur"));
-            }
-
-            // TODO: Test kullanıcı imzalama mantığı implementasyonu
-            LOGGER.warn("Test kullanıcı imzalama henüz refactor edilmiş versiyonda implement edilmedi");
-            
-            return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED)
-                .body(new ErrorModel("NOT_IMPLEMENTED", 
-                    "Test kullanıcı imzalama sonraki aşamada implement edilecek"));
-
-        } catch (Exception e) {
-            LOGGER.error("Test kullanıcı zarfı imzalanırken hata", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }
