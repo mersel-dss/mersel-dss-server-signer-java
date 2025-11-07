@@ -156,8 +156,6 @@ Timestamp servisinin yapılandırma durumunu kontrol eder.
 
 ## Kullanım Örnekleri
 
-### Bash/cURL Örnekleri
-
 #### 1. Basit Metin İçin Zaman Damgası Alma
 
 ```bash
@@ -220,119 +218,40 @@ curl -X POST http://localhost:8080/api/timestamp/validate \
   -F "timestampToken=@timestamp.tst" | jq .
 ```
 
-### Python Örneği
+#### 5. Header'lardan Metadata Okuma
 
-```python
-import requests
+```bash
+#!/bin/bash
 
-class TimestampClient:
-    def __init__(self, base_url="http://localhost:8080"):
-        self.base_url = base_url
-    
-    def get_timestamp(self, file_path, hash_algorithm="SHA256"):
-        """Dosya için zaman damgası al"""
-        with open(file_path, 'rb') as f:
-            files = {'document': f}
-            data = {'hashAlgorithm': hash_algorithm}
-            
-            response = requests.post(
-                f"{self.base_url}/api/timestamp/get",
-                files=files,
-                data=data
-            )
-        
-        # Binary response
-        timestamp_token = response.content
-        
-        # Metadata header'larda
-        metadata = {
-            'timestamp': response.headers.get('X-Timestamp-Time'),
-            'tsa': response.headers.get('X-Timestamp-TSA'),
-            'serial': response.headers.get('X-Timestamp-Serial'),
-            'hash_algorithm': response.headers.get('X-Timestamp-Hash-Algorithm'),
-            'nonce': response.headers.get('X-Timestamp-Nonce')
-        }
-        
-        return timestamp_token, metadata
-    
-    def validate_timestamp(self, timestamp_file, original_file=None):
-        """Zaman damgasını doğrula"""
-        with open(timestamp_file, 'rb') as ts_file:
-            files = {'timestampToken': ts_file}
-            
-            if original_file:
-                with open(original_file, 'rb') as orig_file:
-                    files['originalDocument'] = orig_file
-                    response = requests.post(
-                        f"{self.base_url}/api/timestamp/validate",
-                        files=files
-                    )
-            else:
-                response = requests.post(
-                    f"{self.base_url}/api/timestamp/validate",
-                    files=files
-                )
-        
-        return response.json()
+# Timestamp al ve header'ları kaydet
+curl -X POST http://localhost:8080/api/timestamp/get \
+  -F "document=@document.pdf" \
+  -o timestamp.tst \
+  -D headers.txt
 
-# Kullanım
-client = TimestampClient()
-
-# Zaman damgası al - binary token ve metadata döner
-token, metadata = client.get_timestamp("document.pdf")
-
-print(f"Timestamp alındı: {metadata['timestamp']}")
-print(f"TSA: {metadata['tsa']}")
-print(f"Serial: {metadata['serial']}")
-
-# Token'ı kaydet (zaten binary)
-with open('timestamp.tst', 'wb') as f:
-    f.write(token)
-
-# Doğrula
-validation = client.validate_timestamp('timestamp.tst', "document.pdf")
-print(f"Geçerli: {validation['valid']}")
-print(f"Mesaj: {validation['message']}")
+# Metadata bilgilerini oku
+echo "Zaman: $(grep X-Timestamp-Time headers.txt | cut -d' ' -f2-)"
+echo "TSA: $(grep X-Timestamp-TSA headers.txt | cut -d' ' -f2-)"
+echo "Serial: $(grep X-Timestamp-Serial headers.txt | cut -d' ' -f2-)"
+echo "Hash: $(grep X-Timestamp-Hash-Algorithm headers.txt | cut -d' ' -f2-)"
 ```
 
-### Java Örneği
+#### 6. Farklı Hash Algoritmaları
 
-```java
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.*;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
+```bash
+#!/bin/bash
 
-import java.io.File;
+# SHA256 ile
+curl -X POST http://localhost:8080/api/timestamp/get \
+  -F "document=@file.pdf" \
+  -F "hashAlgorithm=SHA256" \
+  -o timestamp-sha256.tst
 
-public class TimestampExample {
-    public static void main(String[] args) throws Exception {
-        RestTemplate restTemplate = new RestTemplate();
-        String url = "http://localhost:8080/api/timestamp/get";
-        
-        // Multipart request oluştur
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-        
-        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-        body.add("document", new FileSystemResource(new File("document.pdf")));
-        body.add("hashAlgorithm", "SHA256");
-        
-        HttpEntity<MultiValueMap<String, Object>> requestEntity = 
-            new HttpEntity<>(body, headers);
-        
-        // POST isteği gönder
-        ResponseEntity<String> response = restTemplate.exchange(
-            url,
-            HttpMethod.POST,
-            requestEntity,
-            String.class
-        );
-        
-        System.out.println("Response: " + response.getBody());
-    }
-}
+# SHA512 ile
+curl -X POST http://localhost:8080/api/timestamp/get \
+  -F "document=@file.pdf" \
+  -F "hashAlgorithm=SHA512" \
+  -o timestamp-sha512.tst
 ```
 
 ## Hata Kodları

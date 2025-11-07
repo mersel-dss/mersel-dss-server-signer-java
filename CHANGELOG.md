@@ -42,10 +42,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
     - `TimestampConfigurationService` - TSP sunucu yapılandırması (mevcut)
     - `TimestampController` - REST API endpoints
   - **Dokümantasyon**
-    - `docs/TIMESTAMP.md` - 388 satır kapsamlı dokümantasyon
+    - `docs/TIMESTAMP.md` - Kapsamlı kullanım kılavuzu
     - Bash/cURL örnekleri
-    - Python client örneği
-    - Java client örneği
     - Kullanım senaryoları ve SSS
   - **Test Coverage**
     - `TimestampServiceTest` - 11 unit test
