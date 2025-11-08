@@ -68,7 +68,7 @@ nano .env
 docker-compose up -d
 ```
 
-**Detaylı bilgi:** [../../DOCKER.md](../../DOCKER.md)
+**Detaylı bilgi:** [Docker](https://dss.mersel.dev/devops/docker)
 
 ### Kullanılabilir Komutlar
 
@@ -162,10 +162,10 @@ echo "your-password" | docker secret create cert_pin -
 
 ## 📚 İlgili Dökümanlar
 
-- [DOCKER.md](../../DOCKER.md) - Docker kullanım rehberi
-- [docs/MONITORING.md](../../docs/MONITORING.md) - Prometheus & Grafana detayları
-- [docs/ACTUATOR_ENDPOINTS.md](../../docs/ACTUATOR_ENDPOINTS.md) - Health checks
-- [README.md](../../README.md) - Ana dokümantasyon
+- [Docker](https://dss.mersel.dev/devops/docker) - Docker kullanım rehberi
+- [Monitoring](https://dss.mersel.dev/sign-api/monitoring) - Prometheus & Grafana detayları
+- [Actuator Endpoints](https://dss.mersel.dev/sign-api/actuator-endpoints) - Health checks
+- [Ana Dokümantasyon](https://dss.mersel.dev) - Merkezi dokümantasyon
 
 ## 🎯 Örnek Kullanım
 

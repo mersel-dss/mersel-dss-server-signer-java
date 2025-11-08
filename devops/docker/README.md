@@ -132,7 +132,7 @@ docker-compose --profile monitoring-full up -d
 
 ## 📚 Detaylı Döküman
 
-Tüm detaylar için: [../../DOCKER.md](../../DOCKER.md)
+Tüm detaylar için: [Docker Deployment](https://dss.mersel.dev/devops/docker)
 
 ---
 

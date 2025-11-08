@@ -125,8 +125,8 @@ cd scripts && ./start-test1.sh
 
 - **[TEST_CERTIFICATES.md](../TEST_CERTIFICATES.md)** - Kapsamlı test sertifikaları rehberi
 - **[TEST_CERTS_CHEATSHEET.md](../TEST_CERTS_CHEATSHEET.md)** - Hızlı başvuru kılavuzu
-- **[QUICK_START.md](../QUICK_START.md)** - Genel hızlı başlangıç
-- **[README.md](../README.md)** - Ana dokümantasyon
+- **[Hızlı Başlangıç](https://dss.mersel.dev/getting-started/quick-start)** - Genel hızlı başlangıç
+- **[Ana Dokümantasyon](https://dss.mersel.dev)** - Merkezi dokümantasyon
 
 ## 💡 İpuçları
 

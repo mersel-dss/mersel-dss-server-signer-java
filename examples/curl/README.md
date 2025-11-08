@@ -64,6 +64,6 @@ BASE_URL="http://your-server:8080"
 
 ## Daha Fazla Bilgi
 
-- [Timestamp Dokümantasyonu](../../docs/TIMESTAMP.md)
-- [API Dokümantasyonu](../../README.md)
+- [Timestamp Dokümantasyonu](https://dss.mersel.dev/sign-api/timestamp)
+- [API Dokümantasyonu](https://dss.mersel.dev)
 - [Swagger UI](http://localhost:8080/index.html)

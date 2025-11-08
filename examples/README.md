@@ -38,7 +38,7 @@ Script çıktısı size:
 - Geçerlilik tarihlerini
 - Environment variable örneklerini gösterecektir
 
-📘 **Detaylı bilgi:** [docs/CERTIFICATE_SELECTION.md](../docs/CERTIFICATE_SELECTION.md)
+📘 **Detaylı bilgi:** [Sertifika Seçimi](https://dss.mersel.dev/sign-api/certificate-selection)
 
 ### 1. cURL ile Test
 
@@ -265,10 +265,10 @@ tail -f logs/signature.log
 ## 📚 Ek Kaynaklar
 
 - [API Dokümantasyonu](http://localhost:8085/index.html)
-- [Sertifika Seçimi Rehberi](../docs/CERTIFICATE_SELECTION.md)
+- [Sertifika Seçimi Rehberi](https://dss.mersel.dev/sign-api/certificate-selection)
 - [DSS Override Dokümantasyonu](../DSS_OVERRIDE.md)
 - [Güvenlik Politikası](../SECURITY.md)
-- [Performance Guide](../docs/PERFORMANCE.md)
+- [Performance Guide](https://dss.mersel.dev/sign-api/performance)
 
 ## 🤝 Katkıda Bulunma
 

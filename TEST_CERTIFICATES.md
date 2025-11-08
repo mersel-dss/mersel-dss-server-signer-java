@@ -311,9 +311,9 @@ mvn spring-boot:run
 
 ## 📚 İlgili Dökümanlar
 
-- [QUICK_START.md](QUICK_START.md) - Genel hızlı başlangıç rehberi
-- [README.md](README.md) - Tam dokümantasyon
-- [docs/CERTIFICATE_SELECTION.md](docs/CERTIFICATE_SELECTION.md) - Sertifika seçimi
+- [Hızlı Başlangıç](https://dss.mersel.dev/getting-started/quick-start) - Genel hızlı başlangıç rehberi
+- [Ana Dokümantasyon](https://dss.mersel.dev) - Merkezi dokümantasyon
+- [Sertifika Seçimi](https://dss.mersel.dev/sign-api/certificate-selection) - Sertifika seçimi
 - [SECURITY.md](SECURITY.md) - Güvenlik en iyi uygulamaları
 - [examples/README.md](examples/README.md) - Kullanım örnekleri
 

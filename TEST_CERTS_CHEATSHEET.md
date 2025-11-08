@@ -414,8 +414,8 @@ export JAVA_HOME=/path/to/java
 ## 📚 Detaylı Dökümanlar
 
 - [TEST_CERTIFICATES.md](TEST_CERTIFICATES.md) - Tam test sertifikaları rehberi
-- [QUICK_START.md](QUICK_START.md) - Genel hızlı başlangıç
-- [README.md](README.md) - Ana dokümantasyon
+- [Hızlı Başlangıç](https://dss.mersel.dev/getting-started/quick-start) - Genel hızlı başlangıç
+- [Ana Dokümantasyon](https://dss.mersel.dev) - Merkezi dokümantasyon
 - [examples/README.md](examples/README.md) - Kullanım örnekleri
 
 ## 💡 Yararlı İpuçları
@@ -464,5 +464,5 @@ export JAVA_HOME=/path/to/java
 
 ---
 
-**Not:** Bu döküman test sertifikaları için hazırlanmıştır. Production ortamı için [README.md](README.md) dosyasına bakın.
+**Not:** Bu döküman test sertifikaları için hazırlanmıştır. Production ortamı için [merkezi dokümantasyonu](https://dss.mersel.dev) ziyaret edin.
 

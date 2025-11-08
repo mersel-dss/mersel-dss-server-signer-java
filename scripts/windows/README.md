@@ -203,7 +203,7 @@ signapi
 
 - [PowerShell Dökümanı](https://docs.microsoft.com/powershell/)
 - [Unix Script'leri](../unix/README.md)
-- [Docker Guide](../../DOCKER.md)
+- [Docker Guide](https://dss.mersel.dev/devops/docker)
 
 ---
 

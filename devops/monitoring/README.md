@@ -200,7 +200,7 @@ ITERATIONS=1000 SLEEP_BETWEEN=0 ./load-test.sh
 - [Alert Rules](prometheus/alerts.yml)
 - [Grafana Provisioning](grafana/provisioning/)
 - [AlertManager Config](alertmanager/alertmanager.yml)
-- [Main Monitoring Guide](../../docs/MONITORING.md)
+- [Monitoring Guide](https://dss.mersel.dev/sign-api/monitoring)
 
 ## 🔧 Troubleshooting
 
