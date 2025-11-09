@@ -8,10 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
@@ -47,11 +45,39 @@ public class CertificateFolderResolver implements TrustedRootCertificateResolver
     public CertificateFolderResolver(ResourceLoader resourceLoader,
                                      @Value("${trusted.root.cert.folder.path:}") String folderPath) {
         this.resourceLoader = resourceLoader;
+        // Path'teki baştaki ve sondaki tırnakları temizle (Spring properties'te çift tırnak kullanımı için)
+        if (folderPath != null) {
+            folderPath = folderPath.trim();
+            // Çift tırnak veya tek tırnak ile başlayıp bitiyorsa kaldır
+            if ((folderPath.startsWith("\"") && folderPath.endsWith("\"")) ||
+                (folderPath.startsWith("'") && folderPath.endsWith("'"))) {
+                folderPath = folderPath.substring(1, folderPath.length() - 1);
+            }
+            // Encoding sorununu çöz: Eğer path ISO-8859-1 olarak yanlış okunduysa UTF-8'e çevir
+            try {
+                // ISO-8859-1 olarak yanlış okunmuş gibi görünen karakterleri UTF-8'e çevir
+                // Örnek: "Ãn" -> "Ön", "HazÄ±rlÄ±k" -> "Hazırlık"
+                if (folderPath.contains("Ã") || folderPath.contains("Ä")) {
+                    byte[] bytes = folderPath.getBytes("ISO-8859-1");
+                    String correctedPath = new String(bytes, "UTF-8");
+                    // Eğer düzeltilmiş path Türkçe karakterler içeriyorsa kullan
+                    if (correctedPath.contains("Ö") || correctedPath.contains("ö") || 
+                        correctedPath.contains("ı") || correctedPath.contains("İ") ||
+                        correctedPath.contains("ş") || correctedPath.contains("Ş") ||
+                        correctedPath.contains("ğ") || correctedPath.contains("Ğ") ||
+                        correctedPath.contains("ü") || correctedPath.contains("Ü") ||
+                        correctedPath.contains("ç") || correctedPath.contains("Ç")) {
+                        folderPath = correctedPath;
+                        logger.debug("Path encoding düzeltildi: {}", folderPath);
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Path encoding düzeltme hatası: {}", e.getMessage());
+            }
+        }
         this.folderPath = folderPath;
     }
 
-    @PostConstruct
-    @Scheduled(cron = "${trusted.root.refresh-cron:0 15 3 * * *}")
     @Override
     public void refreshTrustedRoots() {
         // Mevcut sertifikaları sakla (başarısız olursa geri yüklemek için)

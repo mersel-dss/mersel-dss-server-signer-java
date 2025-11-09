@@ -7,11 +7,9 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import javax.annotation.PostConstruct;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
@@ -47,8 +45,6 @@ public class KamuSMXmlDepoOnlineResolver extends AbstractKamuSMXmlDepoResolver {
         this.rootUrl = rootUrl;
     }
 
-    @PostConstruct
-    @Scheduled(cron = "${trusted.root.refresh-cron:0 15 3 * * *}")
     @Override
     public void refreshTrustedRoots() {
         // Mevcut sertifikaları sakla (başarısız olursa geri yüklemek için)
