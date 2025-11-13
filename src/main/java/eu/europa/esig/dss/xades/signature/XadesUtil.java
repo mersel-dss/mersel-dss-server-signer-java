@@ -3,6 +3,9 @@ package eu.europa.esig.dss.xades.signature;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.security.cert.X509CRL;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECPoint;
+import java.util.Arrays;
 
 import org.apache.commons.codec.binary.Base64;
 import org.w3c.dom.Document;
@@ -222,5 +225,89 @@ public class XadesUtil {
 
             return crlNumber.toString();
         }
+    }
+
+
+    public static String ecPublicKeyToUncompressedPointBase64(ECPublicKey pub) {
+        ECPoint w = pub.getW();
+        BigInteger x = w.getAffineX();
+        BigInteger y = w.getAffineY();
+
+        int fieldSize = pub.getParams().getCurve().getField().getFieldSize();
+        int coordLen = (fieldSize + 7) / 8;
+
+        byte[] xb = toFixedLength(x.toByteArray(), coordLen);
+        byte[] yb = toFixedLength(y.toByteArray(), coordLen);
+
+        byte[] out = new byte[1 + xb.length + yb.length];
+        out[0] = 0x04; // uncompressed point indicator
+        System.arraycopy(xb, 0, out, 1, xb.length);
+        System.arraycopy(yb, 0, out, 1 + xb.length, yb.length);
+
+        return java.util.Base64.getEncoder().encodeToString(out);
+    }
+
+    private static byte[] toFixedLength(byte[] src, int len) {
+        // src may contain leading zero due to BigInteger sign bit; normalize to exactly len bytes
+        if (src.length == len) return src;
+        if (src.length == len + 1 && src[0] == 0x00) {
+            return Arrays.copyOfRange(src, 1, src.length);
+        }
+        if (src.length < len) {
+            byte[] dst = new byte[len];
+            System.arraycopy(src, 0, dst, len - src.length, src.length);
+            return dst;
+        }
+        // src.length > len -> trim leading bytes (shouldn't happen for proper coords)
+        return Arrays.copyOfRange(src, src.length - len, src.length);
+    }
+
+    public static String extractNamedCurveOID(ECPublicKey publicKey) {
+        try {
+            byte[] encoded = publicKey.getEncoded();
+            int found = 0;
+            for (int i = 0; i < encoded.length - 2; i++) {
+                if (encoded[i] == 0x06) { // OBJECT IDENTIFIER
+                    int len = encoded[i + 1] & 0xFF;
+                    byte[] oidBytes = Arrays.copyOfRange(encoded, i + 2, i + 2 + len);
+                    String oid = decodeOID(oidBytes);
+                    found++;
+                    // 2. OID genellikle curve OID’dir
+                    if (found == 2) {
+                        return oid;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        int fs = publicKey.getParams().getCurve().getField().getFieldSize();
+        switch (fs) {
+            case 256:
+                return "1.2.840.10045.3.1.7";
+            case 384:
+                return "1.3.132.0.34"; // secp384r1
+            case 521:
+                return "1.3.132.0.35";
+        }
+        return null;
+    }
+
+    private static String decodeOID(byte[] bytes) {
+        StringBuilder oid = new StringBuilder();
+        int first = bytes[0] & 0xFF;
+        oid.append(first / 40).append('.').append(first % 40);
+        long value = 0;
+        for (int i = 1; i < bytes.length; i++) {
+            int b = bytes[i] & 0xFF;
+            if ((b & 0x80) != 0) {
+                value = (value << 7) | (b & 0x7F);
+            } else {
+                value = (value << 7) | b;
+                oid.append('.').append(value);
+                value = 0;
+            }
+        }
+        return oid.toString();
     }
 }

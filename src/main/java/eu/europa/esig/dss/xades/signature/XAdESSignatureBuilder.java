@@ -20,23 +20,8 @@
  */
 package eu.europa.esig.dss.xades.signature;
 
-import eu.europa.esig.dss.enumerations.CommitmentType;
-import eu.europa.esig.dss.enumerations.DigestAlgorithm;
-import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
-import eu.europa.esig.dss.enumerations.MimeTypeEnum;
-import eu.europa.esig.dss.enumerations.ObjectIdentifier;
-import eu.europa.esig.dss.enumerations.ObjectIdentifierQualifier;
-import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
-import eu.europa.esig.dss.enumerations.SignaturePackaging;
-import eu.europa.esig.dss.enumerations.TimestampType;
-import eu.europa.esig.dss.model.CommitmentQualifier;
-import eu.europa.esig.dss.model.CommonCommitmentType;
-import eu.europa.esig.dss.model.DSSDocument;
-import eu.europa.esig.dss.model.DSSException;
-import eu.europa.esig.dss.model.Policy;
-import eu.europa.esig.dss.model.SignerLocation;
-import eu.europa.esig.dss.model.SpDocSpecification;
-import eu.europa.esig.dss.model.UserNotice;
+import eu.europa.esig.dss.enumerations.*;
+import eu.europa.esig.dss.model.*;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.DSSASN1Utils;
 import eu.europa.esig.dss.spi.DSSUtils;
@@ -52,11 +37,7 @@ import eu.europa.esig.dss.xades.XAdESSignatureParameters;
 import eu.europa.esig.dss.xades.dataobject.DSSDataObjectFormat;
 import eu.europa.esig.dss.xades.dataobject.DataObjectFormatBuilder;
 import eu.europa.esig.dss.xades.definition.xades132.XAdES132Attribute;
-import eu.europa.esig.dss.xades.reference.DSSReference;
-import eu.europa.esig.dss.xades.reference.ReferenceBuilder;
-import eu.europa.esig.dss.xades.reference.ReferenceIdProvider;
-import eu.europa.esig.dss.xades.reference.ReferenceProcessor;
-import eu.europa.esig.dss.xades.reference.ReferenceVerifier;
+import eu.europa.esig.dss.xades.reference.*;
 import eu.europa.esig.dss.xades.validation.XAdESAttributeIdentifier;
 import eu.europa.esig.dss.xml.common.definition.DSSElement;
 import eu.europa.esig.dss.xml.common.definition.xmldsig.XMLDSigAttribute;
@@ -67,15 +48,12 @@ import eu.europa.esig.dss.xml.utils.XMLCanonicalizer;
 import org.apache.xml.security.transforms.Transforms;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.w3c.dom.Text;
+import org.w3c.dom.*;
 
 import javax.xml.datatype.XMLGregorianCalendar;
 import java.math.BigInteger;
 import java.security.PublicKey;
+import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPublicKey;
 import java.util.*;
 
@@ -616,10 +594,43 @@ public abstract class XAdESSignatureBuilder extends XAdESBuilder implements Sign
          *          </ds:KeyValue>
          *      </ds:KeyInfo>
          */
-        addRSAKeyValue(keyInfoElement, params.getSigningCertificate());
-
+        addKeyValue(keyInfoElement,params.getSigningCertificate());
         this.keyInfoDom = keyInfoElement;
 
+    }
+
+    private void addKeyValue(Element keyInfoElement, CertificateToken signingCertificate) {
+        PublicKey publicKey = signingCertificate.getPublicKey();
+        if ((publicKey instanceof RSAPublicKey)) {
+            addRSAKeyValue(keyInfoElement,signingCertificate);
+        }else if(publicKey instanceof ECPublicKey){
+            addECKeyValue(keyInfoElement,signingCertificate);
+        }else{
+            LOG.warn("Public key is not supported type, skipping KeyValue element");
+        }
+    }
+
+    private void addECKeyValue(Element keyInfoElement, CertificateToken signingCertificate) {
+        // <ds:KeyValue>
+        final String xmldsigUri = getXmldsigNamespace().getUri();
+        final String xmldsigPrefix = getXmldsigNamespace().getPrefix();
+        final Element keyValueElement = documentDom.createElementNS(xmldsigUri, xmldsigPrefix + ":KeyValue");
+        keyInfoElement.appendChild(keyValueElement);
+
+        Element ecKeyValue = documentDom.createElementNS("http://www.w3.org/2009/xmldsig11#", "dsig11:ECKeyValue");
+        ECPublicKey ecKey = (ECPublicKey)signingCertificate.getPublicKey();
+        Element publicKeyElem = documentDom.createElementNS("http://www.w3.org/2009/xmldsig11#", "dsig11:PublicKey");
+        publicKeyElem.setTextContent(XadesUtil.ecPublicKeyToUncompressedPointBase64(ecKey));
+        ecKeyValue.appendChild(publicKeyElem);
+
+        String oid = XadesUtil.extractNamedCurveOID(ecKey);
+        if (oid != null) {
+            Element namedCurve = documentDom.createElementNS("http://www.w3.org/2009/xmldsig11#", "dsig11:NamedCurve");
+            namedCurve.setTextContent("urn:oid:" + oid);
+            ecKeyValue.appendChild(namedCurve);
+        }
+
+        keyValueElement.appendChild(ecKeyValue);
     }
 
     /**
@@ -685,10 +696,7 @@ public abstract class XAdESSignatureBuilder extends XAdESBuilder implements Sign
         try {
             PublicKey publicKey = token.getPublicKey();
             
-            if (!(publicKey instanceof RSAPublicKey)) {
-                LOG.warn("Public key is not RSA type, skipping KeyValue element");
-                return;
-            }
+
             
             RSAPublicKey rsaPublicKey = (RSAPublicKey) publicKey;
             BigInteger modulus = rsaPublicKey.getModulus();
@@ -1723,7 +1731,12 @@ public abstract class XAdESSignatureBuilder extends XAdESBuilder implements Sign
         }
 
         final EncryptionAlgorithm encryptionAlgorithm = params.getEncryptionAlgorithm();
-        final byte[] signatureValueBytes = DSSASN1Utils.ensurePlainSignatureValue(encryptionAlgorithm, signatureValue);
+        final byte[] signatureValueBytes;
+        if (EncryptionAlgorithm.ECDSA.isEquivalent(encryptionAlgorithm)) {
+            signatureValueBytes = signatureValue;
+        } else {
+            signatureValueBytes = DSSASN1Utils.ensurePlainSignatureValue(encryptionAlgorithm, signatureValue);
+        }
         final String signatureValueBase64Encoded = Utils.toBase64(signatureValueBytes);
         final Text signatureValueNode = documentDom.createTextNode(signatureValueBase64Encoded);
         signatureValueDom.appendChild(signatureValueNode);
