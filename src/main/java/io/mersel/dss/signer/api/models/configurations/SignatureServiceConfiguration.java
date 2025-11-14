@@ -15,6 +15,9 @@ public class SignatureServiceConfiguration {
     @Value("${PKCS11_SLOT:-1}")
     private Long pkcs11Slot;
 
+    @Value("${PKCS11_SLOT_LIST_INDEX:-1}")
+    private Long pkcs11SlotIndex;
+
     @Value("${CERTIFICATE_PIN}")
     private String certificatePin;
 
@@ -76,6 +79,10 @@ public class SignatureServiceConfiguration {
 
     public Long getPkcs11Slot() {
         return pkcs11Slot;
+    }
+
+    public Long getPkcs11SlotIndex() {
+        return pkcs11SlotIndex;
     }
 
     public String getIssuerCertificatePath() {

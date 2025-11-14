@@ -136,7 +136,8 @@ public class CertificateInfoController {
         if (StringUtils.hasText(config.getPkcs11LibraryPath())) {
             return new PKCS11KeyStoreProvider(
                 config.getPkcs11LibraryPath(),
-                config.getPkcs11Slot()
+                config.getPkcs11Slot(),
+                config.getPkcs11SlotIndex()
             );
         } else if (StringUtils.hasText(config.getPfxPath())) {
             return new PfxKeyStoreProvider(config.getPfxPath());
