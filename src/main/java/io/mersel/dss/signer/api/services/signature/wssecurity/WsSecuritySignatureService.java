@@ -10,15 +10,21 @@ import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
+import javax.xml.crypto.XMLStructure;
+import javax.xml.crypto.dom.DOMStructure;
+import javax.xml.crypto.dsig.*;
+import javax.xml.crypto.dsig.dom.DOMSignContext;
+import javax.xml.crypto.dsig.keyinfo.KeyInfo;
+import javax.xml.crypto.dsig.spec.C14NMethodParameterSpec;
+import javax.xml.crypto.dsig.spec.TransformParameterSpec;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.ByteArrayOutputStream;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
+import java.security.PrivateKey;
+import java.util.*;
 import java.util.concurrent.Semaphore;
 
 /**
@@ -29,7 +35,9 @@ import java.util.concurrent.Semaphore;
 public class WsSecuritySignatureService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(WsSecuritySignatureService.class);
-
+    private static final String BODY_ID = "SignedSoapBodyContent";
+    private static final String TS_ID = "SignedSoapTimestampContent";
+    private static final String NS_WSSE = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd";
     private final Semaphore semaphore;
 
     public WsSecuritySignatureService(Semaphore signatureSemaphore) {
@@ -68,7 +76,7 @@ public class WsSecuritySignatureService {
             // Body elemanını hazırla
             Element bodyElement = (Element) soapDocument
                 .getElementsByTagNameNS(soapNamespace, "Body").item(0);
-            
+
             if (bodyElement != null) {
                 bodyElement.setAttribute("Id", "SignedSoapBodyContent");
                 // ID attribute'unu XML parser'a bildir
@@ -255,108 +263,68 @@ public class WsSecuritySignatureService {
         
         semaphore.acquire();
         try {
-            // XML Signature factory oluştur
-            javax.xml.crypto.dsig.XMLSignatureFactory sigFactory = 
-                javax.xml.crypto.dsig.XMLSignatureFactory.getInstance("DOM");
-            
-            // DigestMethod
-            javax.xml.crypto.dsig.DigestMethod digestMethod = 
-                sigFactory.newDigestMethod(javax.xml.crypto.dsig.DigestMethod.SHA256, null);
-            
-            // Transform'lar (Exclusive C14N)
-            List<javax.xml.crypto.dsig.Transform> transforms = new ArrayList<>();
-            transforms.add(sigFactory.newTransform(
-                javax.xml.crypto.dsig.CanonicalizationMethod.EXCLUSIVE,
-                (javax.xml.crypto.dsig.spec.TransformParameterSpec) null));
-            
-            // İmzalanacak referanslar
-            List<javax.xml.crypto.dsig.Reference> references = new ArrayList<>();
-            
-            // Timestamp referansı
-            references.add(sigFactory.newReference(
-                "#SignedSoapTimestampContent",
-                digestMethod,
-                transforms,
-                null,
-                null));
-            
-            // Body referansı
-            references.add(sigFactory.newReference(
-                "#SignedSoapBodyContent",
-                digestMethod,
-                transforms,
-                null,
-                null));
-            
-            // SignedInfo
-            javax.xml.crypto.dsig.SignedInfo signedInfo = sigFactory.newSignedInfo(
-                sigFactory.newCanonicalizationMethod(
-                    javax.xml.crypto.dsig.CanonicalizationMethod.EXCLUSIVE,
-                    (javax.xml.crypto.dsig.spec.C14NMethodParameterSpec) null),
-                sigFactory.newSignatureMethod(
-                    "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256", null),
-                references);
-            
-            // KeyInfo - SecurityTokenReference kullan
-            Element securityTokenRefElement = createSecurityTokenReference(
-                document, bstReference);
-            List<javax.xml.crypto.XMLStructure> keyInfoContent = new ArrayList<>();
-            keyInfoContent.add(new javax.xml.crypto.dom.DOMStructure(securityTokenRefElement));
-            javax.xml.crypto.dsig.keyinfo.KeyInfo keyInfo = 
-                sigFactory.getKeyInfoFactory().newKeyInfo(keyInfoContent);
-            
-            // Private key
-            java.security.PrivateKey privateKey = material.getPrivateKey();
-            
-            // XMLSignature oluştur
-            javax.xml.crypto.dsig.XMLSignature signature = 
-                sigFactory.newXMLSignature(signedInfo, keyInfo);
-            
-            // DOMSignContext oluştur ve imzala
-            javax.xml.crypto.dsig.dom.DOMSignContext signContext = 
-                new javax.xml.crypto.dsig.dom.DOMSignContext(privateKey, securityElement);
-            
-            // Namespace prefix mapping
-            signContext.putNamespacePrefix(
-                javax.xml.crypto.dsig.XMLSignature.XMLNS, "ds");
-            
-            // Custom URIDereferencer - ID attribute'larını manuel olarak çöz
-            signContext.setURIDereferencer(new javax.xml.crypto.URIDereferencer() {
-                @Override
-                public javax.xml.crypto.Data dereference(javax.xml.crypto.URIReference uriReference, 
-                                                         javax.xml.crypto.XMLCryptoContext context) 
-                        throws javax.xml.crypto.URIReferenceException {
-                    String uri = uriReference.getURI();
-                    LOGGER.debug("URIDereferencer çağrıldı: URI={}", uri);
-                    
-                    if (uri != null && uri.startsWith("#")) {
-                        String id = uri.substring(1);
-                        LOGGER.debug("ID arıyor: {}", id);
-                        
-                        // ID ile elementi bul
-                        org.w3c.dom.Element element = findElementById(document, id);
-                        if (element != null) {
-                            LOGGER.debug("Element başarıyla bulundu ve döndürülüyor: {}", id);
-                            // NodeSetData olarak dön
-                            java.util.Set<org.w3c.dom.Node> nodeSet = 
-                                new java.util.HashSet<org.w3c.dom.Node>();
-                            nodeSet.add(element);
-                            return new javax.xml.crypto.NodeSetData() {
-                                @Override
-                                public java.util.Iterator<org.w3c.dom.Node> iterator() {
-                                    return nodeSet.iterator();
-                                }
-                            };
-                        } else {
-                            LOGGER.error("Element bulunamadı! ID: {}", id);
-                        }
-                    }
-                    throw new javax.xml.crypto.URIReferenceException(
-                        "Element bulunamadı: " + uri);
-                }
-            });
-            
-            // İmzala
+
+            XMLSignatureFactory sigFactory = XMLSignatureFactory.getInstance("DOM");
+
+            DigestMethod digestMethod = sigFactory.newDigestMethod(DigestMethod.SHA256, null);
+
+            // Basit EXCLUSIVE C14N transform'u (parametresiz)
+            Transform excTransform = sigFactory.newTransform(
+                    CanonicalizationMethod.EXCLUSIVE,
+                    (TransformParameterSpec) null
+            );
+
+            // Referanslar: Timestamp + Body
+            List<Reference> refs = new ArrayList<>();
+            refs.add(sigFactory.newReference(
+                    "#" + TS_ID,
+                    digestMethod,
+                    Collections.singletonList(excTransform),
+                    null,
+                    null
+            ));
+            refs.add(sigFactory.newReference(
+                    "#" + BODY_ID,
+                    digestMethod,
+                    Collections.singletonList(excTransform),
+                    null,
+                    null
+            ));
+
+            // SignedInfo: yine EXCLUSIVE C14N, paramsiz
+            SignedInfo signedInfo = sigFactory.newSignedInfo(
+                    sigFactory.newCanonicalizationMethod(
+                            CanonicalizationMethod.EXCLUSIVE,
+                            (C14NMethodParameterSpec) null
+                    ),
+                    sigFactory.newSignatureMethod(
+                            "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
+                            null
+                    ),
+                    refs
+            );
+
+            // KeyInfo -> SecurityTokenReference (X509v3)
+            Element str = document.createElementNS(NS_WSSE, "wsse:SecurityTokenReference");
+
+            Element ref = document.createElementNS(NS_WSSE, "wsse:Reference");
+            ref.setAttribute("URI", "#" + bstReference);
+            ref.setAttribute(
+                    "ValueType",
+                    "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-x509-token-profile-1.0#X509v3"
+            );
+            str.appendChild(ref);
+            List<XMLStructure> kiContent = Arrays.asList(new DOMStructure(str));
+            KeyInfo keyInfo = sigFactory.getKeyInfoFactory().newKeyInfo(kiContent);
+
+            PrivateKey privateKey = material.getPrivateKey();
+            XMLSignature signature = sigFactory.newXMLSignature(signedInfo, keyInfo);
+
+
+
+            DOMSignContext signContext = new DOMSignContext(privateKey, securityElement);
+            signContext.putNamespacePrefix(XMLSignature.XMLNS, "ds");
+
             signature.sign(signContext);
             
         } finally {
