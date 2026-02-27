@@ -7,6 +7,14 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import java.io.IOException;
+import java.io.StringReader;
 
 /**
  * XML belgelerinde imza elemanlarını yerleştiren servis.
@@ -17,14 +25,14 @@ public class XAdESDocumentPlacementService {
 
     /**
      * İmza elemanını belge tipine göre uygun konuma yerleştirir.
-     * 
+     *
      * @param document Ana XML belgesi
      * @param signatureElement Yerleştirilecek imza elemanı
      * @param documentType Belge tipi
      */
-    public void placeSignatureElement(Document document, 
-                                     Element signatureElement,
-                                     DocumentType documentType) {
+    public void placeSignatureElement(Document document,
+                                      Element signatureElement,
+                                      DocumentType documentType) {
         // İmzayı mevcut üst elemanından kaldır
         Node parent = signatureElement.getParentNode();
         if (parent != null) {
@@ -49,15 +57,15 @@ public class XAdESDocumentPlacementService {
             case UblDocument:
                 target = findUblExtensionContent(document);
                 break;
-                
+
             case EArchiveReport:
                 target = findEArchiveHeader(document);
                 break;
-                
+
             case HrXml:
                 target = findHrXmlSignatureContainer(document);
                 break;
-                
+
             default:
                 // Diğer belge tipleri için kök elemana yerleştir
                 break;
@@ -72,78 +80,107 @@ public class XAdESDocumentPlacementService {
     }
 
     /**
+     * UBL belgelerinde imzadan ÖNCE UBLExtensions yapısının mevcut olmasını sağlar.
+     * İmza, imzalama sırasında belgenin canonical formu üzerinden hesaplanır.
+     * @param document UBL belgesi
+     * @return ExtensionContent zaten varsa false, yeni eklendiyse true
+     */
+    public boolean ensureUblExtensionContentExists(Document document) {
+        if (getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent") != null) {
+            return false;
+        }
+        addUblExtensionsStructure(document);
+        return true;
+    }
+
+    /**
      * UBL ExtensionContent elemanını bulur. Yoksa UBLExtensions/UBLExtension/ExtensionContent
-     * yapısını kök elemanın başına ekleyip ExtensionContent döner.
+     * XML ile aynı formatta (string parse) kök elemanın başına ekleyip
+     * ExtensionContent döner. DOM createElementNS ile oluşturma imza canonicalization'da
+     * farklı çıktı ürettiği için string parse kullanılıyor.
      */
     private Node findUblExtensionContent(Document document) {
         Node target = getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
         if (target != null) {
             return target;
         }
+        addUblExtensionsStructure(document);
+        return getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
+    }
 
-        Element root = document.getDocumentElement();
-        Element ublExtensions = document.createElementNS(XmlConstants.NS_UBL_EXTENSION, "UBLExtensions");
-        Element ublExtension = document.createElementNS(XmlConstants.NS_UBL_EXTENSION, "UBLExtension");
-        Element extensionContent = document.createElementNS(XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
+    private void addUblExtensionsStructure(Document document) {
+        try {
+            String fragment = "<ext:UBLExtensions xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
+                    "<ext:UBLExtension>" +
+                    "<ext:ExtensionContent></ext:ExtensionContent>" +
+                    "</ext:UBLExtension>" +
+                    "</ext:UBLExtensions>";
 
-        ublExtension.appendChild(extensionContent);
-        ublExtensions.appendChild(ublExtension);
+            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+            dbf.setNamespaceAware(true);
+            DocumentBuilder db = dbf.newDocumentBuilder();
+            Document fragDoc = db.parse(new InputSource(new StringReader(fragment)));
+            Element ublExtensions = fragDoc.getDocumentElement();
 
-        Node firstChild = root.getFirstChild();
-        if (firstChild != null) {
-            root.insertBefore(ublExtensions, firstChild);
-        } else {
-            root.appendChild(ublExtensions);
+            Element root = document.getDocumentElement();
+            Node imported = document.importNode(ublExtensions, true);
+
+            Node firstChild = root.getFirstChild();
+            if (firstChild != null) {
+                root.insertBefore(imported, firstChild);
+            } else {
+                root.appendChild(imported);
+            }
+        } catch (ParserConfigurationException | SAXException | IOException e) {
+            throw new RuntimeException("UBLExtensions yapısı eklenirken hata oluştu", e);
         }
-
-        return extensionContent;
     }
 
     /**
      * e-Arşiv Raporu başlık elemanını bulur.
-     * 
+     *
      * @throws IllegalArgumentException Başlık elemanı bulunamazsa
      */
     private Node findEArchiveHeader(Document document) {
         Node target = getFirstElementByTagNameNS(document, XmlConstants.NS_EARSIV, "baslik");
-        
+
         if (target == null) {
             throw new IllegalArgumentException(
-                String.format("e-Arşiv rapor belgesi için 'baslik' elemanı bulunamadı. " +
-                             "Beklenen namespace: %s", XmlConstants.NS_EARSIV));
+                    String.format("e-Arşiv rapor belgesi için 'baslik' elemanı bulunamadı. " +
+                            "Beklenen namespace: %s", XmlConstants.NS_EARSIV));
         }
-        
+
         return target;
     }
 
     /**
      * HrXml imza konteynırını bulur.
-     * 
+     *
      * @throws IllegalArgumentException ApplicationArea elemanı bulunamazsa
      */
     private Node findHrXmlSignatureContainer(Document document) {
         // ApplicationArea'yı namespace ile bul
         Node applicationArea = getFirstElementByTagNameNS(document, XmlConstants.NS_OAGIS, "ApplicationArea");
-        
+
         // Namespace olmadan fallback
         if (applicationArea == null) {
             applicationArea = getFirstElementByTagName(document, "ApplicationArea");
         }
-        
+
         if (applicationArea == null) {
             throw new IllegalArgumentException(
-                String.format("HrXml belgesi için 'ApplicationArea' elemanı bulunamadı. " +
-                             "Beklenen namespace: %s", XmlConstants.NS_OAGIS));
+                    String.format("HrXml belgesi için 'ApplicationArea' elemanı bulunamadı. " +
+                            "Beklenen namespace: %s", XmlConstants.NS_OAGIS));
         }
 
         // ApplicationArea içinde Signature node'unu bul (namespace ile)
         Node signatureNode = getFirstChildElementNS(applicationArea, XmlConstants.NS_OAGIS, "Signature");
-        
+
         // Namespace olmadan fallback
         if (signatureNode == null) {
             signatureNode = getFirstChildElement(applicationArea, "Signature");
         }
-        
+
         return signatureNode != null ? signatureNode : applicationArea;
     }
 
