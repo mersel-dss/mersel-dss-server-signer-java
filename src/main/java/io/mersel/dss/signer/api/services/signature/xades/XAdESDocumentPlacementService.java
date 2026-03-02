@@ -1,7 +1,12 @@
 package io.mersel.dss.signer.api.services.signature.xades;
 
-import io.mersel.dss.signer.api.constants.XmlConstants;
-import io.mersel.dss.signer.api.models.enums.DocumentType;
+import java.io.IOException;
+import java.io.StringReader;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -10,11 +15,9 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.IOException;
-import java.io.StringReader;
+import io.mersel.dss.signer.api.constants.XmlConstants;
+import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.mersel.dss.signer.api.models.enums.DocumentType;
 
 /**
  * XML belgelerinde imza elemanlarını yerleştiren servis.
@@ -26,9 +29,9 @@ public class XAdESDocumentPlacementService {
     /**
      * İmza elemanını belge tipine göre uygun konuma yerleştirir.
      *
-     * @param document Ana XML belgesi
+     * @param document         Ana XML belgesi
      * @param signatureElement Yerleştirilecek imza elemanı
-     * @param documentType Belge tipi
+     * @param documentType     Belge tipi
      */
     public void placeSignatureElement(Document document,
                                       Element signatureElement,
@@ -94,10 +97,11 @@ public class XAdESDocumentPlacementService {
     }
 
     /**
-     * UBL ExtensionContent elemanını bulur. Yoksa UBLExtensions/UBLExtension/ExtensionContent
+     * UBL ExtensionContent elemanını bulur. Yoksa
+     * UBLExtensions/UBLExtension/ExtensionContent
      * XML ile aynı formatta (string parse) kök elemanın başına ekleyip
-     * ExtensionContent döner. DOM createElementNS ile oluşturma imza canonicalization'da
-     * farklı çıktı ürettiği için string parse kullanılıyor.
+     * ExtensionContent döner. DOM createElementNS ile oluşturma imza
+     * canonicalization'da farklı çıktı ürettiği için string parse kullanılıyor.
      */
     private Node findUblExtensionContent(Document document) {
         Node target = getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
@@ -132,7 +136,7 @@ public class XAdESDocumentPlacementService {
                 root.appendChild(imported);
             }
         } catch (ParserConfigurationException | SAXException | IOException e) {
-            throw new RuntimeException("UBLExtensions yapısı eklenirken hata oluştu", e);
+            throw new SignatureException("UBL_EXTENSION_ERROR", "UBLExtensions yapısı eklenirken hata oluştu", e);
         }
     }
 
@@ -204,4 +208,3 @@ public class XAdESDocumentPlacementService {
         return (nodeList != null && nodeList.getLength() > 0) ? nodeList.item(0) : null;
     }
 }
-

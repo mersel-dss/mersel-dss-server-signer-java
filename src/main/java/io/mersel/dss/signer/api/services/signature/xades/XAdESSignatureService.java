@@ -1,35 +1,36 @@
 package io.mersel.dss.signer.api.services.signature.xades;
 
-import eu.europa.esig.dss.enumerations.MimeType;
-import eu.europa.esig.dss.model.DSSDocument;
-import eu.europa.esig.dss.model.InMemoryDocument;
-import eu.europa.esig.dss.model.SignatureValue;
-import eu.europa.esig.dss.model.ToBeSigned;
-import eu.europa.esig.dss.spi.validation.CertificateVerifier;
-import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
-import eu.europa.esig.dss.spi.x509.CertificateSource;
-import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
-import eu.europa.esig.dss.xades.XAdESSignatureParameters;
-import eu.europa.esig.dss.xades.reference.DSSReference;
-import eu.europa.esig.dss.xades.signature.XAdESLevelC;
-import eu.europa.esig.dss.xades.signature.XAdESService;
-import eu.europa.esig.dss.xades.signature.XAdESSignatureBuilder;
-import eu.europa.esig.dss.validation.SignedDocumentValidator;
-import io.mersel.dss.signer.api.exceptions.SignatureException;
-import io.mersel.dss.signer.api.models.SignResponse;
-import io.mersel.dss.signer.api.models.SigningMaterial;
-import io.mersel.dss.signer.api.models.enums.DocumentType;
-import eu.europa.esig.dss.model.x509.CertificateToken;
-import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
+import java.io.InputStream;
+import java.util.Base64;
+import java.util.concurrent.Semaphore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import java.io.InputStream;
-import java.util.Base64;
-import java.util.concurrent.Semaphore;
+import eu.europa.esig.dss.enumerations.MimeType;
+import eu.europa.esig.dss.model.DSSDocument;
+import eu.europa.esig.dss.model.InMemoryDocument;
+import eu.europa.esig.dss.model.SignatureValue;
+import eu.europa.esig.dss.model.ToBeSigned;
+import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.spi.validation.CertificateVerifier;
+import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
+import eu.europa.esig.dss.spi.x509.CertificateSource;
+import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
+import eu.europa.esig.dss.validation.SignedDocumentValidator;
+import eu.europa.esig.dss.xades.XAdESSignatureParameters;
+import eu.europa.esig.dss.xades.reference.DSSReference;
+import eu.europa.esig.dss.xades.signature.XAdESLevelC;
+import eu.europa.esig.dss.xades.signature.XAdESService;
+import eu.europa.esig.dss.xades.signature.XAdESSignatureBuilder;
+import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.mersel.dss.signer.api.models.SignResponse;
+import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 
 /**
  * XAdES imzaları oluşturan servis.
