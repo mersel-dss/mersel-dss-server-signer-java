@@ -84,7 +84,15 @@ public class XAdESDocumentPlacementService {
 
     /**
      * UBL belgelerinde imzadan ÖNCE UBLExtensions yapısının mevcut olmasını sağlar.
-     * İmza, imzalama sırasında belgenin canonical formu üzerinden hesaplanır.
+     * Mevcut yapıyı katman katman kontrol eder ve sadece eksik olanı ekler:
+     * <ul>
+     *   <li>UBLExtensions bile yoksa -> tüm yapıyı kök elemanın başına ekler</li>
+     *   <li>UBLExtensions var ama UBLExtension yoksa -> UBLExtension/ExtensionContent ekler</li>
+     *   <li>UBLExtension var ama ExtensionContent yoksa -> sadece ExtensionContent ekler</li>
+     * </ul>
+     * İmza, belgenin canonical formu üzerinden hesaplanır; bu yüzden yapı imzalama
+     * öncesinde eklenmelidir.
+     *
      * @param document UBL belgesi
      * @return ExtensionContent zaten varsa false, yeni eklendiyse true
      */
@@ -92,51 +100,97 @@ public class XAdESDocumentPlacementService {
         if (getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent") != null) {
             return false;
         }
-        addUblExtensionsStructure(document);
+        ensureUblExtensionStructure(document);
         return true;
     }
 
     /**
-     * UBL ExtensionContent elemanını bulur. Yoksa
-     * UBLExtensions/UBLExtension/ExtensionContent
-     * XML ile aynı formatta (string parse) kök elemanın başına ekleyip
-     * ExtensionContent döner. DOM createElementNS ile oluşturma imza
-     * canonicalization'da farklı çıktı ürettiği için string parse kullanılıyor.
+     * UBL ExtensionContent elemanını bulur. Yoksa eksik katmanları tamamlayarak
+     * ExtensionContent döner.
+     * <p>
+     * DOM createElementNS ile oluşturma, imza canonicalization'da farklı çıktı
+     * ürettiği için string parse kullanılıyor.
      */
     private Node findUblExtensionContent(Document document) {
         Node target = getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
         if (target != null) {
             return target;
         }
-        addUblExtensionsStructure(document);
+        ensureUblExtensionStructure(document);
         return getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent");
     }
 
-    private void addUblExtensionsStructure(Document document) {
-        try {
-            String fragment = "<ext:UBLExtensions xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
-                    "<ext:UBLExtension>" +
-                    "<ext:ExtensionContent></ext:ExtensionContent>" +
-                    "</ext:UBLExtension>" +
-                    "</ext:UBLExtensions>";
+    /**
+     * UBLExtensions/UBLExtension/ExtensionContent hiyerarşisini katman katman kontrol eder
+     * ve sadece eksik olan kısmı ekler.
+     */
+    private void ensureUblExtensionStructure(Document document) {
+        String ns = XmlConstants.NS_UBL_EXTENSION;
 
+        Node ublExtensions = getFirstElementByTagNameNS(document, ns, "UBLExtensions");
+        if (ublExtensions == null) {
+            addFullUblExtensionsStructure(document);
+            return;
+        }
+
+        Node ublExtension = getFirstElementByTagNameNS(document, ns, "UBLExtension");
+        if (ublExtension == null) {
+            Node fragment = parseFragment(
+                    "<ext:UBLExtension xmlns:ext=\"" + ns + "\">" +
+                    "<ext:ExtensionContent></ext:ExtensionContent>" +
+                    "</ext:UBLExtension>");
+            ublExtensions.insertBefore(
+                    document.importNode(fragment, true),
+                    ublExtensions.getFirstChild());
+            return;
+        }
+
+        Node extensionContent = getFirstElementByTagNameNS(document, ns, "ExtensionContent");
+        if (extensionContent == null) {
+            Node fragment = parseFragment(
+                    "<ext:ExtensionContent xmlns:ext=\"" + ns + "\"></ext:ExtensionContent>");
+            ublExtension.insertBefore(
+                    document.importNode(fragment, true),
+                    ublExtension.getFirstChild());
+        }
+    }
+
+    /**
+     * Hiçbir UBLExtensions yapısı olmadığında tüm hiyerarşiyi kök elemanın başına ekler.
+     */
+    private void addFullUblExtensionsStructure(Document document) {
+        Node fragment = parseFragment(
+                "<ext:UBLExtensions xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
+                "<ext:UBLExtension>" +
+                "<ext:ExtensionContent></ext:ExtensionContent>" +
+                "</ext:UBLExtension>" +
+                "</ext:UBLExtensions>");
+
+        Element root = document.getDocumentElement();
+        Node imported = document.importNode(fragment, true);
+
+        Node firstChild = root.getFirstChild();
+        if (firstChild != null) {
+            root.insertBefore(imported, firstChild);
+        } else {
+            root.appendChild(imported);
+        }
+    }
+
+    /**
+     * XML string'ini parse edip kök elemanını döner.
+     * DOM createElementNS yerine string parse kullanılır çünkü
+     * canonicalization sırasında namespace declaration sıralaması farklılık yaratabilir.
+     */
+    private Node parseFragment(String xml) {
+        try {
             DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
             dbf.setNamespaceAware(true);
             DocumentBuilder db = dbf.newDocumentBuilder();
-            Document fragDoc = db.parse(new InputSource(new StringReader(fragment)));
-            Element ublExtensions = fragDoc.getDocumentElement();
-
-            Element root = document.getDocumentElement();
-            Node imported = document.importNode(ublExtensions, true);
-
-            Node firstChild = root.getFirstChild();
-            if (firstChild != null) {
-                root.insertBefore(imported, firstChild);
-            } else {
-                root.appendChild(imported);
-            }
+            return db.parse(new InputSource(new StringReader(xml))).getDocumentElement();
         } catch (ParserConfigurationException | SAXException | IOException e) {
-            throw new SignatureException("UBL_EXTENSION_ERROR", "UBLExtensions yapısı eklenirken hata oluştu", e);
+            throw new SignatureException("UBL_EXTENSION_ERROR",
+                    "UBLExtensions yapısı eklenirken hata oluştu", e);
         }
     }
 
