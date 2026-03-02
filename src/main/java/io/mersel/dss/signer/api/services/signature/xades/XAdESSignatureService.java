@@ -1,40 +1,41 @@
 package io.mersel.dss.signer.api.services.signature.xades;
 
-import eu.europa.esig.dss.enumerations.MimeType;
-import eu.europa.esig.dss.model.DSSDocument;
-import eu.europa.esig.dss.model.InMemoryDocument;
-import eu.europa.esig.dss.model.SignatureValue;
-import eu.europa.esig.dss.model.ToBeSigned;
-import eu.europa.esig.dss.spi.validation.CertificateVerifier;
-import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
-import eu.europa.esig.dss.spi.x509.CertificateSource;
-import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
-import eu.europa.esig.dss.xades.XAdESSignatureParameters;
-import eu.europa.esig.dss.xades.reference.DSSReference;
-import eu.europa.esig.dss.xades.signature.XAdESLevelC;
-import eu.europa.esig.dss.xades.signature.XAdESService;
-import eu.europa.esig.dss.xades.signature.XAdESSignatureBuilder;
-import eu.europa.esig.dss.validation.SignedDocumentValidator;
-import io.mersel.dss.signer.api.exceptions.SignatureException;
-import io.mersel.dss.signer.api.models.SignResponse;
-import io.mersel.dss.signer.api.models.SigningMaterial;
-import io.mersel.dss.signer.api.models.enums.DocumentType;
-import eu.europa.esig.dss.model.x509.CertificateToken;
-import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
+import java.io.InputStream;
+import java.util.Base64;
+import java.util.concurrent.Semaphore;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 
-import java.io.InputStream;
-import java.util.Base64;
-import java.util.concurrent.Semaphore;
+import eu.europa.esig.dss.enumerations.MimeType;
+import eu.europa.esig.dss.model.DSSDocument;
+import eu.europa.esig.dss.model.InMemoryDocument;
+import eu.europa.esig.dss.model.SignatureValue;
+import eu.europa.esig.dss.model.ToBeSigned;
+import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.spi.validation.CertificateVerifier;
+import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
+import eu.europa.esig.dss.spi.x509.CertificateSource;
+import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
+import eu.europa.esig.dss.validation.SignedDocumentValidator;
+import eu.europa.esig.dss.xades.XAdESSignatureParameters;
+import eu.europa.esig.dss.xades.reference.DSSReference;
+import eu.europa.esig.dss.xades.signature.XAdESLevelC;
+import eu.europa.esig.dss.xades.signature.XAdESService;
+import eu.europa.esig.dss.xades.signature.XAdESSignatureBuilder;
+import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.mersel.dss.signer.api.models.SignResponse;
+import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 
 /**
  * XAdES imzaları oluşturan servis.
  * UBL, e-Arşiv Raporu, HrXml gibi çeşitli belge tiplerini destekler.
- * 
+ *
  * <p>
  * Desteklenen belge türleri:
  * <ul>
@@ -66,14 +67,14 @@ public class XAdESSignatureService {
     private final Semaphore semaphore;
 
     public XAdESSignatureService(XAdESService xadesService,
-            XAdESParametersBuilderService parametersBuilder,
-            XmlProcessingService xmlProcessor,
-            XAdESDocumentPlacementService documentPlacement,
-            XAdESLevelUpgradeService levelUpgradeService,
-            CryptoSignerService cryptoSigner,
-            CertificateVerifier certificateVerifier,
-            io.mersel.dss.signer.api.services.util.CompressionService compressionService,
-            Semaphore signatureSemaphore) {
+                                 XAdESParametersBuilderService parametersBuilder,
+                                 XmlProcessingService xmlProcessor,
+                                 XAdESDocumentPlacementService documentPlacement,
+                                 XAdESLevelUpgradeService levelUpgradeService,
+                                 CryptoSignerService cryptoSigner,
+                                 CertificateVerifier certificateVerifier,
+                                 io.mersel.dss.signer.api.services.util.CompressionService compressionService,
+                                 Semaphore signatureSemaphore) {
         this.xadesService = xadesService;
         this.parametersBuilder = parametersBuilder;
         this.xmlProcessor = xmlProcessor;
@@ -87,7 +88,7 @@ public class XAdESSignatureService {
 
     /**
      * XML belgesini XAdES imzası ile imzalar.
-     * 
+     *
      * @param xmlInputStream XML belgesi içeren input stream
      * @param documentType   Belge tipi (e-Fatura, e-Arşiv vb.)
      * @param signatureId    İsteğe bağlı imza tanımlayıcısı
@@ -96,10 +97,10 @@ public class XAdESSignatureService {
      * @return İmzalanmış belge ve imza değeri içeren yanıt
      */
     public SignResponse signXml(InputStream xmlInputStream,
-            DocumentType documentType,
-            String signatureId,
-            boolean zipped,
-            SigningMaterial material) {
+                                DocumentType documentType,
+                                String signatureId,
+                                boolean zipped,
+                                SigningMaterial material) {
         try {
             // 1. XML byte'larını çıkar
             byte[] xmlBytes = extractXmlBytes(xmlInputStream, zipped);
@@ -109,21 +110,32 @@ public class XAdESSignatureService {
                 documentType = DocumentType.OtherXmlDocument;
             }
 
-            // 3. Belgeyi parse et ve parametreleri oluştur
+            // 3. Belgeyi parse et
             Document document = xmlProcessor.parseDocument(xmlBytes);
+
+            // 4. UBL belgeleri için UBLExtensions'ı imzadan ÖNCE ekle.
+            // İmza, belgenin canonical formu üzerinden hesaplanır. UBLExtensions
+            // imza yerleştirme sırasında eklenirse, imzalanan içerik ile nihai
+            // belge uyuşmaz ve doğrulama başarısız olur.
+            if (documentType == DocumentType.UblDocument) {
+                documentPlacement.ensureUblExtensionContentExists(document);
+                xmlBytes = xmlProcessor.documentToBytes(document);
+            }
+
+            // 5. Parametreleri oluştur
             DSSDocument dssDocument = new InMemoryDocument(xmlBytes, DEFAULT_XML_NAME,
                     MimeType.fromFileExtension("xml"));
             XAdESSignatureParameters parameters = parametersBuilder.buildParameters(
                     document, documentType, signatureId, material);
 
-            // 4. İmzalama sertifika zincirini doğrulayıcıya ekle
+            // 6. İmzalama sertifika zincirini doğrulayıcıya ekle
             addSigningCertificateChainToVerifier(material);
 
-            // 5. İmzayı oluştur
+            // 7. İmzayı oluştur
             SignResponse response = createSignature(document, dssDocument, parameters,
                     documentType, material);
 
-            // 6. Gerekirse ZIP'le
+            // 8. Gerekirse ZIP'le
             if (zipped) {
                 byte[] zippedBytes = compressionService.zipBytes(ZIP_ENTRY_NAME, response.getSignedDocument());
                 return new SignResponse(zippedBytes, response.getSignatureValue());
@@ -146,10 +158,10 @@ public class XAdESSignatureService {
      * Semaphore ile eşzamanlı imza sayısını kontrol eder.
      */
     private SignResponse createSignature(Document mainDocument,
-            DSSDocument dssDocument,
-            XAdESSignatureParameters parameters,
-            DocumentType documentType,
-            SigningMaterial material) throws Exception {
+                                         DSSDocument dssDocument,
+                                         XAdESSignatureParameters parameters,
+                                         DocumentType documentType,
+                                         SigningMaterial material) throws Exception {
 
         // OCSP cache cleanup için signature ID'yi takip et
         String actualSignatureId = null;
@@ -180,7 +192,7 @@ public class XAdESSignatureService {
                     dataToSign,
                     material.getPrivateKey(),
                     parameters.getDigestAlgorithm());
-            
+
             // SignatureValue'yu yakala (response için)
             capturedSignatureValue = signatureValue;
 
@@ -213,9 +225,9 @@ public class XAdESSignatureService {
             }
 
             // SignatureValue'yu Base64 string'e çevir
-            String encodedSignature = capturedSignatureValue != null 
-                ? Base64.getEncoder().encodeToString(capturedSignatureValue.getValue())
-                : null;
+            String encodedSignature = capturedSignatureValue != null
+                    ? Base64.getEncoder().encodeToString(capturedSignatureValue.getValue())
+                    : null;
 
             return new SignResponse(finalSignedBytes, encodedSignature);
 
