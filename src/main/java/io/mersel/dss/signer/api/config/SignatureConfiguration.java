@@ -205,5 +205,13 @@ public class SignatureConfiguration {
     public eu.europa.esig.dss.xades.signature.XAdESService xadesService(CertificateVerifier certificateVerifier) {
         return new eu.europa.esig.dss.xades.signature.XAdESService(certificateVerifier);
     }
+
+    /**
+     * Sertifika doğrulayıcı ile yapılandırılmış CAdES servisini sağlar.
+     */
+    @Bean
+    public eu.europa.esig.dss.cades.signature.CAdESService cadesService(CertificateVerifier certificateVerifier) {
+        return new eu.europa.esig.dss.cades.signature.CAdESService(certificateVerifier);
+    }
 }
 
