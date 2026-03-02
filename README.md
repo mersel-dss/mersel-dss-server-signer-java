@@ -7,7 +7,7 @@ Türkiye e-imza standartlarına uygun elektronik imza (XAdES, PAdES, WS-Security
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![DSS](https://img.shields.io/badge/DSS-6.3-blue.svg)](https://github.com/esig/dss)
 [![Version](https://img.shields.io/badge/version-0.1.0-brightgreen.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/releases)
-[![Tests](https://img.shields.io/badge/tests-22%20passed-success.svg)](https://dss.mersel.dev/sign-api/testing)
+[![Tests](https://img.shields.io/badge/tests-96%20passed-success.svg)](https://dss.mersel.dev/sign-api/testing)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
@@ -26,6 +26,8 @@ Açık kaynağın gücüne inanıyor ve birlikte daha iyisini üretmeye devam ed
 | --- | --- |
 | [@hasanyildiz](https://github.com/hasanyildiz) | İZİBİZ Bilişim Teknolojileri Anonim Şirketi |
 | [@emresimsk](https://github.com/emresimsk) | IDECON DANIŞMANLIK HİZMETLERİ ANONİM ŞİRKETİ |
+| [@Burak-Attila](https://github.com/Burak-Attila) | EDM Bilişim |
+| [@batuhanonerr](https://github.com/batuhanonerr) | NİLVERA YAZILIM VE BİLİŞİM HİZMETLERİ TİC. LTD. ŞTİ. |
 
 ### Kurumsal Destekçiler
 
@@ -33,6 +35,8 @@ Açık kaynağın gücüne inanıyor ve birlikte daha iyisini üretmeye devam ed
 | --- | --- |
 | İzibiz | Geliştirme desteği |
 | İdecon | Geliştirme desteği |
+| EDM | Geliştirme desteği |
+| NİLVERA | Geliştirme desteği |
 
 ### Öne Çıkan Pull Request / Issue Katkıları
 
@@ -40,6 +44,9 @@ Açık kaynağın gücüne inanıyor ve birlikte daha iyisini üretmeye devam ed
 | --- | --- | --- | --- |
 | PR | [#3](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/3) | TÜBİTAK XAdES için ECDSA doğrulama özelleştirmeleri | [@hasanyildiz](https://github.com/hasanyildiz) |
 | PR | [#6](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/6) | PKCS#11 `slot` ve `slotListIndex` yapılandırması geliştirmesi | [@hasanyildiz](https://github.com/hasanyildiz) |
+| PR | [#8](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/8) | WS-Security imzalama düzeltmesi | [@batuhanonerr](https://github.com/batuhanonerr) |
+| PR | [#10](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/10) | UBLExtensions eksik element oluşturma düzeltmesi | [@batuhanonerr](https://github.com/batuhanonerr) |
+| PR | [#11](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/11) | CAdES-BES imzalama desteği | [@Burak-Attila](https://github.com/Burak-Attila) |
 
 ---
 
@@ -101,6 +108,7 @@ mvn spring-boot:run
 ## 🎯 Özellikler
 
 - ✅ **XAdES**: e-Fatura, e-Arşiv, XML imzalama
+- ✅ **CAdES**: CMS tabanlı elektronik imzalama (CAdES-BES)
 - ✅ **PAdES**: PDF dijital imzalama
 - ✅ **WS-Security**: SOAP imzalama
 - ✅ **Timestamp**: RFC 3161 (TÜBİTAK ESYA desteği)
