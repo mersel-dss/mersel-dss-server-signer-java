@@ -5,7 +5,10 @@ import org.slf4j.LoggerFactory;
 
 import java.security.PrivateKey;
 import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAPublicKey;
+import java.util.Locale;
 
 /**
  * Kriptografik ve encoding işlemleri için yardımcı metodlar.
@@ -101,15 +104,38 @@ public final class CryptoUtils {
     public static String getSignatureAlgorithm(PrivateKey privateKey, 
                                                 java.security.cert.X509Certificate certificate) {
         if (certificate != null) {
+            java.security.PublicKey publicKey = certificate.getPublicKey();
             String certSigAlg = certificate.getSigAlgName();
-            if (certSigAlg != null && !certSigAlg.isEmpty()) {
-                LOGGER.debug("Sertifika imza algoritması: {}", certSigAlg);
-                return certSigAlg;
+            
+            if (publicKey instanceof RSAPublicKey) {
+                // Açık anahtar RSA ise, sertifika algoritmasından SHA kısmını al ve RSA ile birleştir
+                if (certSigAlg != null && !certSigAlg.isEmpty()) {
+                    String shaPrefix = extractShaPrefix(certSigAlg);
+                    String result = shaPrefix + "withRSA";
+                    LOGGER.debug("Sertifika RSA açık anahtara sahip, algoritma düzeltildi: {} -> {}", certSigAlg, result);
+                    return result;
+                }
+                return "SHA256withRSA";
+            } else if (publicKey instanceof ECPublicKey) {
+                if (certSigAlg != null && !certSigAlg.isEmpty()) {
+                    LOGGER.debug("Sertifika EC açık anahtara sahip, sertifika algoritması kullanılacak: {}", certSigAlg);
+                    return certSigAlg;
+                }
             }
         }
         return getSignatureAlgorithm(privateKey);
     }
 
+    private static String extractShaPrefix(String sigAlgorithm) {
+        String upper = sigAlgorithm.toUpperCase(Locale.ENGLISH);
+        if (upper.startsWith("SHA")) {
+            int idx = upper.indexOf("WITH");
+            if (idx > 0) {
+                return upper.substring(0, idx);
+            }
+        }
+        return "SHA256";
+    }
     /**
      * EC key boyutuna göre uygun hash algoritmasını seçer.
      * P-256 -> SHA256, P-384 -> SHA384, P-521 -> SHA512
