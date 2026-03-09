@@ -34,8 +34,8 @@ public class XAdESDocumentPlacementService {
      * @param documentType     Belge tipi
      */
     public void placeSignatureElement(Document document,
-                                      Element signatureElement,
-                                      DocumentType documentType) {
+            Element signatureElement,
+            DocumentType documentType) {
         // İmzayı mevcut üst elemanından kaldır
         Node parent = signatureElement.getParentNode();
         if (parent != null) {
@@ -65,6 +65,10 @@ public class XAdESDocumentPlacementService {
                 target = findEArchiveHeader(document);
                 break;
 
+            case EBiletReport:
+                target = findEBiletHeader(document);
+                break;
+
             case HrXml:
                 target = findHrXmlSignatureContainer(document);
                 break;
@@ -86,9 +90,11 @@ public class XAdESDocumentPlacementService {
      * UBL belgelerinde imzadan ÖNCE UBLExtensions yapısının mevcut olmasını sağlar.
      * Mevcut yapıyı katman katman kontrol eder ve sadece eksik olanı ekler:
      * <ul>
-     *   <li>UBLExtensions bile yoksa -> tüm yapıyı kök elemanın başına ekler</li>
-     *   <li>UBLExtensions var ama UBLExtension yoksa -> UBLExtension/ExtensionContent ekler</li>
-     *   <li>UBLExtension var ama ExtensionContent yoksa -> sadece ExtensionContent ekler</li>
+     * <li>UBLExtensions bile yoksa -> tüm yapıyı kök elemanın başına ekler</li>
+     * <li>UBLExtensions var ama UBLExtension yoksa -> UBLExtension/ExtensionContent
+     * ekler</li>
+     * <li>UBLExtension var ama ExtensionContent yoksa -> sadece ExtensionContent
+     * ekler</li>
      * </ul>
      * İmza, belgenin canonical formu üzerinden hesaplanır; bu yüzden yapı imzalama
      * öncesinde eklenmelidir.
@@ -121,7 +127,8 @@ public class XAdESDocumentPlacementService {
     }
 
     /**
-     * UBLExtensions/UBLExtension/ExtensionContent hiyerarşisini katman katman kontrol eder
+     * UBLExtensions/UBLExtension/ExtensionContent hiyerarşisini katman katman
+     * kontrol eder
      * ve sadece eksik olan kısmı ekler.
      */
     private void ensureUblExtensionStructure(Document document) {
@@ -137,8 +144,8 @@ public class XAdESDocumentPlacementService {
         if (ublExtension == null) {
             Node fragment = parseFragment(
                     "<ext:UBLExtension xmlns:ext=\"" + ns + "\">" +
-                    "<ext:ExtensionContent></ext:ExtensionContent>" +
-                    "</ext:UBLExtension>");
+                            "<ext:ExtensionContent></ext:ExtensionContent>" +
+                            "</ext:UBLExtension>");
             ublExtensions.insertBefore(
                     document.importNode(fragment, true),
                     ublExtensions.getFirstChild());
@@ -156,15 +163,16 @@ public class XAdESDocumentPlacementService {
     }
 
     /**
-     * Hiçbir UBLExtensions yapısı olmadığında tüm hiyerarşiyi kök elemanın başına ekler.
+     * Hiçbir UBLExtensions yapısı olmadığında tüm hiyerarşiyi kök elemanın başına
+     * ekler.
      */
     private void addFullUblExtensionsStructure(Document document) {
         Node fragment = parseFragment(
                 "<ext:UBLExtensions xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
-                "<ext:UBLExtension>" +
-                "<ext:ExtensionContent></ext:ExtensionContent>" +
-                "</ext:UBLExtension>" +
-                "</ext:UBLExtensions>");
+                        "<ext:UBLExtension>" +
+                        "<ext:ExtensionContent></ext:ExtensionContent>" +
+                        "</ext:UBLExtension>" +
+                        "</ext:UBLExtensions>");
 
         Element root = document.getDocumentElement();
         Node imported = document.importNode(fragment, true);
@@ -180,7 +188,8 @@ public class XAdESDocumentPlacementService {
     /**
      * XML string'ini parse edip kök elemanını döner.
      * DOM createElementNS yerine string parse kullanılır çünkü
-     * canonicalization sırasında namespace declaration sıralaması farklılık yaratabilir.
+     * canonicalization sırasında namespace declaration sıralaması farklılık
+     * yaratabilir.
      */
     private Node parseFragment(String xml) {
         try {
@@ -240,6 +249,23 @@ public class XAdESDocumentPlacementService {
         }
 
         return signatureNode != null ? signatureNode : applicationArea;
+    }
+
+    /**
+     * e-Bilet Raporu başlık elemanını bulur.
+     * 
+     * @throws IllegalArgumentException Başlık elemanı bulunamazsa
+     */
+    private Node findEBiletHeader(Document document) {
+        Node target = getFirstElementByTagNameNS(document, XmlConstants.NS_BILET, "baslik");
+
+        if (target == null) {
+            throw new IllegalArgumentException(
+                    String.format("e-Bilet rapor belgesi için 'baslik' elemanı bulunamadı. " +
+                            "Beklenen namespace: %s", XmlConstants.NS_BILET));
+        }
+
+        return target;
     }
 
     private Node getFirstElementByTagName(Document document, String tagName) {

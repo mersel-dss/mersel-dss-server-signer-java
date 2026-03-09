@@ -67,14 +67,14 @@ public class XAdESSignatureService {
     private final Semaphore semaphore;
 
     public XAdESSignatureService(XAdESService xadesService,
-                                 XAdESParametersBuilderService parametersBuilder,
-                                 XmlProcessingService xmlProcessor,
-                                 XAdESDocumentPlacementService documentPlacement,
-                                 XAdESLevelUpgradeService levelUpgradeService,
-                                 CryptoSignerService cryptoSigner,
-                                 CertificateVerifier certificateVerifier,
-                                 io.mersel.dss.signer.api.services.util.CompressionService compressionService,
-                                 Semaphore signatureSemaphore) {
+            XAdESParametersBuilderService parametersBuilder,
+            XmlProcessingService xmlProcessor,
+            XAdESDocumentPlacementService documentPlacement,
+            XAdESLevelUpgradeService levelUpgradeService,
+            CryptoSignerService cryptoSigner,
+            CertificateVerifier certificateVerifier,
+            io.mersel.dss.signer.api.services.util.CompressionService compressionService,
+            Semaphore signatureSemaphore) {
         this.xadesService = xadesService;
         this.parametersBuilder = parametersBuilder;
         this.xmlProcessor = xmlProcessor;
@@ -97,10 +97,10 @@ public class XAdESSignatureService {
      * @return İmzalanmış belge ve imza değeri içeren yanıt
      */
     public SignResponse signXml(InputStream xmlInputStream,
-                                DocumentType documentType,
-                                String signatureId,
-                                boolean zipped,
-                                SigningMaterial material) {
+            DocumentType documentType,
+            String signatureId,
+            boolean zipped,
+            SigningMaterial material) {
         try {
             // 1. XML byte'larını çıkar
             byte[] xmlBytes = extractXmlBytes(xmlInputStream, zipped);
@@ -158,10 +158,10 @@ public class XAdESSignatureService {
      * Semaphore ile eşzamanlı imza sayısını kontrol eder.
      */
     private SignResponse createSignature(Document mainDocument,
-                                         DSSDocument dssDocument,
-                                         XAdESSignatureParameters parameters,
-                                         DocumentType documentType,
-                                         SigningMaterial material) throws Exception {
+            DSSDocument dssDocument,
+            XAdESSignatureParameters parameters,
+            DocumentType documentType,
+            SigningMaterial material) throws Exception {
 
         // OCSP cache cleanup için signature ID'yi takip et
         String actualSignatureId = null;
@@ -239,9 +239,10 @@ public class XAdESSignatureService {
                 // 1. Bu imzaya özel cache'i temizle (her imza için)
                 XAdESLevelC.cleanupOcspCache(actualSignatureId);
 
-                // 2. Eski genel cache'leri temizle (sadece e-Arşiv Raporu/XAdES-A upgrade yapıldıysa)
+                // 2. Eski genel cache'leri temizle (sadece e-Arşiv Raporu/XAdES-A upgrade
+                // yapıldıysa)
                 // Çünkü XAdES-A upgrade sırasında çok fazla OCSP/CRL cache'i oluşur
-                if (documentType == DocumentType.EArchiveReport) {
+                if (documentType == DocumentType.EArchiveReport || documentType == DocumentType.EBiletReport) {
                     XAdESLevelC.cleanupOldCaches(5 * 60 * 1000L);
                 }
             }
