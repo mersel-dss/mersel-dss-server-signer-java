@@ -9,5 +9,6 @@ public enum DocumentType {
     UblDocument,
     HrXml,
     EArchiveReport,
+    EBiletReport,  
     OtherXmlDocument
 }

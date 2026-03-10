@@ -124,5 +124,89 @@ class XadesControllerTest {
         assertNotNull(response);
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
     }
+
+    @Test
+    void testSignXadesWithEBiletReportSuccess() throws Exception {
+        // Given
+        String xmlContent = "<?xml version=\"1.0\"?><biletRapor><baslik/></biletRapor>";
+        MockMultipartFile file = new MockMultipartFile(
+            "document",
+            "ebilet-rapor.xml",
+            "text/xml",
+            xmlContent.getBytes()
+        );
+
+        SignResponse mockResponse = new SignResponse(
+            xmlContent.getBytes(),
+            "test-ebilet-signature-value"
+        );
+
+        when(xadesSignatureService.signXml(
+            any(InputStream.class),
+            eq(DocumentType.EBiletReport),
+            isNull(),
+            eq(false),
+            eq(signingMaterial)
+        )).thenReturn(mockResponse);
+
+        // When
+        io.mersel.dss.signer.api.dtos.SignXadesDto dto =
+            new io.mersel.dss.signer.api.dtos.SignXadesDto();
+        dto.setDocument(file);
+        dto.setDocumentType(DocumentType.EBiletReport);
+        dto.setZipFile(false);
+
+        ResponseEntity<?> response = controller.signXades(dto);
+
+        // Then
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getHeaders().get("x-signature-value"));
+        assertEquals("test-ebilet-signature-value",
+            response.getHeaders().getFirst("x-signature-value"));
+    }
+
+    @Test
+    void testSignXadesWithEBiletReportPassesCorrectDocumentType() throws Exception {
+        // Given
+        String xmlContent = "<?xml version=\"1.0\"?><biletRapor/>";
+        MockMultipartFile file = new MockMultipartFile(
+            "document",
+            "ebilet-rapor.xml",
+            "text/xml",
+            xmlContent.getBytes()
+        );
+
+        SignResponse mockResponse = new SignResponse(
+            xmlContent.getBytes(),
+            "sig-value"
+        );
+
+        when(xadesSignatureService.signXml(
+            any(InputStream.class),
+            any(DocumentType.class),
+            any(),
+            anyBoolean(),
+            any()
+        )).thenReturn(mockResponse);
+
+        // When
+        io.mersel.dss.signer.api.dtos.SignXadesDto dto =
+            new io.mersel.dss.signer.api.dtos.SignXadesDto();
+        dto.setDocument(file);
+        dto.setDocumentType(DocumentType.EBiletReport);
+        dto.setZipFile(false);
+
+        controller.signXades(dto);
+
+        // Then
+        verify(xadesSignatureService).signXml(
+            any(InputStream.class),
+            eq(DocumentType.EBiletReport),
+            isNull(),
+            eq(false),
+            eq(signingMaterial)
+        );
+    }
 }
 
