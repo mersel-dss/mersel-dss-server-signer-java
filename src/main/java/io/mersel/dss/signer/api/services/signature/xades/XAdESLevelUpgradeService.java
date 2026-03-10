@@ -16,7 +16,7 @@ import javax.xml.crypto.dsig.CanonicalizationMethod;
 
 /**
  * XAdES imza seviyelerini yükselten servis.
- * e-Arşiv Raporları için XAdES-B'den XAdES-A'ya yükseltme yapar.
+ * e-Arşiv Raporları ve e-Bilet Raporları için XAdES-B'den XAdES-A'ya yükseltme yapar.
  */
 @Service
 public class XAdESLevelUpgradeService {
@@ -34,7 +34,7 @@ public class XAdESLevelUpgradeService {
 
     /**
      * Belge tipine göre imza seviyesini yükseltir.
-     * Şu an sadece e-Arşiv Raporları için XAdES-A yükseltmesi yapılır.
+     * e-Arşiv Raporları ve e-Bilet Raporları için XAdES-A yükseltmesi yapılır.
      * 
      * @param signedDocument İmzalanmış belge
      * @param documentType Belge tipi
@@ -44,19 +44,17 @@ public class XAdESLevelUpgradeService {
     public DSSDocument upgradeIfNeeded(DSSDocument signedDocument,
                                       DocumentType documentType,
                                       XAdESSignatureParameters baseParameters) {
-        // Sadece e-Arşiv Raporları için upgrade yap
-        if (documentType != DocumentType.EArchiveReport) {
+        if (documentType != DocumentType.EArchiveReport && documentType != DocumentType.EBiletReport) {
             return signedDocument;
         }
 
-        // Timestamp servis yoksa upgrade yapılamaz
         if (!timestampService.isAvailable()) {
-            LOGGER.warn("Timestamp servisi yapılandırılmamış. e-Arşiv Raporu için XAdES-A yükseltmesi atlanıyor.");
+            LOGGER.warn("Timestamp servisi yapılandırılmamış. {} için XAdES-A yükseltmesi atlanıyor.", documentType);
             return signedDocument;
         }
 
         try {
-            LOGGER.info("e-Arşiv Raporu için XAdES-A seviyesine yükseltiliyor...");
+            LOGGER.info("{} için XAdES-A seviyesine yükseltiliyor...", documentType);
 
             // Timestamp parametrelerini yapılandır
             XAdESTimestampParameters tsParams = new XAdESTimestampParameters();
@@ -74,7 +72,7 @@ public class XAdESLevelUpgradeService {
             
             DSSDocument upgradedDocument = levelA.extendSignatures(signedDocument, baseParameters);
 
-            LOGGER.info("e-Arşiv Raporu başarıyla XAdES-A seviyesine yükseltildi");
+            LOGGER.info("{} başarıyla XAdES-A seviyesine yükseltildi", documentType);
             return upgradedDocument;
 
         } catch (Exception ex) {
