@@ -6,9 +6,13 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  packages: write
+
 env:
-  GHCR_IMAGE: ghcr.io/${{ github.repository }}
-  DOCKERHUB_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/dss-server-signer-java
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -41,12 +45,9 @@ jobs:
           retention-days: 14
 
   docker:
-    name: Build and Push Docker Images
+    name: Build and Push Docker Image
     needs: test
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout
@@ -55,29 +56,18 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --- GHCR Login ---
-      - name: Log in to GitHub Container Registry
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # --- Docker Hub Login (optional, skipped if secrets not configured) ---
-      - name: Log in to Docker Hub
-        if: secrets.DOCKERHUB_USERNAME != ''
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels)
+      - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: |
-            ${{ env.GHCR_IMAGE }}
-            ${{ env.DOCKERHUB_IMAGE }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -99,11 +89,11 @@ jobs:
 
       - name: Smoke test
         run: |
-          docker pull ${{ env.GHCR_IMAGE }}:main
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
           docker run --rm -d \
             --name sign-api-smoke \
             -p 8085:8085 \
-            ${{ env.GHCR_IMAGE }}:main
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
 
           echo "Waiting for application startup..."
           for i in $(seq 1 30); do
@@ -121,13 +111,3 @@ jobs:
           done
 
           docker stop sign-api-smoke
-
-      - name: Update Docker Hub description
-        if: github.ref == 'refs/heads/main' && secrets.DOCKERHUB_USERNAME != ''
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: ${{ env.DOCKERHUB_IMAGE }}
-          short-description: "Mersel DSS Sign API - Dijital imza servisi"
-          readme-filepath: ./README.md
