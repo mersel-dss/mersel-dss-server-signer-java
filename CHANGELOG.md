@@ -8,399 +8,223 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 ## [Unreleased]
 
 ### Added
-
-- 🔧 **Güvenilir Kök Sertifika Resolver Sistemi** - Üç farklı resolver tipi desteği
-  - **KamuSM XML Depo Online Resolver**: İnternet üzerinden KamuSM XML deposunu otomatik indirme ve periyodik güncelleme
-  - **KamuSM XML Depo Offline Resolver**: Yerel dosya sisteminden KamuSM XML deposunu yükleme (air-gapped sistemler için)
-  - **Certificate Folder Resolver**: Belirtilen klasördeki tüm .crt/.cer/.pem dosyalarını güvenilir kök sertifika olarak yükleme
-  - Configuration ile kolay resolver değişimi (`trusted.root.resolver.type=kamusm-online|kamusm-offline|certificate-folder`)
-  - Tüm resolver'lar için aynı interface ve davranış garantisi (`TrustedRootCertificateResolver`)
-  - Offline ortamlarda güvenilir kök sertifika zinciri oluşturma desteği
-  - Özel sertifika klasörlerinden toplu sertifika yükleme desteği
-
-- 🔐 **Sertifika Listeleme API'si** - Keystore sertifikalarını görüntüleme ve bilgi alma
-  - **Sertifika Listesi Endpoint** (`GET /api/certificates/list`)
-    - PKCS#11 ve PFX keystore'larından tüm sertifikaları listeler
-    - Detaylı sertifika bilgileri (alias, serial, subject, issuer, geçerlilik tarihleri)
-    - Key usage ve extended key usage bilgileri
-    - Certificate policies ve CPS URL'leri
-    - Private key varlık kontrolü
-    - JSON formatında yapılandırılmış yanıt
-  - **Keystore Bilgileri Endpoint** (`GET /api/certificates/info`)
-    - Yapılandırılmış keystore tipi ve parametreleri
-    - PKCS#11 library path ve slot bilgisi
-    - PFX dosya yolu bilgisi
-    - Seçili sertifika alias ve serial number
-  - **Swagger/OpenAPI entegrasyonu**
-    - Detaylı endpoint dokümantasyonu
-    - Response şemaları ve örnekler
+- 🎫 **e-Bilet Rapor Desteği** (PR [#12](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/12)) - Katkıcı: [@ozlemkzn](https://github.com/ozlemkzn) / e-Platform Bulut Bilişim A.Ş.
+- 🧪 **Yeni Test Coverage** - 22 yeni test (toplam: 115)
+- 🐳 **GHCR Desteği** - Docker Hub + GHCR'e tek workflow'dan paralel push
+- 📦 **Docker Image İçinde 5 Test Sertifikası** - Runtime'da `-e` ile değiştirilebilir
 
 ### Changed
+- 🔄 **GitHub Actions Konsolidasyonu** - 3 workflow → 2 workflow, sıfır çakışma
+- ⬆️ **Actions v3 → v4** - Deprecated action hataları giderildi
+- 🐳 **Dockerfile** - Mevcut test sertifikaları image'a gömüldü, varsayılan ENV'ler eklendi
 
-- 🌐 **CORS Yapılandırması İyileştirildi**
-  - Timestamp header'ları CORS exposed headers'a eklendi
-    - `X-Timestamp-Time` - Zaman damgası zamanı
-    - `X-Timestamp-TSA` - TSA (Time Stamp Authority) bilgisi
-    - `X-Timestamp-Serial` - Seri numarası
-    - `X-Timestamp-Hash-Algorithm` - Kullanılan hash algoritması
-  - `Content-Disposition` header'ı exposed edildi (dosya indirmeleri için)
-  - `x-signature-value` header'ı exposed edildi (imza değeri için)
-  - CORS configuration daha temiz ve maintainable
+### Fixed
+- 🐛 **XAdES-A Yükseltme Hatası** - e-Bilet raporları XAdES-B'de kalıyordu
+- 🔧 **CI Workflow** - `actions/upload-artifact@v3` deprecated hatası
 
-### Previous Changes
+---
 
-- 🎨 **Scalar API Documentation** - Modern ve kullanıcı dostu API dokümantasyon arayüzü
-  - Swagger UI yerine Scalar kullanımı
-  - Dark mode ve modern tasarım
-  - Daha iyi UX ve navigasyon
-  - Interactive API playground
-  - Otomatik kod örnekleri (cURL, JavaScript, Python, Java, Go, PHP, Ruby, C#)
-  - Mobile uyumlu responsive tasarım
-  - Dokümantasyon: `docs/SCALAR.md`
+## [0.3.0] - 2026-03-11
 
-- ⏰ **RFC 3161 Zaman Damgası (Timestamp) Servisi** - Binary belgelere zaman damgası ekleme ve doğrulama
-  - **Timestamp Alma Endpoint** (`POST /api/timestamp/get`)
-    - Herhangi bir binary dosya için RFC 3161 uyumlu timestamp
-    - Multipart/form-data ile dosya yükleme
-    - Binary response (application/octet-stream) - direkt .tst dosyası
-    - Metadata HTTP header'larında (`X-Timestamp-*`)
-    - Çoklu hash algoritması desteği (SHA256, SHA384, SHA512)
-    - TÜBİTAK ESYA ve standart TSP sunucuları desteği
-  - **Timestamp Doğrulama Endpoint** (`POST /api/timestamp/validate`)
-    - Timestamp token'ın yapısal doğrulaması
-    - TSA sertifika kontrolü ve geçerlilik doğrulaması
-    - Orijinal belge ile hash eşleşme kontrolü (opsiyonel)
-    - Detaylı validation raporu
-    - Sertifika geçerlilik tarihi kontrolü
-  - **Servis Durumu Endpoint** (`GET /api/timestamp/status`)
-    - TSP sunucu yapılandırma kontrolü
-    - Servis hazır olma durumu
-  - **Teknik Özellikler**
-    - DSS (Digital Signature Service) 6.3 entegrasyonu
-    - BouncyCastle TSP implementasyonu
-    - Hybrid parsing yaklaşımı (TimeStampResponse + CMSSignedData)
-    - Robust error handling
-    - Comprehensive logging
-  - **DTO'lar**
-    - `TimestampRequestDto` - Timestamp alma talebi (deprecated, geriye dönük uyumluluk)
-    - `TimestampResponseDto` - Internal use için metadata
-    - `TimestampValidationDto` - Validation talebi (deprecated, geriye dönük uyumluluk)
-    - `TimestampValidationResponseDto` - Detaylı validation sonucu
-  - **Servisler**
-    - `TimestampService` - Core timestamp işlemleri
-    - `TimestampConfigurationService` - TSP sunucu yapılandırması (mevcut)
-    - `TimestampController` - REST API endpoints
-  - **Dokümantasyon**
-    - `docs/TIMESTAMP.md` - Kapsamlı kullanım kılavuzu
-    - Bash/cURL örnekleri
-    - Kullanım senaryoları ve SSS
-  - **Test Coverage**
-    - `TimestampServiceTest` - 11 unit test
-    - `TimestampControllerTest` - 11 unit test
-    - `examples/curl/timestamp-example.sh` - 9 senaryo ile entegrasyon test script'i
-  - **Özellikler**
-    - ✅ RFC 3161 tam uyumluluk
-    - ✅ Binary response ile %25 bandwidth tasarrufu
-    - ✅ Metadata HTTP header'larda (RESTful)
-    - ✅ Browser'da direkt dosya indirme
-    - ✅ Multipart/form-data (diğer endpoint'lerle tutarlı)
-    - ✅ TÜBİTAK ESYA özel authentication desteği
-    - ✅ KAMUSM timestamp sunucusu desteği
-    - ✅ E-Tugra ve diğer RFC 3161 sunucuları desteği
-    - ✅ Swagger/OpenAPI 3.0 entegrasyonu
-    - ✅ Hash verification
-    - ✅ Certificate validation
-    - ✅ Nonce support
+### Added
+- 🎫 **e-Bilet Rapor İmzalama** (PR [#12](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/12))
+  - `EBiletReport` document type (`DocumentType` enum)
+  - `NS_BILET` XML namespace sabiti (`XmlConstants`)
+  - e-Bilet rapor belgelerinde `baslik` elemanı altına imza yerleştirme (`XAdESDocumentPlacementService`)
+  - e-Bilet raporları için XAdES-A seviyesine yükseltme
+  - e-Bilet imzalama sonrası OCSP cache temizliği
+  - Katkıcı: [@ozlemkzn](https://github.com/ozlemkzn) / e-Platform Bulut Bilişim A.Ş.
 
-- 🐳 **Docker & Docker Compose Desteği** - Production-ready containerization
-  - **Dockerfile** - Multi-stage build (Maven build + JRE runtime)
-    - Eclipse Temurin 8 JRE (AdoptOpenJDK resmi devamı)
-    - Java 8 compatibility (production-tested)
-    - Optimized layers (dependencies cache)
-    - Non-root user (security best practice)
-    - Built-in health check
-    - Image size: ~250MB
-  - **docker-compose.yml** - Tam monitoring stack
-    - Sign API service
-    - Prometheus (metrics collection)
-    - Grafana (visualization) - Dashboard ID: **11378**
-    - AlertManager (optional profile)
-    - Persistent volumes
-    - Health checks tüm servislerde
-  - **.dockerignore** - Build optimization
-  - **.env.example** - Environment variables template
-  - **Monitoring Stack Yapılandırmaları**
-    - `devops/monitoring/prometheus/prometheus.yml` - Scrape config
-    - `devops/monitoring/prometheus/alerts.yml` - 8 alert rule
-    - `devops/monitoring/grafana/provisioning/` - Otomatik datasource ve dashboard
-    - `devops/monitoring/alertmanager/alertmanager.yml` - Alert routing
+- 🧪 **Test Coverage Artışı** - 22 yeni test eklendi (93 → 115)
+  - `XAdESDocumentPlacementServiceTest` - e-Bilet, e-Arşiv, UBL ve OtherXml belge yerleştirme testleri
+  - `XAdESLevelUpgradeServiceTest` - XAdES-A yükseltme/atlama ve timestamp servis testleri
+  - `XadesControllerTest` - e-Bilet document type controller testleri
 
-- 🖥️ **Cross-Platform Script Desteği** - Windows ve Unix için ayrı script'ler
-  - **Unix/Linux/macOS** (`scripts/unix/` ve `devops/docker/unix/`)
-    - 5 bash script (.sh) - Ana script'ler
-    - 3 Docker helper script (.sh) - Test kurum başlatma
-    - Tam özellik desteği
-    - Renkli terminal çıktısı
-  - **Windows PowerShell** (`scripts/windows/` ve `devops/docker/windows/`)
-    - 4 PowerShell script (.ps1) - Ana script'ler
-    - 3 Docker helper script (.ps1) - Test kurum başlatma
-    - Modern Windows (10/11) için optimize
-    - Renkli çıktı desteği
-    - Execution policy yönetimi
-  - Her platform için ayrı README dökümanları
-  - **Not:** Windows Batch (.bat) desteği kaldırıldı - PowerShell daha modern ve güçlü
+- 🐳 **GHCR (GitHub Container Registry) Desteği**
+  - `ghcr.io/mersel-dss/mersel-dss-server-signer-java:latest`
+  - Multi-platform: `linux/amd64`, `linux/arm64`
+  - Smoke test: container başlatılıp health check doğrulanıyor
+  - Docker Hub ve GHCR'e tek workflow'dan paralel push
 
-- 📂 **DevOps Klasörü Organizasyonu** - Modern repository yapısı
-  - `devops/docker/` - Docker deployment files
-    - `.env.test.kurum1/2/3` - Hazır test kurum yapılandırmaları
-    - `.env` symlink - Varsayılan: test kurum 1
-    - `unix/` - Unix/Linux/macOS helper scripts
-    - `windows/` - Windows PowerShell helper scripts
-  - `devops/monitoring/` - Monitoring configurations
-  - `devops/kubernetes/` - Kubernetes manifests placeholder (v0.2.0)
-  - `devops/README.md` - DevOps overview
+- 📦 **Docker Image İçinde Test Sertifikaları** - Hazır kullanıma uygun 5 sertifika
+  - `testkurum01_rsa2048@test.com.tr` (RSA-2048, parola: 614573) - **varsayılan**
+  - `testkurum02_ec384@test.com.tr` (EC-384, parola: 825095)
+  - `testkurum02_rsa2048@sm.gov.tr` (RSA-2048, parola: 059025)
+  - `testkurum03_ec384@test.com.tr` (EC-384, parola: 540425)
+  - `testkurum03_rsa2048@test.com.tr` (RSA-2048, parola: 181193)
+  - Güvenilir köklere (KamuSM) uyumlu, zincir doğrulaması çalışıyor
+  - `docker run -e PFX_PATH=... -e CERTIFICATE_PIN=... -e CERTIFICATE_ALIAS=...` ile runtime'da değiştirilebilir
 
-- 🚀 **Hızlı Başlatma Script'leri** - Hazır test sertifikaları ile tek komutla başlatma
-  - **İnteraktif Script**: `scripts/quick-start-with-test-certs.sh` - Sertifika seçimi ve otomatik yapılandırma
-  - **Direkt Başlatma**: `scripts/start-test1.sh`, `start-test2.sh`, `start-test3.sh` - Her sertifika için ayrı script
-  - **Otomatik Test**: `scripts/test-with-bundled-certs.sh` - Tüm API endpoint'lerini otomatik test eder
-  - Renkli terminal çıktısı ve kullanıcı dostu mesajlar
-  - TÜBİTAK timestamp opsiyonel yapılandırma desteği
-  - Environment variable'lar otomatik ayarlanır
-  - Cross-directory çalışma desteği (nereden çağırılırsa çağırılsın çalışır)
+### Changed
+- 🔄 **GitHub Actions Workflow Konsolidasyonu** - 3 workflow → 2 workflow, sıfır çakışma
+  - `ci.yml`: PR ve develop branch'te çalışır (build + test + code quality)
+  - `docker.yml`: main push ve tag'lerde çalışır (test → Docker Hub + GHCR push + smoke test)
+  - Eski workflow'lar silindi: `docker-publish.yml`, `ghcr-publish.yml`
+  - Her push'ta 3x build+test yerine 1x çalışıyor
+- ⬆️ **GitHub Actions Versiyon Güncellemeleri**
+  - `actions/checkout@v3` → `@v4`
+  - `actions/setup-java@v3` → `@v4`
+  - `actions/upload-artifact@v3` → `@v4`
+  - `mvn validate -B` adımı eklendi (lokal bağımlılık kurulumu)
+- 🐳 **Dockerfile Güncellendi** - Test sertifikaları ile production-ready
+  - Mevcut test sertifikaları image'a gömülüyor (`/app/test-certs/`)
+  - Varsayılan ENV'ler: `PFX_PATH`, `CERTIFICATE_PIN=614573`, `CERTIFICATE_ALIAS=1`
 
-- 📊 **Prometheus Metrics Export** - Production-grade monitoring desteği
-  - **Micrometer Prometheus Registry** dependency eklendi
-  - **Prometheus Endpoint**: `/actuator/prometheus` - 40+ metrik export edilir
-  - **Metrics Detail Endpoint**: `/actuator/metrics/{name}` - Belirli metrik detayları
-  - HTTP request metrics (count, duration, percentiles)
-  - JVM metrics (memory, GC, threads, classes)
-  - System metrics (CPU, disk, uptime)
-  - Tomcat metrics (sessions, threads)
-  - Percentile histogram desteği (p50, p95, p99)
-  - Application tagging (multi-instance monitoring için)
+### Fixed
+- 🐛 **XAdES-A Yükseltme Hatası** - e-Bilet raporları için XAdES-A yükseltme yapılmıyordu
+  - `XAdESLevelUpgradeService`: `EBiletReport` document type eksikti, XAdES-B'de kalıyordu
+  - OCSP cache temizliği çalışıyor ama yükseltme atlanıyordu (tutarsızlık)
+  - Log mesajları dinamik hale getirildi (document type bilgisi)
+- 🔧 **CI Workflow Hatası** - `actions/upload-artifact@v3` deprecated olduğu için build başarısız oluyordu
 
-- 🔍 **Spring Boot Actuator** - Health check ve monitoring
-  - **Health Check Endpoint**: `/actuator/health` - API sağlık durumu
-  - **Info Endpoint**: `/actuator/info` - Uygulama bilgileri
+---
+
+## [0.2.1] - 2026-03-03
+
+### Added
+- 🔏 **CAdES İmza Desteği** (PR [#11](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/11))
+  - DSS kütüphanesi ile CAdES-BES imzalama
+  - Katkıcı: [@Burak-Attila](https://github.com/Burak-Attila)
+
+---
+
+## [0.2.0] - 2026-03-02
+
+### Fixed
+- 🐛 **UBLExtensions Hiyerarşisi** (PR [#10](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/10))
+  - Eksik `UBLExtensions/UBLExtension/ExtensionContent` hiyerarşisi otomatik oluşturuluyor
+  - Kısmi UBLExtensions yapısı graceful olarak handle ediliyor
+  - Import'lar ve hata yönetimi iyileştirildi
+  - Katkıcı: [@batuhanonerr](https://github.com/batuhanonerr)
+
+---
+
+## [0.1.5] - 2026-02-19
+
+### Changed
+- 🔧 **Kriptografik İyileştirmeler** - İmza işleme ve şifreleme fonksiyonelliği geliştirildi
+
+### Fixed
+- 🐛 **UBLExtensions Auto-Create** - Eksik `UBLExtensions/UBLExtension/ExtensionContent` yapısı otomatik oluşturuluyor
+
+---
+
+## [0.1.4] - 2026-02-04
+
+### Fixed
+- 🐛 **WS-Security signDocument** (PR [#8](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/8))
+  - WS-Security imzalama hatası düzeltildi
+  - Katkıcı: [@batuhanonerr](https://github.com/batuhanonerr)
+- 🐛 **Zip Okuma Problemi** - Zip dosyalarının okunmasındaki hata giderildi
+
+---
+
+## [0.1.3] - 2025-11-16
+
+### Added
+- 🔌 **PKCS#11 Slot Yapılandırması** (PR [#6](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/6))
+  - `PKCS11_SLOT` ve `PKCS11_SLOT_LIST_INDEX` parametreleri ayrı ayrı kullanılabilir
+  - Katkıcı: [@hasanyildiz](https://github.com/hasanyildiz)
+
+---
+
+## [0.1.2] - 2025-11-13
+
+### Fixed
+- 🐛 **TÜBİTAK ECDSA Doğrulama** (PR [#3](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/3))
+  - TÜBİTAK XAdES için ECDSA doğrulama iyileştirmeleri
+  - TÜBİTAK customization for XAdES BES signature
+  - Katkıcı: [@hasanyildiz](https://github.com/hasanyildiz)
+
+---
+
+## [0.1.1] - 2025-11-10
+
+### Added
+- ⏰ **RFC 3161 Zaman Damgası Servisi**
+  - `POST /api/timestamp/get` - RFC 3161 uyumlu timestamp
+  - `POST /api/timestamp/validate` - Timestamp doğrulama
+  - `GET /api/timestamp/status` - TSP sunucu durumu
+  - `TimestampStatusDto` eklendi
+  - TÜBİTAK ESYA, KAMUSM ve standart TSP sunucuları desteği
+  - 22 unit test (TimestampServiceTest + TimestampControllerTest)
+
+- 🔧 **Güvenilir Kök Sertifika Resolver Sistemi**
+  - **KamuSM XML Depo Online Resolver**: İnternet üzerinden otomatik indirme ve periyodik güncelleme
+  - **KamuSM XML Depo Offline Resolver**: Air-gapped sistemler için yerel dosya
+  - **Certificate Folder Resolver**: Klasördeki .crt/.cer/.pem dosyalarını yükleme
+  - `trusted.root.resolver.type=kamusm-online|kamusm-offline|certificate-folder`
+
+- 🔐 **Sertifika Listeleme API'si**
+  - `GET /api/certificates/list` - Keystore'daki tüm sertifikaları listele
+  - `GET /api/certificates/info` - Keystore tipi ve parametreleri
+  - `--list-certificates` CLI argümanı (Spring context olmadan)
+  - OID, Key Usage, Extended Key Usage, Certificate Policies bilgileri
+
+- 🎨 **Scalar API Documentation** - Swagger UI yerine modern Scalar arayüzü
+
+- 📊 **Prometheus Metrics Export**
+  - `/actuator/prometheus` - 40+ metrik
+  - HTTP, JVM, System, Tomcat metrikleri
+  - Percentile histogram (p50, p95, p99)
+
+- 🔍 **Spring Boot Actuator**
+  - `/actuator/health`, `/actuator/info`
   - Kubernetes liveness/readiness probe desteği
-  - Docker health check desteği
-  - CI/CD pipeline entegrasyonu için hazır
-
-- 📚 **Kapsamlı Monitoring Dökümanları**
-  - **docs/MONITORING.md** - Prometheus & Grafana kurulum rehberi
-    - Önerilen Grafana Dashboard ID: **11378** (Spring Boot 2.x)
-    - Docker Compose monitoring stack örneği
-    - Prometheus scrape yapılandırması
-    - Alert rules örnekleri (API down, high error rate, high memory, vb.)
-    - Grafana panel örnekleri
-    - Önemli metrikler ve PromQL sorguları
-    - Production deployment örnekleri (Docker, Kubernetes)
-  - **docs/ACTUATOR_ENDPOINTS.md** - Actuator endpoint'leri detaylı rehber
-    - Health, Info, Prometheus, Metrics endpoint'leri
-    - Kubernetes probe yapılandırması
-    - CI/CD entegrasyon örnekleri
-  - **TEST_CERTIFICATES.md** - Test sertifikaları kullanım rehberi
-  - **TEST_CERTS_CHEATSHEET.md** - Hızlı başvuru kılavuzu
-  - **scripts/README.md** - Script'ler dökümanı
-
-- 🔐 **Test Sertifikaları** - Geliştirme ortamı için hazır sertifikalar
-  - 3 adet test PFX sertifikası (`resources/test-certs/`)
-  - `testkurum01@test.com.tr_614573.pfx` (Parola: 614573)
-  - `testkurum02@sm.gov.tr_059025.pfx` (Parola: 059025)
-  - `testkurum3@test.com.tr_181193.pfx` (Parola: 181193)
-  - Dosya isminde `_` sonrası parola formatı (kullanıcı dostu)
-  - Güvenilir kök sertifikalarla uyumlu (normal doğrulama çalışır)
-
-- 🔥 **Sertifika Listeleme API'si** - Native Java ile keystore sertifikalarını listeleme
-  - **REST API**: `GET /api/certificates/list` - Çalışan API'den sertifika listesi
-  - **REST API**: `GET /api/certificates/info` - Keystore bilgileri
-  - **Command-line Utility**: `java -jar xxx.jar --list-certificates` - API başlatmadan sertifikaları listele
-  - **Cross-platform**: macOS ARM64, Linux, Windows'da sorunsuz çalışır
-  - **Mimari bağımsız**: Java'nın native PKCS#11 desteği kullanılır
-  - **JSON output**: REST API ile programatik erişim
-  - **Pretty console output**: CLI ile renkli, formatlanmış çıktı
-  - Hem PKCS#11 hem PFX desteği
-  - Alias, serial number (hex/dec), subject, issuer, validity bilgileri
-  - Private key kontrolü
-  - **OID Bilgileri**: Key Usage, Extended Key Usage, Certificate Policies (ham değerler)
-  - **Policy Qualifiers**: CPS URL'leri ve User Notice metinleri sertifikadan parse edilir
-  - **No OID Mapping**: OID'ler olduğu gibi gösterilir, her TSP'ye özel mapping yok
-  - Kullanıcılar OID'leri görebilir ve kendi araştırmalarını yapabilir
-  
-- 📘 **Sertifika Seçimi Dokümantasyonu** - Kapsamlı sertifika seçimi rehberi (docs/CERTIFICATE_SELECTION.md)
-  - Alias ile sertifika seçimi detayları
-  - Serial number ile sertifika seçimi (hexadecimal format)
-  - Öncelik sırası açıklaması
-  - Sertifika bilgilerini bulma yöntemleri (4 pratik yöntem)
-  - **⚠️ Kritik bölüm**: Doğru sertifikayı seçme rehberi
-  - **Mali Mühür**: SIGN0 vs ENCR0 ayrımı, Extended Key Usage kontrolü
-  - **Bireysel E-İmza**: Key Usage (Digital Signature + Non Repudiation) kontrolü
-  - Gerçek örneklerle pratik senaryolar
-  - macOS ARM64 mimari sorunları ve çözümleri
-  - Best practices ve karar tablosu
-  
-- 🔧 **find-certificate-info.sh** - PFX ve PKCS#11'den sertifika bilgilerini çıkaran helper script
-  - Alias listesi görüntüleme
-  - Serial number (hex) çıkarma
-  - Environment variable örnekleri oluşturma
-  - macOS ARM64 tespit ve Rosetta desteği
-  - Java fallback mekanizması
-  - Hem PFX hem PKCS#11 desteği
 
 ### Changed
+- 🌐 **CORS** - Timestamp ve signature header'ları exposed headers'a eklendi
+- 🔧 **Sertifika Yapılandırması** - `CERTIFICATE_ALIAS` ve `CERTIFICATE_SERIAL_NUMBER` opsiyonel
+- 🎯 **SignatureApplication** - `--list-certificates`, `--help`, `--version` CLI argümanları
 
-- 🔧 **Sertifika Yapılandırması İyileştirmeleri**
-  - `CERTIFICATE_SERIAL_NUMBER` artık opsiyonel (varsayılan: boş string)
-  - `CERTIFICATE_ALIAS` artık opsiyonel (varsayılan: boş string)
-  - SignatureServiceConfiguration - Varsayılan değerler eklendi
-  - Test sertifikaları için `CERTIFICATE_ALIAS=1` kullanımı
-  - Sertifika bulunamazsa daha açıklayıcı hata mesajları
+### Fixed
+- 🐛 CI workflow ve test hataları düzeltildi
+- 🐛 Docker publish workflow düzeltildi
 
-- 📖 **Dokümantasyon İyileştirmeleri**
-  - README.md - Monitoring bölümü ve Grafana Dashboard ID eklendi
-  - README.md - Actuator endpoint'leri listeye eklendi
-  - QUICK_START.md - Test sertifikaları bölümü eklendi (öncelikli pozisyon)
-  - QUICK_START.md - Health check endpoint referansları
-  - SECURITY.md - Test sertifikaları güvenlik uyarısı eklendi
-  - examples/curl/README.md - Test script'leri referansları
-  - application.properties - Actuator ve Prometheus yapılandırması eklendi
-
-- 📁 **Script Organizasyonu**
-  - Script'ler platform bazlı organize edildi
-  - `scripts/unix/` - Unix/Linux/macOS bash script'leri
-  - `scripts/windows/` - Windows PowerShell ve Batch script'leri
-  - Her platform için ayrı README
-  - Script'ler otomatik olarak proje root dizinine geçer
-  - Yerden bağımsız çalışma desteği (portable scripts)
-
-- 📦 **DevOps Yapılandırmaları**
-  - Tüm deployment dosyaları `devops/` altında organize edildi
-  - Docker, monitoring ve Kubernetes için ayrı klasörler
-  - Gelecekte genişletilebilir yapı (CI/CD, Terraform, vb.)
-  
-- 🎯 **SignatureApplication** - Command-line argüman desteği
-  - `--list-certificates` / `--list-certs`: Sertifikaları listele
-  - `--help` / `-h`: Yardım mesajı
-  - `--version` / `-v`: Versiyon bilgisi
-  - Spring context olmadan hızlı çalışma
-
-### Improved
-
-- 🧪 **Test Workflow İyileştirmeleri**
-  - `test-with-bundled-certs.sh` - Actuator health check ile API hazır kontrolü
-  - Daha güvenilir başlangıç kontrolü
-  - Renkli test sonuçları ve özet rapor
-  - Otomatik test dosyası oluşturma (XML, PDF, SOAP)
-
-### Technical Details
-
-- **pom.xml Güncellemeleri**
-  - `spring-boot-starter-actuator` dependency eklendi
-  - `micrometer-registry-prometheus` dependency eklendi
-  - Spring Boot parent version: 2.7.18
-
-- **application.properties Yapılandırması**
-  - `management.endpoints.web.exposure.include=health,info,prometheus,metrics`
-  - `management.metrics.export.prometheus.enabled=true`
-  - `management.metrics.distribution.percentiles-histogram.http.server.requests=true`
-  - `management.metrics.tags.application=${spring.application.name}`
-
-- **Sertifika Validation**
-  - CertificateValidatorService - Normal güven doğrulaması korundu
-  - Test sertifikaları güvenilir köklerle çalışıyor
-  - SKIP_CERTIFICATE_TRUST_VALIDATION gereksiz karmaşıklık kaldırıldı
-
-- **Yeni DTO**: `CertificateInfoDto` - Sertifika bilgileri (alias, serial, OID'ler)
-- **Yeni Service**: `CertificateInfoService` - Keystore okuma ve OID extraction
-  - `extractKeyUsage()` - 9 farklı Key Usage biti
-  - `extractExtendedKeyUsage()` - Extended Key Usage OID'leri
-  - `extractCertificatePolicies()` - Policy OID'leri + CPS/User Notice qualifiers
-- **Yeni Controller**: `CertificateInfoController` - REST endpoint'leri
-- Mevcut kod zaten hem alias hem de serial number desteğine sahipti
-- `KeyStoreLoaderService.resolveKeyEntry()` her iki yöntemi de destekliyor
-- BigInteger ile hex formatı doğru şekilde parse ediliyor
-- Öncelik sırası: 1) Alias → 2) Serial Number → 3) Otomatik seçim
-
-### Design Philosophy
-- ✅ **No OID mapping**: OID'ler sertifikadan okunan ham değerler olarak gösterilir
-- ✅ **Show, don't interpret**: Her TSP'nin farklı OID yapısı var, mapping yerine ham veri
-- ✅ **CPS reference**: Kullanıcılar sertifika içindeki CPS URL'den detaylı bilgi alabilir
-- ✅ **No external tools**: pkcs11-tool, OpenSC gibi araçlara bağımlı değil
-- ✅ **Cross-platform**: macOS ARM64 mimari sorunlarından etkilenmez
-- ✅ **Integrated**: API'nin kendi bağımlılıklarını kullanır
-- ✅ **Fast**: Spring Boot başlatmadan da çalışabilir
-- ✅ **Reliable**: Java'nın native PKCS#11 implementasyonu
+---
 
 ## [0.1.0] - 2025-11-07
 
 ### 🎉 İlk Public Release
 
 #### Added
-- 📝 **SECURITY.md** - Kapsamlı güvenlik politikası ve best practices
+- 🐳 **Docker & Docker Compose Desteği**
+  - Multi-stage Dockerfile (Maven build + Eclipse Temurin 8 JRE)
+  - docker-compose.yml ile Prometheus + Grafana monitoring stack
+  - Non-root user, built-in health check, ~250MB image
+- 🖥️ **Cross-Platform Script Desteği**
+  - Unix/Linux/macOS bash script'leri (`scripts/unix/`)
+  - Windows PowerShell script'leri (`scripts/windows/`)
+  - Docker helper script'leri (test kurum başlatma)
+- 📂 **DevOps Organizasyonu** - `devops/docker/`, `devops/monitoring/`, `devops/kubernetes/`
+- 🚀 **Hızlı Başlatma Script'leri** - Test sertifikaları ile tek komutla başlatma
+- 🔐 **Test Sertifikaları** - 3 adet test PFX (`resources/test-certs/`)
+- 📚 **Kapsamlı Dokümantasyon** - MONITORING.md, ACTUATOR_ENDPOINTS.md, CERTIFICATE_SELECTION.md
+- 📝 **SECURITY.md** - Güvenlik politikası ve best practices
 - 🔒 **CORS Yapılandırması** - Güvenli cross-origin resource sharing
 - 🛡️ **Security Headers** - XSS, Clickjacking koruması
-- 📊 **Performance Guide** - JVM tuning ve production optimizasyonu (docs/PERFORMANCE.md)
-- 📚 **Örnek Projeler** - cURL (examples/)
+- 📊 **Performance Guide** - JVM tuning rehberi (docs/PERFORMANCE.md)
 - 🧪 **Unit Testler** - Temel servis ve controller testleri
 - 📋 **CHANGELOG.md** - Versiyon geçmişi takibi
 
 #### Changed
-- ♻️ **Log Yönetimi Refactored**
-  - Ana dizin yerine logback-spring.xml kullanımı
-  - Yapılandırılabilir log dizini (LOG_PATH)
-  - Rolling file appenders (10MB, 30 gün)
-  - Ayrı error.log ve signature.log dosyaları
-  - Async logging desteği hazır
-
+- ♻️ **Log Yönetimi** - logback-spring.xml, rolling file appenders, ayrı error.log/signature.log
 - 📦 **Dependency Güncellemeleri** (JDK 1.8 uyumlu)
-  - Spring Boot: 2.3.7 → 2.7.18 (LTS, güvenlik güncellemeleri)
-  - Jackson: 2.11.2 → 2.15.3 (CVE düzeltmeleri)
-  - BouncyCastle: 1.50 → 1.70 (güvenlik yamalarıı)
+  - Spring Boot: 2.3.7 → 2.7.18
+  - Jackson: 2.11.2 → 2.15.3
+  - BouncyCastle: 1.50 → 1.70
   - Apache HttpClient: 4.5.10 → 4.5.14
-  - Commons Codec: 1.15 → 1.16.1
   - SpringDoc OpenAPI: 1.4.8 → 1.7.0
   - Sentry: 4.1.0 → 6.34.0
-  - JSoup: 1.10.2 → 1.17.2
-  - Commons Text: 1.8 → 1.11.0
-
-- 📖 **README.md Güncellemeleri**
-  - Yeni badges eklendi (Version, PRs Welcome, DSS)
-  - Roadmap bölümü (v0.2.0, v0.3.0 planları)
-  - Performance metrikleri
-  - Güvenlik uyarıları
-  - Bağımlılıklar tablosu güncellendi
-  - GitHub URL'leri placeholder olarak eklendi
-
-#### Improved
-- 🚀 **Application Startup**
-  - Temiz SLF4J logging (TeeOutputStream kaldırıldı)
-  - Başlangıç bilgilendirme logları
-  - Daha iyi hata yönetimi
-
-- 📝 **Dokümantasyon**
-  - Tüm yapılandırma dosyaları yorumlandı
-  - Örnek kullanımlar ve script'ler
-  - Postman koleksiyonu
-  - Performance tuning rehberi
-
-#### Security
-- 🔒 CORS yapılandırması production-ready
-- 🛡️ Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection)
-- 📋 Güvenlik politikası dokümante edildi
-- ⚠️ Authentication eksikliği dokümante edildi (internal use için tasarlandı)
 
 #### Fixed
 - 🐛 Log dosyalarının ana dizinde oluşması sorunu
 - 📝 application.properties syntax düzeltmeleri
 - 🔧 Maven compiler encoding yapılandırması
 
-#### Technical Debt
-- ⚠️ API Authentication henüz yok (v0.2.0'da planlandı)
-- ⚠️ Rate limiting henüz yok (v0.2.0'da planlandı)
-- ⚠️ Docker desteği henüz yok (v0.2.0'da planlandı)
+---
 
-## [0.0.1] - 2025-XX-XX
+## [0.0.1] - 2025-10-XX
 
 ### İlk İç Versiyon
 - ✅ XAdES imzalama (e-Fatura, e-Arşiv, e-İrsaliye)
@@ -414,39 +238,16 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ---
 
-## Versiyon Numaralandırma
-
-Bu proje [Semantic Versioning](https://semver.org/) kullanır:
-
-- **MAJOR** versiyon: Geriye uyumsuz API değişiklikleri
-- **MINOR** versiyon: Geriye uyumlu yeni özellikler
-- **PATCH** versiyon: Geriye uyumlu bug düzeltmeleri
-
-## Kategori Açıklamaları
-
-- **Added**: Yeni özellikler
-- **Changed**: Mevcut özelliklerde değişiklikler
-- **Deprecated**: Yakında kaldırılacak özellikler
-- **Removed**: Kaldırılan özellikler
-- **Fixed**: Bug düzeltmeleri
-- **Security**: Güvenlik düzeltmeleri
-- **Improved**: İyileştirmeler
-
 ## Gelecek Sürümler
 
-### v0.2.0 (Planlanan)
-- ✅ ~~Metrics (Prometheus)~~ - v0.1.0'da eklendi
-- ✅ ~~Docker ve Docker Compose~~ - v0.1.0'da eklendi
+### v0.4.0 (Planlanan)
 - Kubernetes manifests
 - Rate limiting
 - API Authentication
 - Asenkron imzalama
 - Batch imzalama
-- CI/CD pipeline (GitHub Actions)
 
-### v0.3.0 (Planlanan)
-- CAdES imza desteği
+### v0.5.0 (Planlanan)
 - WebSocket bildirimler
 - Kafka/RabbitMQ entegrasyonu
 - Dashboard UI
-
