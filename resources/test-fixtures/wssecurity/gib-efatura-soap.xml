@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GİB e-Fatura / e-Arşiv Mali Mühür SOAP request örneği.
+
+  Gerçek GİB endpoint'lerinin SOAP envelope iskeletini taklit eder
+  (production envelope ile namespace + element order paritesi):
+    - SOAP 1.1 envelope (GİB legacy endpoint'lerinin çoğu 1.1)
+    - WS-Addressing yok (bu fixture sadece SOAP body parity'sine
+      odaklanır; addressing için ayrı fixture: soap-with-wsa.xml)
+    - Body altında SendDocumentFile-benzeri yapı; UBL Invoice base64
+      data placeholder (~600 byte, gerçek envelope kapsamını taklit
+      etmeye yeterli, ancak parser'ı fazla yormaz)
+    - Türkçe karakterler element value'larında (Mali Mühür request'lerinde
+      sıkça karşılaşılan: ünvan, adres alanları)
+    - Multiple namespace declaration: soapenv, ei, xsd, xsi, gib
+    - Attribute içeren child element (UUID, schema location stili)
+
+  Test amacı: signer'ın "üretim envelope'una en yakın" girdide
+  namespace ve element order regression'a karşı dayanıklı olduğunu
+  doğrulamak. Verifier (lokal javax.xml.crypto) Body+Timestamp digest'i
+  c14n sonrası matematiksel olarak teyit eder.
+
+  Fakeness: Endpoint adresleri / VKN'ler / UUID'ler tamamen örnek
+  değer; production credential'larını barındırmaz.
+-->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:ei="http://schemas.i2i.com/ei/wsdl"
+                  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xmlns:gib="http://gib.gov.tr/vedop3/eFatura">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <ei:sendDocumentFile>
+         <input xsi:type="ei:SendDocumentFileType">
+            <fileName xsi:type="xsd:string">MRS2026000000001.xml</fileName>
+            <binaryData xsi:type="xsd:base64Binary">UEsDBBQAAAAIAGdJVlnEAhAAAQAAAAAAAAAAAAAAAAAAAAAAAA==</binaryData>
+            <hash xsi:type="xsd:string">sha256:5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8</hash>
+            <documentType xsi:type="gib:DocumentTypeEnum">EFATURA</documentType>
+            <senderTaxId xsi:type="xsd:string">9999999999</senderTaxId>
+            <senderName xsi:type="xsd:string">MERSEL YAZILIM TEKNOLOJİLERİ A.Ş.</senderName>
+            <receiverTaxId xsi:type="xsd:string">1111111111</receiverTaxId>
+            <receiverName xsi:type="xsd:string">ANONİM ALICI TİC. LTD. ŞTİ.</receiverName>
+            <invoiceDate xsi:type="xsd:date">2026-05-16</invoiceDate>
+            <invoiceUuid xsi:type="xsd:string">00000000-0000-0000-0000-000000000000</invoiceUuid>
+            <documentSchema schemeID="UBL-TR" xsi:type="xsd:string">1.2</documentSchema>
+            <metadata xsi:type="gib:Metadata">
+               <gib:Channel>GIB_PORTAL</gib:Channel>
+               <gib:ClientVersion>3.1.4</gib:ClientVersion>
+               <gib:SubmissionAddress>Ankara V.D., İstanbul Şubesi</gib:SubmissionAddress>
+            </metadata>
+         </input>
+      </ei:sendDocumentFile>
+   </soapenv:Body>
+</soapenv:Envelope>

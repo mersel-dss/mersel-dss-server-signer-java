@@ -2,6 +2,7 @@ package io.mersel.dss.signer.api.services.signature.xades;
 
 import eu.europa.esig.dss.model.DSSDocument;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.mersel.dss.signer.api.util.xml.SecureXmlFactories;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -32,8 +33,9 @@ public class XmlProcessingService {
     private final DocumentBuilderFactory documentBuilderFactory;
 
     public XmlProcessingService() {
-        this.documentBuilderFactory = DocumentBuilderFactory.newInstance();
-        this.documentBuilderFactory.setNamespaceAware(true);
+        // XXE-güvenli (hardened) factory; SecureXmlFactories merkezi olarak
+        // DOCTYPE/external entity/DTD/XInclude vektörlerini kapatır.
+        this.documentBuilderFactory = SecureXmlFactories.newDocumentBuilderFactory();
     }
 
     /**
@@ -55,7 +57,7 @@ public class XmlProcessingService {
      */
     public byte[] documentToBytes(Document document) {
         try {
-            TransformerFactory transformerFactory = TransformerFactory.newInstance();
+            TransformerFactory transformerFactory = SecureXmlFactories.newTransformerFactory();
             Transformer transformer = transformerFactory.newTransformer();
             transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
             transformer.setOutputProperty(OutputKeys.ENCODING, "UTF-8");

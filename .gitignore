@@ -52,4 +52,27 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Test runtime: her testin ürettiği imzalı içerikler (XAdES/CAdES/PAdES/WSS).
+# `SignedArtifactExporter` test başına buraya yazar — üçüncü taraf araçlarla
+# (Adobe Reader, EU DSS Demo, xmlsec1, openssl smime, SoapUI) manuel olarak
+# doğrulamak için. `target/` zaten exclude ama explicit netlik için:
+target/signed-artifacts/
+# Mutlak/custom yola taşımak isteyen geliştiriciler için fallback location:
+signed-artifacts/
+
+# Evidence Site local preview (scripts/serve-pages-locally.sh çıktıları).
+# `publish-pages.yml` workflow'unda CI Pages'e push eder; local'de her
+# koşumda yeniden üretilir → repo'ya commit etmeye gerek yok.
+pages-output/
+# Spring Boot snapshot + Scalar API Reference HTML template — script üretir.
+openapi-snapshot/
+# Allure trend history — workflow actions/cache@v4 ile saklar; local'de
+# her run yeniden üretilebilir, repo'ya gömmeye değer değil.
+.allure-history/
+# allure-maven-plugin'in indirdiği Allure CLI binary (~28 MB).
+# `mvn allure:report` ilk koşumda buraya çeker, sonraki run'larda
+# cache'ten kullanır. Repo'ya commit edilmez — `mvn` her ortamda
+# kendi versiyonunu indirir.
+.allure/
+
 .vscode

@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -78,6 +79,26 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
             .body(new ErrorModel("FILE_TOO_LARGE", 
                 "Yüklenen dosya maksimum izin verilen boyutu aşıyor"));
+    }
+
+    /**
+     * Yanlış {@code Content-Type} ile gelen istekler için 415 mapping.
+     *
+     * <p>Sign endpoint'leri {@code consumes=multipart/form-data} sözleşmesi
+     * ile çalışır; client {@code application/json}, {@code text/plain} ya da
+     * benzeri media type ile POST attığında Spring
+     * {@link HttpMediaTypeNotSupportedException} fırlatır. Bu exception
+     * generic {@code Exception} handler'a düşmemeli — operasyonel UX için
+     * 415 UNSUPPORTED_MEDIA_TYPE + açık bir {@code WRONG_CONTENT_TYPE}
+     * error kodu daha doğru ki client doğru header'ı ayarlasın.</p>
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorModel> handleHttpMediaTypeNotSupported(
+            HttpMediaTypeNotSupportedException ex) {
+        LOGGER.warn("Desteklenmeyen content-type: {}", ex.getContentType());
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE)
+            .body(new ErrorModel("WRONG_CONTENT_TYPE",
+                "İstek 'multipart/form-data' Content-Type'ı ile gönderilmeli"));
     }
 
     /**

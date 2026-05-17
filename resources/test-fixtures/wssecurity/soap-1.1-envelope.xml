@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:test="http://test.example.com">
+   <soapenv:Header></soapenv:Header>
+   <soapenv:Body>
+      <test:TestRequest>
+         <test:RequestId>TEST-12345</test:RequestId>
+         <test:Timestamp>2024-01-01T00:00:00Z</test:Timestamp>
+         <test:Data>
+            <test:Message>This is a SOAP 1.1 test message for WS-Security signing</test:Message>
+            <test:Priority>High</test:Priority>
+            <test:Status>Active</test:Status>
+         </test:Data>
+      </test:TestRequest>
+   </soapenv:Body>
+</soapenv:Envelope>

@@ -1,10 +1,12 @@
 package io.mersel.dss.signer.api.services.signature.pades;
 
 import com.itextpdf.text.pdf.*;
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
-import io.mersel.dss.signer.api.util.CryptoUtils;
+import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
+import io.mersel.dss.signer.api.services.crypto.SigningMaterialContentSigner;
 import org.apache.commons.io.IOUtils;
 import org.bouncycastle.asn1.ASN1EncodableVector;
 import org.bouncycastle.asn1.DERSet;
@@ -12,7 +14,6 @@ import org.bouncycastle.asn1.cms.Attribute;
 import org.bouncycastle.asn1.cms.AttributeTable;
 import org.bouncycastle.asn1.ess.ESSCertIDv2;
 import org.bouncycastle.asn1.ess.SigningCertificateV2;
-import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -26,7 +27,6 @@ import org.bouncycastle.cms.CMSSignedDataGenerator;
 import org.bouncycastle.cms.DefaultSignedAttributeTableGenerator;
 import org.bouncycastle.cms.jcajce.JcaSignerInfoGeneratorBuilder;
 import org.bouncycastle.operator.ContentSigner;
-import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -58,9 +58,12 @@ public class PAdESSignatureService {
     private static final int SIGNATURE_SIZE_ESTIMATE = 8192;
 
     private final Semaphore semaphore;
+    private final DigestAlgorithmResolverService digestAlgorithmResolver;
 
-    public PAdESSignatureService(Semaphore signatureSemaphore) {
+    public PAdESSignatureService(Semaphore signatureSemaphore,
+                                 DigestAlgorithmResolverService digestAlgorithmResolver) {
         this.semaphore = signatureSemaphore;
+        this.digestAlgorithmResolver = digestAlgorithmResolver;
     }
 
     /**
@@ -130,12 +133,19 @@ public class PAdESSignatureService {
     /**
      * PDF içeriği için CMS imzası oluşturur.
      * SigningCertificateV2 özniteliği ile sertifikaya uygun hash algoritması kullanır.
+     *
+     * <p>Digest algoritması seçimi {@link DigestAlgorithmResolverService}'e
+     * delege edilir — CAdES/XAdES ile <b>aynı</b> mantık (sertifika sigAlg
+     * adı + EC anahtar boyu, NIST SP 800-57). Bu sayede aynı sertifikayla
+     * farklı imza formatlarında tutarlı digest kullanılır.</p>
      */
     private byte[] createCMSSignature(PdfSignatureAppearance appearance,
                                      SigningMaterial material) throws Exception {
-        // Sertifika algoritmasına göre digest belirle
-        String digestAlgName = resolveDigestAlgorithmName(material);
-        org.bouncycastle.asn1.ASN1ObjectIdentifier digestOid = resolveDigestOid(digestAlgName);
+        DigestAlgorithm digest = digestAlgorithmResolver.resolveDigestAlgorithm(
+            material.getSigningCertificate());
+        String digestAlgName = digest.getJavaName();
+        org.bouncycastle.asn1.ASN1ObjectIdentifier digestOid =
+            new org.bouncycastle.asn1.ASN1ObjectIdentifier(digest.getOid());
 
         // SigningCertificateV2 için sertifika hash'i hesapla
         MessageDigest messageDigest = MessageDigest.getInstance(digestAlgName);
@@ -172,11 +182,9 @@ public class PAdESSignatureService {
                 .setSignedAttributeGenerator(
                     new DefaultSignedAttributeTableGenerator(attributeTable));
 
-        // Dinamik algoritma seçimi (sertifika sigAlgName'den)
-        String signatureAlgorithm = CryptoUtils.getSignatureAlgorithm(
-            material.getPrivateKey(), material.getSigningCertificate());
-        ContentSigner contentSigner = new JcaContentSignerBuilder(signatureAlgorithm)
-            .build(material.getPrivateKey());
+        // BC CMS imzasını SigningMaterial'ın tek sign kontratı üzerinden ata.
+        // PFX ve HSM ayrımı document-format katmanına sızmaz.
+        ContentSigner contentSigner = buildContentSigner(material, digest);
 
         // Generate CMS signed data
         CMSSignedDataGenerator generator = new CMSSignedDataGenerator();
@@ -213,24 +221,10 @@ public class PAdESSignatureService {
         }
     }
 
-    private String resolveDigestAlgorithmName(SigningMaterial material) {
-        String sigAlg = material.getSigningCertificate().getSigAlgName();
-        if (sigAlg != null) {
-            String upper = sigAlg.toUpperCase(java.util.Locale.ROOT);
-            if (upper.contains("SHA384")) return "SHA-384";
-            if (upper.contains("SHA512")) return "SHA-512";
-            if (upper.contains("SHA224")) return "SHA-224";
-        }
-        return "SHA-256";
-    }
-
-    private org.bouncycastle.asn1.ASN1ObjectIdentifier resolveDigestOid(String digestAlgName) {
-        switch (digestAlgName) {
-            case "SHA-384": return NISTObjectIdentifiers.id_sha384;
-            case "SHA-512": return NISTObjectIdentifiers.id_sha512;
-            case "SHA-224": return NISTObjectIdentifiers.id_sha224;
-            default:        return NISTObjectIdentifiers.id_sha256;
-        }
+    /**
+     * Material'in arka ucundan bağımsız tek {@link ContentSigner} üretir.
+     */
+    private ContentSigner buildContentSigner(SigningMaterial material, DigestAlgorithm digest) throws Exception {
+        return new SigningMaterialContentSigner(material, digest);
     }
 }
-

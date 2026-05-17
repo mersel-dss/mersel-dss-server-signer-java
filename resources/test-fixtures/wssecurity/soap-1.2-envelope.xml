@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope" xmlns:test="http://test.example.com">
+   <env:Header></env:Header>
+   <env:Body>
+      <test:TestRequest>
+         <test:RequestId>TEST-67890</test:RequestId>
+         <test:Timestamp>2024-01-01T00:00:00Z</test:Timestamp>
+         <test:Data>
+            <test:Message>This is a SOAP 1.2 test message for WS-Security signing</test:Message>
+            <test:Priority>High</test:Priority>
+            <test:Status>Active</test:Status>
+         </test:Data>
+      </test:TestRequest>
+   </env:Body>
+</env:Envelope>

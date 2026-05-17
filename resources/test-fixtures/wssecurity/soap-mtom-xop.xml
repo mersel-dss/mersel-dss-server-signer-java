@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MTOM/XOP attachment placeholder içeren SOAP envelope.
+
+  Gerçek MTOM: Content-Type: multipart/related; type="application/xop+xml"
+  ile XML envelope + binary attachment parça(lar)ı tek HTTP body'de gönderilir.
+  Bu fixture sadece XML envelope kısmıdır — multipart wrapper bu repo'nun
+  signer scope'unun dışında (signer signSoapEnvelope sadece Document alır).
+
+  Bu envelope'un test edilebilir kısmı:
+    1) <xop:Include href="cid:..."/> element'i imza c14n'inde aynen
+       kalmalı, signer tarafından "expand" edilmemelidir (zaten signer
+       MTOM-aware değil).
+    2) Body subtree digest'ini içerikle birlikte (cid: ref dahil)
+       matematiksel olarak imzalamalı; verifier aynı subtree üzerinden
+       SignedInfo'yu doğrulayabilmeli.
+
+  Pratik not: production MTOM signing genellikle "Inlined MTOM" stratejisi
+  ile çalışır — multipart parser önce xop:Include'ları base64'e geri
+  inline eder, sonra imzalanır. Bu kod o transformasyonu yapmaz, bu yüzden
+  bu fixture sadece "XOP element'i barındıran envelope" regresyon kapsamıdır.
+-->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:xop="http://www.w3.org/2004/08/xop/include"
+                  xmlns:test="http://test.example.com">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <test:DocumentRequest>
+         <test:Metadata>
+            <test:Type>PDF</test:Type>
+            <test:Filename>invoice.pdf</test:Filename>
+         </test:Metadata>
+         <test:Document>
+            <xop:Include href="cid:document-001@example.com"/>
+         </test:Document>
+         <test:Attachment id="att-1">
+            <xop:Include href="cid:attachment-001@example.com"/>
+         </test:Attachment>
+      </test:DocumentRequest>
+   </soapenv:Body>
+</soapenv:Envelope>

@@ -4,12 +4,10 @@ FROM maven:3.8-openjdk-8 AS builder
 
 WORKDIR /build
 
-# Copy pom.xml and local lib (for dependency resolution)
+# Copy pom.xml (PKCS#11 wrapper artık Maven Central'dan: org.xipki:ipkcs11wrapper).
+# Eskiden local src/main/lib/sunpkcs11.jar vardı; IAIK geçişiyle gereksizleşti
+# ve repo'dan kaldırıldı. Buraya COPY src/main/lib eklemeyin — dizin yok.
 COPY pom.xml .
-COPY src/main/lib ./src/main/lib
-
-# Install local dependencies (sunpkcs11.jar) to Maven local repo
-RUN mvn validate -B
 
 # Download remote dependencies (cache layer)
 RUN mvn dependency:go-offline -B

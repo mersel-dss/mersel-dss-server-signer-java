@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.util;
 
+import io.mersel.dss.signer.api.util.xml.SecureXmlFactories;
 import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -31,12 +32,8 @@ public class Utilities {
     private static final Logger LOGGER = LoggerFactory.getLogger(Utilities.class);
 
     public static Document LoadXMLFromInputStream(InputStream inputStream) throws ParserConfigurationException, SAXException, IOException {
-
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-
-        factory.setNamespaceAware(true);
+        DocumentBuilderFactory factory = SecureXmlFactories.newDocumentBuilderFactory();
         DocumentBuilder builder = factory.newDocumentBuilder();
-
         return builder.parse(inputStream);
     }
 

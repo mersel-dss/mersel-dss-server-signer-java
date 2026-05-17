@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Body'de birden fazla child element içeren SOAP envelope.
+
+  SOAP 1.1 §4.3 Body içeriği için "zero or more" çocuk müsaade eder
+  (1.2 §5.3.1 de aynı). Çoğu RPC stili tek child kullansa da, batch
+  request veya document-style envelope birden fazla element içerebilir.
+
+  WS-Security imzası Body element'in TAMAMINI (subtree) c14n + digest
+  eder; child sayısı imza kapsamını etkilemez. Test: roundtrip valid
+  + tüm 3 child sign sonrası varlığını korur (signer body içeriğine
+  dokunmamalı).
+-->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:test="http://test.example.com">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <test:Operation1>
+         <test:Param>value-1</test:Param>
+      </test:Operation1>
+      <test:Operation2>
+         <test:Param>value-2</test:Param>
+         <test:NestedData>
+            <test:Item id="A">alpha</test:Item>
+            <test:Item id="B">beta</test:Item>
+         </test:NestedData>
+      </test:Operation2>
+      <test:Operation3>
+         <test:Param>value-3</test:Param>
+      </test:Operation3>
+   </soapenv:Body>
+</soapenv:Envelope>

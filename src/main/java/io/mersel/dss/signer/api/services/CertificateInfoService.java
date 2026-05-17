@@ -3,8 +3,11 @@ package io.mersel.dss.signer.api.services;
 import io.mersel.dss.signer.api.dtos.CertificateInfoDto;
 import io.mersel.dss.signer.api.exceptions.KeyStoreException;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
+import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
+import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyStore;
@@ -12,39 +15,85 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
-import org.bouncycastle.asn1.ASN1Sequence;
-import org.bouncycastle.asn1.ASN1String;
-import org.bouncycastle.asn1.x509.CertificatePolicies;
-import org.bouncycastle.asn1.x509.PolicyInformation;
-import org.bouncycastle.asn1.x509.PolicyQualifierInfo;
-import org.bouncycastle.asn1.x509.Extension;
 
 /**
  * Keystore içerisindeki sertifika bilgilerini listeleme servisi.
+ *
+ * <p>Üç katmanlı kaynak sırası:</p>
+ * <ol>
+ *   <li><b>IAIK PKCS#11</b> (container'da {@link IaikPkcs11Module} bean'i
+ *       varsa) — primary kaynak. SunPKCS11'in P11KeyStore alias map'inden
+ *       bağımsızdır.</li>
+ *   <li><b>JCA {@link KeyStore#aliases()}</b> — PFX gibi non-HSM
+ *       sağlayıcılar için.</li>
+ * </ol>
  */
 @Service
 public class CertificateInfoService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CertificateInfoService.class);
-    
-    // Policy Qualifier OID'leri (RFC 3280)
-    private static final String ID_QT_CPS = "1.3.6.1.5.5.7.2.1";
-    private static final String ID_QT_UNOTICE = "1.3.6.1.5.5.7.2.2";
+
+    /** Spring inject eder; PFX yapılandırmasında {@code null}. CLI yolunda manuel set. */
+    private final IaikPkcs11Module iaikModule;
+
+    @Autowired
+    public CertificateInfoService(@Autowired(required = false) IaikPkcs11Module iaikModule) {
+        this.iaikModule = iaikModule;
+    }
+
+    /**
+     * CLI / non-Spring kullanımı için no-arg constructor. PKCS#11 listeleme
+     * istiyorsa {@link #CertificateInfoService(IaikPkcs11Module)} kullan.
+     */
+    public CertificateInfoService() {
+        this((IaikPkcs11Module) null);
+    }
 
     /**
      * Verilen keystore provider'dan tüm sertifikaları listeler.
-     * 
-     * @param provider KeyStore sağlayıcısı (PKCS11 veya PFX)
-     * @param pin KeyStore için PIN/şifre
-     * @return Sertifika bilgileri listesi
+     *
+     * <p>Container'da {@link IaikPkcs11Module} bean'i (HSM yapılandırması)
+     * mevcutsa <b>onun</b> {@code listCertificates()}'i çağrılır — token
+     * üzerinde doğrudan {@code C_FindObjects}. Aksi halde JCA
+     * {@code KeyStore.aliases()} fallback'i kullanılır.</p>
      */
     public List<CertificateInfoDto> listCertificates(KeyStoreProvider provider, char[] pin) {
+        LOGGER.info("Keystore'dan sertifikalar listeleniyor: {}", provider.getType());
+
+        if (iaikModule != null) {
+            try {
+                List<CertificateInfoDto> certs = iaikModule.listCertificates();
+                LOGGER.info("IAIK üzerinden {} entry listelendi.", certs.size());
+                return certs;
+            } catch (Exception e) {
+                // PKCS#11 yapılandırmasında PFX fallback YOL DEĞİL —
+                // PKCS11KeyStoreProvider.loadKeyStore() artık her zaman
+                // UnsupportedOperationException atıyor. IAIK hatasını
+                // sarmalayarak yukarıya bildiriyoruz; orijinal hata mesajı
+                // (HSM device error, session closed, vs.) korunsun.
+                if (provider instanceof PKCS11KeyStoreProvider) {
+                    throw new KeyStoreException(
+                        "HSM (PKCS#11) sertifika listelemesi başarısız: " + e.getMessage()
+                        + ". PKCS#11 yapılandırmasında PFX/JCA fallback yoktur — "
+                        + "token bağlantısını ve PIN'i kontrol edin.", e);
+                }
+                LOGGER.warn("IAIK listing başarısız; JCA KeyStore.aliases() fallback'ine düşülüyor: {}",
+                    e.getMessage(), e);
+            }
+        }
+
+        return listViaKeyStoreAliases(provider, pin);
+    }
+
+    /**
+     * Geriye dönük uyumluluk için orijinal {@link KeyStore#aliases()} tabanlı
+     * enumeration. PFX/PKCS12 keystore'lar için yeterlidir; HSM'lerde alias
+     * mapping kuralları nedeniyle eksik sonuç verebilir.
+     */
+    private List<CertificateInfoDto> listViaKeyStoreAliases(KeyStoreProvider provider, char[] pin) {
         List<CertificateInfoDto> certificates = new ArrayList<>();
-        
+
         try {
-            LOGGER.info("Keystore'dan sertifikalar listeleniyor: {}", provider.getType());
-            
             KeyStore keyStore = provider.loadKeyStore(pin);
             Enumeration<String> aliases = keyStore.aliases();
             
@@ -69,10 +118,9 @@ public class CertificateInfoService {
                             dto.setType(cert.getType());
                             dto.setSignatureAlgorithm(cert.getSigAlgName());
                             
-                            // Sertifika kullanım alanlarını çıkar
-                            dto.setKeyUsage(extractKeyUsage(cert));
-                            dto.setExtendedKeyUsage(extractExtendedKeyUsage(cert));
-                            dto.setCertificatePolicies(extractCertificatePolicies(cert));
+                            dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(cert));
+                            dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(cert));
+                            dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(cert));
                             
                             certificates.add(dto);
                             
@@ -166,151 +214,5 @@ public class CertificateInfoService {
         return sb.toString();
     }
 
-    /**
-     * X509 sertifikasından Key Usage bilgilerini çıkarır.
-     */
-    private String extractKeyUsage(X509Certificate cert) {
-        try {
-            boolean[] keyUsage = cert.getKeyUsage();
-            if (keyUsage == null) {
-                return null;
-            }
-
-            List<String> usages = new ArrayList<String>();
-            String[] keyUsageNames = {
-                "Digital Signature",      // 0
-                "Non Repudiation",        // 1
-                "Key Encipherment",       // 2
-                "Data Encipherment",      // 3
-                "Key Agreement",          // 4
-                "Key Cert Sign",          // 5
-                "CRL Sign",               // 6
-                "Encipher Only",          // 7
-                "Decipher Only"           // 8
-            };
-
-            for (int i = 0; i < keyUsage.length && i < keyUsageNames.length; i++) {
-                if (keyUsage[i]) {
-                    usages.add(keyUsageNames[i]);
-                }
-            }
-
-            return usages.isEmpty() ? null : String.join(", ", usages);
-        } catch (Exception e) {
-            LOGGER.debug("Key Usage bilgisi alınamadı: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * X509 sertifikasından Extended Key Usage bilgilerini çıkarır.
-     * OID'leri olduğu gibi gösterir.
-     */
-    private String extractExtendedKeyUsage(X509Certificate cert) {
-        try {
-            List<String> extKeyUsage = cert.getExtendedKeyUsage();
-            if (extKeyUsage == null || extKeyUsage.isEmpty()) {
-                return null;
-            }
-
-            // OID'leri olduğu gibi göster
-            return String.join(", ", extKeyUsage);
-        } catch (Exception e) {
-            LOGGER.debug("Extended Key Usage bilgisi alınamadı: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * X509 sertifikasından Certificate Policies bilgilerini çıkarır.
-     */
-    private String extractCertificatePolicies(X509Certificate cert) {
-        try {
-            byte[] extValue = cert.getExtensionValue(Extension.certificatePolicies.getId());
-            if (extValue == null) {
-                return null;
-            }
-
-            org.bouncycastle.asn1.ASN1InputStream asn1InputStream = 
-                new org.bouncycastle.asn1.ASN1InputStream(extValue);
-            org.bouncycastle.asn1.ASN1OctetString octets = 
-                (org.bouncycastle.asn1.ASN1OctetString) asn1InputStream.readObject();
-            asn1InputStream.close();
-
-            org.bouncycastle.asn1.ASN1InputStream asn1InputStream2 = 
-                new org.bouncycastle.asn1.ASN1InputStream(octets.getOctets());
-            ASN1Sequence sequence = (ASN1Sequence) asn1InputStream2.readObject();
-            asn1InputStream2.close();
-
-            CertificatePolicies policies = CertificatePolicies.getInstance(sequence);
-            PolicyInformation[] policyInfos = policies.getPolicyInformation();
-
-            if (policyInfos == null || policyInfos.length == 0) {
-                return null;
-            }
-
-            List<String> policyDescriptions = new ArrayList<String>();
-            for (PolicyInformation policyInfo : policyInfos) {
-                ASN1ObjectIdentifier oid = policyInfo.getPolicyIdentifier();
-                String oidStr = oid.getId();
-                
-                // Sadece OID'yi göster
-                StringBuilder policyDesc = new StringBuilder(oidStr);
-                
-                // Policy qualifiers varsa ekle (CPS URL vs.)
-                ASN1Sequence qualifiers = policyInfo.getPolicyQualifiers();
-                if (qualifiers != null && qualifiers.size() > 0) {
-                    List<String> qualifierTexts = new ArrayList<String>();
-                    
-                    for (int i = 0; i < qualifiers.size(); i++) {
-                        try {
-                            PolicyQualifierInfo qualifierInfo = 
-                                PolicyQualifierInfo.getInstance(qualifiers.getObjectAt(i));
-                            
-                            ASN1ObjectIdentifier qualifierId = qualifierInfo.getPolicyQualifierId();
-                            String qualifierIdStr = qualifierId.getId();
-                            
-                            // CPS URI (1.3.6.1.5.5.7.2.1)
-                            if (ID_QT_CPS.equals(qualifierIdStr)) {
-                                ASN1String cpsUri = (ASN1String) qualifierInfo.getQualifier();
-                                if (cpsUri != null) {
-                                    qualifierTexts.add(cpsUri.getString());
-                                }
-                            }
-                            // User Notice (1.3.6.1.5.5.7.2.2)
-                            else if (ID_QT_UNOTICE.equals(qualifierIdStr)) {
-                                ASN1Sequence userNoticeSeq = ASN1Sequence.getInstance(qualifierInfo.getQualifier());
-                                if (userNoticeSeq != null && userNoticeSeq.size() > 0) {
-                                    for (int j = 0; j < userNoticeSeq.size(); j++) {
-                                        try {
-                                            ASN1String noticeText = (ASN1String) userNoticeSeq.getObjectAt(j);
-                                            if (noticeText != null) {
-                                                qualifierTexts.add(noticeText.getString());
-                                                break;
-                                            }
-                                        } catch (Exception ignored) {
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            LOGGER.debug("Policy qualifier parse edilemedi: {}", e.getMessage());
-                        }
-                    }
-                    
-                    if (!qualifierTexts.isEmpty()) {
-                        policyDesc.append(" (").append(String.join(", ", qualifierTexts)).append(")");
-                    }
-                }
-                
-                policyDescriptions.add(policyDesc.toString());
-            }
-
-            return policyDescriptions.isEmpty() ? null : String.join(", ", policyDescriptions);
-        } catch (Exception e) {
-            LOGGER.debug("Certificate Policies bilgisi alınamadı: {}", e.getMessage());
-            return null;
-        }
-    }
 }
 

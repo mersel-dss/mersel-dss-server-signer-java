@@ -17,7 +17,10 @@ import io.mersel.dss.signer.api.services.certificate.OnlineCertificateChainProvi
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PfxKeyStoreProvider;
+import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
 import io.mersel.dss.signer.api.services.KamusmRootCertificateService;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
@@ -47,8 +50,17 @@ public class SignatureConfiguration {
     }
 
     /**
-     * Yapılandırmaya göre KeyStoreProvider sağlar.
-     * Library path yapılandırılmışsa PKCS11, yoksa PFX tercih edilir.
+     * KeyStore sağlayıcısı bean'i.
+     *
+     * <p>Konfigürasyon tarafından hangi yol seçilirse o sağlayıcı üretilir:
+     * <ul>
+     *   <li>PKCS#11 ({@code PKCS11_LIBRARY}) → {@link PKCS11KeyStoreProvider}.
+     *       Bu sağlayıcı artık <b>sadece listing'in eski JCA fallback yolu</b>
+     *       için var; gerçek imzalama akışı {@link IaikPkcs11Module} üzerinden
+     *       yürütülür.</li>
+     *   <li>PFX ({@code PFX_PATH}) → {@link PfxKeyStoreProvider}.</li>
+     * </ul>
+     * </p>
      */
     @Bean
     public KeyStoreProvider keyStoreProvider() {
@@ -59,14 +71,58 @@ public class SignatureConfiguration {
                 config.getPkcs11SlotIndex()
             );
         }
-        
+
         if (StringUtils.hasText(config.getPfxPath())) {
             return new PfxKeyStoreProvider(config.getPfxPath());
         }
-        
+
         throw new IllegalStateException(
             "Ne PKCS11_LIBRARY ne de PFX_PATH yapılandırılmamış. " +
             "En az bir keystore kaynağı belirtilmelidir.");
+    }
+
+    /**
+     * IAIK PKCS#11 modülü — yalnızca {@code PKCS11_LIBRARY} property'si
+     * <b>boş olmayan</b> bir değer içeriyorsa Spring container'da bean
+     * olarak yaratılır.
+     *
+     * <p><b>Neden {@link ConditionalOnExpression}?</b> Spring Boot'un
+     * {@code @ConditionalOnProperty(name = "X")} davranışı: property
+     * <em>tanımlı</em> ve değeri {@code "false"} değilse bean'i aktive
+     * eder. Yani {@code PKCS11_LIBRARY=} (boş string) ya da
+     * {@code PKCS11_LIBRARY=   } (whitespace) durumunda bean aktive olur
+     * ve {@link IaikPkcs11Module} boş library path ile startup'ta patlar.</p>
+     *
+     * <p>{@code StringUtils.hasText} ile null + boş + whitespace
+     * vakalarının üçü de elenir. Bu, container ortamlarında env var'ı
+     * boş bırakma (örn. {@code -e PKCS11_LIBRARY=}) hatasının erken
+     * yakalanmasını sağlar.</p>
+     *
+     * <p>Inisializasyon sırasında native kütüphane yüklenir, token açılır ve
+     * USER ile login olunur. Spring yaşam döngüsünden çıkarken
+     * {@code destroyMethod="destroy"} otomatik çağrılır ve token temiz
+     * kapatılır.</p>
+     *
+     * <p>PFX yapılandırmasında bu bean container'da YOK demektir; aşağıdaki
+     * {@link #signingMaterial} bean'i {@link ObjectProvider} üzerinden
+     * yokluğu algılar ve PFX yoluna düşer.</p>
+     */
+    @Bean(destroyMethod = "destroy")
+    @ConditionalOnExpression("#{T(org.springframework.util.StringUtils).hasText('${PKCS11_LIBRARY:}')}")
+    public IaikPkcs11Module iaikPkcs11Module() {
+        char[] pin = config.getCertificatePin().toCharArray();
+        Long slot = sanitizeSlotConfig(config.getPkcs11Slot());
+        Long slotIndex = sanitizeSlotConfig(config.getPkcs11SlotIndex());
+        return new IaikPkcs11Module(
+            config.getPkcs11LibraryPath(),
+            slot,
+            slotIndex,
+            pin);
+    }
+
+    /** {@code PKCS11_SLOT:-1} default convention'ını {@code null}'a normalize eder. */
+    private static Long sanitizeSlotConfig(Long raw) {
+        return raw != null && raw >= 0 ? raw : null;
     }
 
     /**
@@ -94,40 +150,48 @@ public class SignatureConfiguration {
     }
 
     /**
+     * Singleton {@link SigningContext} — başlangıçta bir kez çözümlenir.
+     *
+     * <p>Backend seçimi: container'da {@link IaikPkcs11Module} bean'i varsa
+     * HSM yolu, yoksa PFX yolu kullanılır.
+     * {@link ObjectProvider#getIfAvailable()} bean yokluğunu temiz şekilde
+     * algılamamızı sağlar.</p>
+     */
+    @Bean
+    public SigningContext signingContext(SigningMaterialFactory factory,
+                                         KeyStoreProvider keyStoreProvider,
+                                         ObjectProvider<IaikPkcs11Module> iaikModuleProvider) {
+        IaikPkcs11Module iaikModule = iaikModuleProvider.getIfAvailable();
+        if (iaikModule != null) {
+            return factory.createPkcs11SigningContext(
+                iaikModule,
+                config.getCertificateAlias(),
+                config.getCertificateSerialNumber());
+        }
+
+        char[] pin = config.getCertificatePin().toCharArray();
+        return factory.createPfxSigningContext(
+            keyStoreProvider,
+            pin,
+            config.getCertificateAlias(),
+            config.getCertificateSerialNumber());
+    }
+
+    /**
      * Uygulama için ana imzalama materyalini sağlar.
      * Başlangıçta bir kez oluşturulur ve tüm imzalama işlemleri için tekrar kullanılır.
      */
     @Bean
-    public SigningMaterial signingMaterial(SigningMaterialFactory factory,
-                                          KeyStoreProvider provider) {
-        char[] pin = config.getCertificatePin().toCharArray();
-        
-        SigningContext context = factory.createSigningContext(
-            provider,
-            pin,
-            config.getCertificateAlias(),
-            config.getCertificateSerialNumber()
-        );
-        
-        return context.getMaterial();
+    public SigningMaterial signingMaterial(SigningContext signingContext) {
+        return signingContext.getMaterial();
     }
 
     /**
      * Keystore işlemleri için imzalama alias'ını sağlar.
      */
     @Bean
-    public String signingAlias(SigningMaterialFactory factory,
-                              KeyStoreProvider provider) {
-        char[] pin = config.getCertificatePin().toCharArray();
-        
-        SigningContext context = factory.createSigningContext(
-            provider,
-            pin,
-            config.getCertificateAlias(),
-            config.getCertificateSerialNumber()
-        );
-        
-        return context.getAlias();
+    public String signingAlias(SigningContext signingContext) {
+        return signingContext.getAlias();
     }
 
     /**

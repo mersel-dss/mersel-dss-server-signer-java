@@ -98,7 +98,7 @@ public class CAdESSignatureService {
 
                 SignatureValue signatureValue = cryptoSigner.sign(
                         dataToSign,
-                        material.getPrivateKey(),
+                        material,
                         digestAlgorithm);
 
                 DSSDocument signedDocument = cadesService.signDocument(document, parameters, signatureValue);

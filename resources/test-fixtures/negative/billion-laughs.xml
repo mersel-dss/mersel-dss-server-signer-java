@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  "Billion Laughs" / XML entity-expansion DoS saldırı fixture'ı.
+
+  Bu dosya bir SALDIRI vektörüdür; production kodunda PARSE EDİLMEMELİ.
+  Sadece SecureXmlFactories'in entity expansion'a karşı dayanıklı
+  olduğunu test etmek için kullanılır.
+
+  Saldırı mantığı: nested entity declaration'ları her seviyede 10×
+  expand olur. &lol9; → 10^9 = 1 milyar karakter ≈ 2 GB bellek.
+  Korunmasız parser dakikalar içinde heap'i tüketir → DoS.
+
+  Beklenen güvenli davranış: SecureXmlFactories DOCTYPE'ı reddettiği
+  için parser zaten ilk DOCTYPE'a SAXParseException fırlatır.
+  Expansion'a sıra bile gelmez (defense-in-depth).
+
+  Referanslar:
+    - https://en.wikipedia.org/wiki/Billion_laughs_attack
+    - OWASP Top 10 — XML External Entities (XXE)
+-->
+<!DOCTYPE lolz [
+  <!ENTITY lol "lol">
+  <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
+  <!ENTITY lol3 "&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;&lol2;">
+  <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
+  <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
+  <!ENTITY lol6 "&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;&lol5;">
+  <!ENTITY lol7 "&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;&lol6;">
+  <!ENTITY lol8 "&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;&lol7;">
+  <!ENTITY lol9 "&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;&lol8;">
+]>
+<lolz>&lol9;</lolz>

@@ -1,0 +1,41 @@
+Mersel DSS — CAdES Test Fixture (sample.txt)
+=============================================
+
+Bu dosya CAdES imza testlerinde UTF-8 Türkçe text payload regresyonu
+için kullanılır. İçerik kasıtlı olarak diakritik (ç, ş, ı, ğ, ü, ö, İ),
+tireleme, paragraf yapısı ve karışık karakter kümeleri içerir; signer'ın
+binary girdi sandığı bir akışta UTF-8 multibyte sequence'ların digest
+hesaplamasını bozmadığını doğrular.
+
+Türkiye Cumhuriyeti'nin altıncı Cumhurbaşkanı Fahri S. Korutürk; bu satır
+yalnızca diakritik için referans niteliğindedir, dosyanın anlamlı bir
+metin oluşturma gibi bir iddiası yoktur. Aşağıdaki paragraf birkaç dilden
+karakter karışımı içerir.
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas
+auctor, lectus eu condimentum tincidunt, dolor justo aliquet ligula,
+in mollis arcu purus eu ipsum. Türkçe örnek: "Çiğdem'in evi ışıklı,
+oğlu üç yaşında; öğle yemeğinde hep şehriye çorbası içiyor." Fransızca:
+"Ça va? Très bien, merci." Almanca: "Größe und Stärke." İspanyolca:
+"¿Cómo estás? Estoy bien, niño." Yunanca harf: αβγδεζηθικλμνξοπρστυφχψω.
+
+Sayılar ve özel karakterler: 1234567890 !@#$%^&*()_+-=[]{}|;:'",.<>/?
+Tab karakteri:	(buraya tab)	(buraya tab)	(son tab)
+Satır içi geri-tırnak: `, çift köşeli parantez: «önemli», noktalı virgül;
+ve em-dash — gibi tipografik işaretler.
+
+Çok satırlı tekrar bloğu (bayt akışı yeterince büyüsün diye):
+
+ARTIK ASAL SAYILAR TEKERLEMESİ (kasıtlı tekrar)
+- 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
+  73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
+  157, 163, 167, 173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229.
+- Çift sayı asal yalnızca 2'dir; geri kalan tüm asal sayılar tek sayıdır.
+- Çiftlerin asal olamayışı (2 hariç): n = 2·k → 2 | n, yani 2 bölücüsü vardır.
+- Eratosthenes eleğinde her asalın iki katı, üç katı… sırasıyla işaretlenir.
+- Bu test fixture'ı için anlamlı bir matematiksel iddia içermez; yalnızca
+  bayt akışını ~2 KB seviyesinde tutmak ve UTF-8 multibyte (ş = 0xC5 0x9F,
+  ğ = 0xC4 0x9F, İ = 0xC4 0xB0, ö = 0xC3 0xB6, ç = 0xC3 0xA7, ü = 0xC3 0xBC)
+  dağılımını çeşitlendirmek içindir.
+
+Son satır — yeni satır ile bitiyor.

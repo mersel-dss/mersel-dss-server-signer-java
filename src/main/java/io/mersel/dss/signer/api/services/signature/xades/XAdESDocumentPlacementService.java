@@ -18,6 +18,7 @@ import org.xml.sax.SAXException;
 import io.mersel.dss.signer.api.constants.XmlConstants;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.util.xml.SecureXmlFactories;
 
 /**
  * XML belgelerinde imza elemanlarını yerleştiren servis.
@@ -193,8 +194,7 @@ public class XAdESDocumentPlacementService {
      */
     private Node parseFragment(String xml) {
         try {
-            DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-            dbf.setNamespaceAware(true);
+            DocumentBuilderFactory dbf = SecureXmlFactories.newDocumentBuilderFactory();
             DocumentBuilder db = dbf.newDocumentBuilder();
             return db.parse(new InputSource(new StringReader(xml))).getDocumentElement();
         } catch (ParserConfigurationException | SAXException | IOException e) {

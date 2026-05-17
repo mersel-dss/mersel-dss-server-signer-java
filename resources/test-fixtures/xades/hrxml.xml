@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<ProcessUserAccount xmlns="http://www.hr-xml.org/3"
+    xmlns:oa="http://www.openapplications.org/oagis/9"
+    xmlns:xades="http://uri.etsi.org/01903/v1.3.2#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" releaseID="3.0">
+    <oa:ApplicationArea>
+        <oa:Sender>
+            <oa:LogicalID>0000000000</oa:LogicalID>
+        </oa:Sender>
+        <oa:CreationDateTime>2026-02-20</oa:CreationDateTime>
+    </oa:ApplicationArea>
+    <DataArea>
+        <oa:Process/>
+        <UserAccount>
+            <UserID schemeID="TCKN">11111111111</UserID>
+            <PersonName>
+                <FormattedName>ANONİM KULLANICI</FormattedName>
+                <oa:GivenName>ANONİM</oa:GivenName>
+                <FamilyName>KULLANICI</FamilyName>
+            </PersonName>
+            <UserRole>
+                <RoleCode>PK</RoleCode>
+                <RoleName>Posta Kutusu</RoleName>
+            </UserRole>
+            <AuthorizedWorkScope>
+                <WorkScopeCode>urn:mail:anonimpk@mersel.io</WorkScopeCode>
+                <WorkScopeName>urn:mail:anonimpk@mersel.io</WorkScopeName>
+            </AuthorizedWorkScope>
+            <AccountConfiguration>
+                <UserOptionCode>2</UserOptionCode>
+            </AccountConfiguration>
+        </UserAccount>
+    </DataArea>
+</ProcessUserAccount>

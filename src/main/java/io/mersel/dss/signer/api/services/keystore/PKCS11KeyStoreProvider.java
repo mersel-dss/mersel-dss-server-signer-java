@@ -1,51 +1,45 @@
 package io.mersel.dss.signer.api.services.keystore;
 
-import io.mersel.dss.signer.api.exceptions.KeyStoreException;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import sun.security.pkcs11.SunPKCS11;
-
-import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
-import java.security.Provider;
-import java.security.Security;
-import java.util.StringJoiner;
-
 /**
- * PKCS#11 donanım güvenlik modülleri (HSM) için KeyStore sağlayıcısı.
- * Hem slot tabanlı hem de kütüphane tabanlı yapılandırmayı destekler.
+ * PKCS#11 yapılandırması için marker {@link KeyStoreProvider}.
+ *
+ * <p>Eski sürümlerde bu sınıf SunPKCS11 üzerinden gerçek bir JCA
+ * {@link java.security.KeyStore} oluşturuyordu (forceLogin, slot list index,
+ * showInfo gibi config tweak'leri dahil). Artık tüm PKCS#11 operasyonları
+ * {@link io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module}
+ * üzerinden yürütüldüğü için bu sınıf yalnızca <em>type discrimination</em>
+ * için kullanılır:</p>
+ *
+ * <ul>
+ *   <li>{@link io.mersel.dss.signer.api.config.SignatureConfiguration}
+ *       PKCS#11 yapılandırmasında bu bean'i {@code KeyStoreProvider}
+ *       arabiriminin somut implementasyonu olarak üretir; controller ve
+ *       service'ler {@code instanceof PKCS11KeyStoreProvider} ile yola
+ *       bakabilir.</li>
+ *   <li>{@link #getType()} → "PKCS11" — info endpoint'i için.</li>
+ *   <li>{@link #loadKeyStore} → {@link UnsupportedOperationException}.
+ *       Gerçek anahtar materyali HSM'de kalır; JCA {@code KeyStore} arayüzü
+ *       üzerinden yüklenmez.</li>
+ * </ul>
  */
 public class PKCS11KeyStoreProvider implements KeyStoreProvider {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(PKCS11KeyStoreProvider.class);
-
     private final String libraryPath;
-    private final Long slotIndex;
-    private final String providerName;
     private final Long slot;
+    private final Long slotIndex;
 
     public PKCS11KeyStoreProvider(String libraryPath, Long slot, Long slotIndex) {
         this.libraryPath = libraryPath;
         this.slot = slot;
         this.slotIndex = slotIndex;
-        this.providerName = "PKCS11Provider_" + System.identityHashCode(this);
     }
 
     @Override
-    public KeyStore loadKeyStore(char[] pin) {
-        try {
-            Provider provider = buildPKCS11Provider();
-            KeyStore keyStore = KeyStore.getInstance("PKCS11", provider);
-            keyStore.load(null, pin);
-            
-            LOGGER.info("PKCS11 KeyStore başarıyla yüklendi. Kütüphane: {}", libraryPath);
-            return keyStore;
-            
-        } catch (Exception e) {
-            throw new KeyStoreException("PKCS11 keystore yüklenemedi: " + libraryPath, e);
-        }
+    public java.security.KeyStore loadKeyStore(char[] pin) {
+        throw new UnsupportedOperationException(
+            "PKCS#11 yolunda JCA KeyStore artık yüklenmiyor. "
+            + "İmzalama ve listeleme akışı IaikPkcs11Module üzerinden çalışır. "
+            + "PFX yapılandırması için PfxKeyStoreProvider kullanın.");
     }
 
     @Override
@@ -53,53 +47,15 @@ public class PKCS11KeyStoreProvider implements KeyStoreProvider {
         return "PKCS11";
     }
 
-    private Provider buildPKCS11Provider() {
-        ensureBouncyCastleRegistered();
-
-        StringJoiner configJoiner = new StringJoiner(System.lineSeparator());
-        configJoiner.add("name = "+providerName);
-        configJoiner.add("library = "+"\""+libraryPath+"\"");
-
-        if (slotIndex != null && slotIndex >= 0) {
-            configJoiner.add("slotListIndex = "+ slotIndex);
-        }else if(slot != null && slot>= 0){
-            configJoiner.add("slot = "+slot);
-        }
-        
-        byte[] configBytes = configJoiner.toString().getBytes(StandardCharsets.UTF_8);
-        SunPKCS11 provider = new SunPKCS11(new ByteArrayInputStream(configBytes));
-        Security.addProvider(provider);
-        
-        LOGGER.debug("PKCS11 provider yapılandırıldı: {}", providerName);
-        return provider;
+    public String getLibraryPath() {
+        return libraryPath;
     }
 
-    /**
-     * JDK 8'in SunEC'si yalnızca named EC eğrilerini (OID formatı) destekler.
-     * HSM'ler (örn. mali mühür) CKA_EC_PARAMS'ı genellikle explicit formda döndürür
-     * ve bu "Only named ECParameters supported" IOException'a neden olur.
-     *
-     * SunPKCS11, P11ECPrivateKey oluştururken şu çağrıyı yapar:
-     *   AlgorithmParameters.getInstance("EC")  -- provider belirtilmez
-     * Bu çağrı JCA provider arama sırasını takip eder.
-     *
-     * BouncyCastle'ı pozisyon 1'e yerleştirerek, JCA'nın EC AlgorithmParameters
-     * çözümlemesini BC'nin hem named hem explicit parametreleri destekleyen
-     * implementasyonuna yönlendiriyoruz.
-     *
-     * Ek olarak SunEC'nin kaldırılması, JCA servis cache'inin eski (kısıtlı)
-     * SunEC implementasyonunu döndürmesini engeller.
-     */
-    private static synchronized void ensureBouncyCastleRegistered() {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) != null) {
-            return;
-        }
+    public Long getSlot() {
+        return slot;
+    }
 
-        Security.removeProvider("SunEC");
-        Security.insertProviderAt(new BouncyCastleProvider(), 1);
-
-        LOGGER.info("BouncyCastle provider pozisyon 1'e kayıt edildi, SunEC kaldırıldı " +
-                    "(EC explicit parameters desteği için)");
+    public Long getSlotIndex() {
+        return slotIndex;
     }
 }
-

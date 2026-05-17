@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2" xmlns:ccts="urn:un:unece:uncefact:documentation:2" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2" xmlns:qdt="urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2" xmlns:ubltr="urn:oasis:names:specification:ubl:schema:xsd:TurkishCustomizationExtensionComponents" xmlns:udt="urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2" xmlns:xades="http://uri.etsi.org/01903/v1.3.2#" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2 UBL-Invoice-2.1.xsd">
+    <ext:UBLExtensions>
+        <ext:UBLExtension>
+            <ext:ExtensionContent><ds:Signature Id="Signature_id-d6a22b27ceeb4306b84b0f054dd2210b"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha384"/><ds:Reference Type="http://uri.etsi.org/01903#SignedProperties" URI="#xades-Signature_id-d6a22b27ceeb4306b84b0f054dd2210b"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315#WithComments"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha384"/><ds:DigestValue>NHl+cQ0b69IOONDnCuW564Y5/8b3uaYOBnxFzUGEL6sDqlBGGJLUPD3cOiZCqVYe</ds:DigestValue></ds:Reference><ds:Reference Id="Reference-Id-6d462fcc-21aa-4469-8655-c366f73b9baa" URI=""><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha384"/><ds:DigestValue>32L8y7RZlZQ2NYtmUTABxUcB6GJ+h0e/gFjF/vUW2KiLxQeIE0ae+LWkhLfGyCqi</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue Id="value-Signature_id-d6a22b27ceeb4306b84b0f054dd2210b">Wlt70kB2TeCG36r08b/gHbFj9KfgjbyZtC64urqhMsW33QLT0QzWhVX0Mvl8vCdFLunXckJctYtSRMfU4lqGKPRej8XJwXY7pEzy1SV7H8VwJ8lZ8Bkr4mYL6SJgJT65LMpBQA2t+f69Y9Ih8pRejIjvYiDjEECYx9jmGlwzLI4Wm3R73PcoDelpE8DK8LSmElJNpRryyv2q5RhsLkDpbO63fhAd8prcT5nVF/J50XF3Rs5+zZ63Qz9R/tEuLMfvYZlr5l9hrq/WjwPMG05W0RiB63qlYYAGip5bzWZ0JxuId1FpMkFfPt+31DCX5h7tYfauTjGIbPg5P12SXUJ+Lw==</ds:SignatureValue><ds:KeyInfo><ds:X509Data><ds:X509SubjectName>CN=Test Kurum Bir,2.5.4.5=#130a31323334353637383031</ds:X509SubjectName><ds:X509Certificate>MIIE7jCCBHSgAwIBAgIIALiCJFIo/DswCgYIKoZIzj0EAwMwgdExCzAJBgNVBAYTAlRSMRgwFgYD
+VQQHDA9HZWJ6ZSAtIEtvY2FlbGkxRzBFBgNVBAoMPlTDvHJraXllIEJpbGltc2VsIHZlIFRla25v
+bG9qaWsgQXJhxZ90xLFybWEgS3VydW11IC0gVMOcQsSwVEFLMRAwDgYDVQQLDAdCxLBMR0VNMU0w
+SwYDVQQDDERNYWxpIE3DvGjDvHIgRWxla3Ryb25payBTZXJ0aWZpa2EgSGl6bWV0IFNhxJ9sYXnE
+sWPEsXPEsSAtIFPDvHLDvG0gMzAeFw0yMzEwMDIwNjIzNTVaFw0yNjEwMDEwNjIzNTVaMC4xEzAR
+BgNVBAUTCjEyMzQ1Njc4MDExFzAVBgNVBAMMDlRlc3QgS3VydW0gQmlyMIIBIjANBgkqhkiG9w0B
+AQEFAAOCAQ8AMIIBCgKCAQEA1a3Q1iFRs6W/BsbOWBh0phkGggZYVsTcOsjEdo3E+wrZpN1vqGPO
+d8Nm/4QEZhEw37gFd0aEJh6Z6A6QYNd2rRqP5zuwpy/VbKCOSOsat4yiZUk416gf9DWsQrrIuDrk
+MnWPWLOH9PNrYzEdg6LsavigbwFBxCucXa+ArzQiF+O0CjOCqMGpEFXsoPvQbjbTzihLaz9WIyvw
+XWJaFOe7tUfejYBsU2yEyhJf6zOZ4Qlla0wfM+5gODM+Nl5C7WzrztlmzXuGxdBzXZMNVkdZgDh6
++1UvgfXbOpsOoEg9p8woee9VGpZ8XCMjJsw/cFvnfkguuCWYCkd34b8361oF1QIDAQABo4ICCzCC
+AgcwHwYDVR0jBBgwFoAUBjloES0EC4AUvbc5gqsEyPbYqXwwHQYDVR0OBBYEFKp99rfQnbbYBlup
++j0XMO8x0i/wMA4GA1UdDwEB/wQEAwIHgDCBxgYDVR0gBIG+MIG7MIG4BgtghhgBAgEBBQcEATCB
+qDAqBggrBgEFBQcCARYeaHR0cDovL2RlcG8ua2FtdXNtLmdvdi50ci9pbGtlMHoGCCsGAQUFBwIC
+MG4MbEJ1IHNlcnRpZmlrYSBpbGUgaWxnaWxpIHNlcnRpZmlrYSB1eWd1bGFtYSBlc2FzbGFyxLFu
+xLEgb2t1bWFrIGnDp2luIGJlbGlydGlsZW4gd2ViIHNpdGVzaW5pIHppeWFyZXQgZWRpbml6LjAM
+BgNVHRMBAf8EAjAAMBYGA1UdJQQPMA0GC2CGGAECAQEFBzIBMEEGA1UdHwQ6MDgwNqA0oDKGMGh0
+dHA6Ly9kZXBvLmthbXVzbS5nb3YudHIva3VydW1zYWwvbW1lc2hzLXMzLmNybDCBggYIKwYBBQUH
+AQEEdjB0MDwGCCsGAQUFBzAChjBodHRwOi8vZGVwby5rYW11c20uZ292LnRyL2t1cnVtc2FsL21t
+ZXNocy1zMy5jcnQwNAYIKwYBBQUHMAGGKGh0dHA6Ly9jaXNkdXBtbXMzLmt1cnVtc2FsLmthbXVz
+bS5nb3YudHIwCgYIKoZIzj0EAwMDaAAwZQIwJxYoC3auHWirE26t++2tZB2JARUvR3S3AjVEWm0S
+rda4CiFndFsrBG1aYEABHCWbAjEAymRIHArugpV88Rzdly51z/+w/zqJw74i50uEf8fg0S9GDLUh
+6AqzrAUXfO7Vtin5
+</ds:X509Certificate></ds:X509Data><ds:KeyValue><ds:RSAKeyValue><ds:Modulus>ANWt0NYhUbOlvwbGzlgYdKYZBoIGWFbE3DrIxHaNxPsK2aTdb6hjznfDZv+EBGYRMN+4BXdGhCYe
+megOkGDXdq0aj+c7sKcv1WygjkjrGreMomVJONeoH/Q1rEK6yLg65DJ1j1izh/Tza2MxHYOi7Gr4
+oG8BQcQrnF2vgK80IhfjtAozgqjBqRBV7KD70G42084oS2s/ViMr8F1iWhTnu7VH3o2AbFNshMoS
+X+szmeEJZWtMHzPuYDgzPjZeQu1s687ZZs17hsXQc12TDVZHWYA4evtVL4H12zqbDqBIPafMKHnv
+VRqWfFwjIybMP3Bb535ILrglmApHd+G/N+taBdU=
+</ds:Modulus><ds:Exponent>AQAB</ds:Exponent></ds:RSAKeyValue></ds:KeyValue></ds:KeyInfo><ds:Object><xades:QualifyingProperties Target="#Signature_id-d6a22b27ceeb4306b84b0f054dd2210b"><xades:SignedProperties Id="xades-Signature_id-d6a22b27ceeb4306b84b0f054dd2210b"><xades:SignedSignatureProperties><xades:SigningTime>2026-05-17T21:20:58Z</xades:SigningTime><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#sha384"/><ds:DigestValue>CbXKZ6wkLv50uL65MnG3tYfI4+sZpZdwMCcgkSv1yGr9YJjaazcQWh99+nZO6EBn</ds:DigestValue></xades:CertDigest><xades:IssuerSerial><ds:X509IssuerName>CN=Mali Mühür Elektronik Sertifika Hizmet Sağlayıcısı - Sürüm 3,OU=BİLGEM,O=Türkiye Bilimsel ve Teknolojik Araştırma Kurumu - TÜBİTAK,L=Gebze - Kocaeli,C=TR</ds:X509IssuerName><ds:X509SerialNumber>51934488223611963</ds:X509SerialNumber></xades:IssuerSerial></xades:Cert></xades:SigningCertificate><xades:SignerRole><xades:ClaimedRoles><xades:ClaimedRole>Supplier</xades:ClaimedRole></xades:ClaimedRoles></xades:SignerRole></xades:SignedSignatureProperties><xades:SignedDataObjectProperties><xades:DataObjectFormat ObjectReference="#Reference-Id-6d462fcc-21aa-4469-8655-c366f73b9baa"><xades:MimeType>text/xml</xades:MimeType></xades:DataObjectFormat></xades:SignedDataObjectProperties></xades:SignedProperties></xades:QualifyingProperties></ds:Object></ds:Signature></ext:ExtensionContent>
+        </ext:UBLExtension>
+    </ext:UBLExtensions>
+    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+    <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
+    <cbc:ProfileID>TEMELFATURA</cbc:ProfileID>
+    <cbc:ID>MRS2026000000001</cbc:ID>
+    <cbc:CopyIndicator>false</cbc:CopyIndicator>
+    <cbc:UUID>00000000-0000-0000-0000-000000000000</cbc:UUID>
+    <cbc:IssueDate>2026-05-16</cbc:IssueDate>
+    <cbc:IssueTime>17:51:30</cbc:IssueTime>
+    <cbc:InvoiceTypeCode>SATIS</cbc:InvoiceTypeCode>
+    <cbc:Note>YALNIZ : ALTIYÜZ TL SIFIR Kr.</cbc:Note>
+    <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
+    <cbc:LineCountNumeric>1</cbc:LineCountNumeric>
+    <cac:Signature>
+        <cbc:ID schemeID="VKN_TCKN">9999999999</cbc:ID>
+        <cac:SignatoryParty>
+            <cbc:WebsiteURI>https://mersel.io</cbc:WebsiteURI>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">9999999999</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>MERSEL YAZILIM A.Ş.</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>ANONİM SOKAK NO: 1</cbc:StreetName>
+                <cbc:CitySubdivisionName>Merkez</cbc:CitySubdivisionName>
+                <cbc:CityName>İstanbul</cbc:CityName>
+                <cbc:PostalZone>34000</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>TR</cbc:IdentificationCode>
+                    <cbc:Name>Türkiye</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cac:TaxScheme>
+                    <cbc:Name>ANONİM V.D.</cbc:Name>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:Contact>
+                <cbc:Telephone>0212 000 00 00</cbc:Telephone>
+                <cbc:ElectronicMail>info@mersel.io</cbc:ElectronicMail>
+            </cac:Contact>
+        </cac:SignatoryParty>
+        <cac:DigitalSignatureAttachment>
+            <cac:ExternalReference>
+                <cbc:URI>#Signature_MRS2026000000001</cbc:URI>
+            </cac:ExternalReference>
+        </cac:DigitalSignatureAttachment>
+    </cac:Signature>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">9999999999</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="MERSISNO">0999999999900001</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="TICARETSICILNO">000000-0</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>MERSEL YAZILIM TEKNOLOJİLERİ A.Ş.</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>ANONİM SOKAK NO: 1</cbc:StreetName>
+                <cbc:CitySubdivisionName>Merkez</cbc:CitySubdivisionName>
+                <cbc:CityName>İstanbul</cbc:CityName>
+                <cac:Country>
+                    <cbc:Name>TÜRKİYE CUMHURİYETİ</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cac:TaxScheme>
+                    <cbc:Name>ANONİM V.D.</cbc:Name>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:Contact>
+                <cbc:Telephone>+90(212) 000 00 00</cbc:Telephone>
+                <cbc:ElectronicMail>info@mersel.io</cbc:ElectronicMail>
+            </cac:Contact>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="TCKN">11111111111</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PostalAddress>
+                <cbc:StreetName>ANONİM MÜŞTERİ ADRESİ</cbc:StreetName>
+                <cbc:CitySubdivisionName>ANONİM</cbc:CitySubdivisionName>
+                <cbc:CityName>ANONİM</cbc:CityName>
+                <cac:Country>
+                    <cbc:Name>TÜRKİYE</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cac:TaxScheme>
+                    <cbc:Name>ANONİM V.D.</cbc:Name>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:Contact>
+                <cbc:Telephone>(500)-000-00-00</cbc:Telephone>
+                <cbc:ElectronicMail>anonim@musteri.com</cbc:ElectronicMail>
+            </cac:Contact>
+            <cac:Person>
+                <cbc:FirstName>ANONİM</cbc:FirstName>
+                <cbc:FamilyName>ALICI</cbc:FamilyName>
+            </cac:Person>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="TRY">100.00</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="TRY">500.00</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="TRY">100.00</cbc:TaxAmount>
+            <cbc:Percent>20</cbc:Percent>
+            <cac:TaxCategory>
+                <cac:TaxScheme>
+                    <cbc:Name>KATMA DEĞER VERGİSİ</cbc:Name>
+                    <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+                </cac:TaxScheme>
+            </cac:TaxCategory>
+        </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyID="TRY">500.00</cbc:LineExtensionAmount>
+        <cbc:TaxExclusiveAmount currencyID="TRY">500.00</cbc:TaxExclusiveAmount>
+        <cbc:TaxInclusiveAmount currencyID="TRY">600.00</cbc:TaxInclusiveAmount>
+        <cbc:AllowanceTotalAmount currencyID="TRY">0</cbc:AllowanceTotalAmount>
+        <cbc:ChargeTotalAmount currencyID="TRY">0</cbc:ChargeTotalAmount>
+        <cbc:PayableAmount currencyID="TRY">600.00</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    <cac:InvoiceLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="C62">50</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="TRY">500.00</cbc:LineExtensionAmount>
+        <cac:TaxTotal>
+            <cbc:TaxAmount currencyID="TRY">100.00</cbc:TaxAmount>
+            <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="TRY">500.00</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="TRY">100.00</cbc:TaxAmount>
+                <cbc:Percent>20</cbc:Percent>
+                <cac:TaxCategory>
+                    <cac:TaxScheme>
+                        <cbc:Name>KATMA DEĞER VERGİSİ</cbc:Name>
+                        <cbc:TaxTypeCode>0015</cbc:TaxTypeCode>
+                    </cac:TaxScheme>
+                </cac:TaxCategory>
+            </cac:TaxSubtotal>
+        </cac:TaxTotal>
+        <cac:Item>
+            <cbc:Name>e-Belge Kontör Bedeli: 50 Adet</cbc:Name>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyID="TRY">10.00000000</cbc:PriceAmount>
+        </cac:Price>
+    </cac:InvoiceLine>
+</Invoice>

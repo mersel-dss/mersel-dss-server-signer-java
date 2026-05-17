@@ -124,11 +124,12 @@ fi
 echo ""
 
 # 6. XML dosyası için timestamp örneği (eğer örnek dosya varsa)
-if [ -f "../../resources/test-documents/EFATURA.xml" ]; then
+# Fixture'lar 0.3+ sonrası resources/test-fixtures/xades/ altında.
+if [ -f "../../resources/test-fixtures/xades/efatura.xml" ]; then
     echo -e "${YELLOW}6. XML dosyası için timestamp al${NC}"
     echo "-----------------------------------"
     
-    XML_FILE="../../resources/test-documents/EFATURA.xml"
+    XML_FILE="../../resources/test-fixtures/xades/efatura.xml"
     XML_TST_FILE="/tmp/xml_timestamp_token.tst"
     
     HTTP_CODE=$(curl -s -w "%{http_code}" -X POST "${API_URL}/get" \

@@ -13,6 +13,10 @@ import eu.europa.esig.dss.model.ToBeSigned;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -33,7 +37,6 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Collections;
@@ -44,6 +47,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+@Epic("Service Layer")
+@Feature("CAdESSignatureService")
+@Severity(SeverityLevel.NORMAL)
 class CAdESSignatureServiceTest {
 
     @Mock private CAdESService cadesService;
@@ -102,7 +108,7 @@ class CAdESSignatureServiceTest {
 
         SignatureValue signatureValue = new SignatureValue(
                 SignatureAlgorithm.RSA_SHA256, new byte[]{10, 20, 30});
-        when(cryptoSigner.sign(any(ToBeSigned.class), any(PrivateKey.class),
+        when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
                 any(DigestAlgorithm.class)))
                 .thenReturn(signatureValue);
 
@@ -217,7 +223,8 @@ class CAdESSignatureServiceTest {
             ToBeSigned toBeSigned = new ToBeSigned(new byte[]{1});
             when(cadesService.getDataToSign(any(DSSDocument.class), any(CAdESSignatureParameters.class)))
                     .thenReturn(toBeSigned);
-            when(cryptoSigner.sign(any(), any(), any()))
+            when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
+                    any(DigestAlgorithm.class)))
                     .thenReturn(new SignatureValue(SignatureAlgorithm.RSA_SHA384, new byte[]{1}));
             when(cadesService.signDocument(any(), any(), any()))
                     .thenReturn(new InMemoryDocument(new byte[]{1}, "s.p7s"));
@@ -263,7 +270,7 @@ class CAdESSignatureServiceTest {
             inOrder.verify(cadesService).getDataToSign(
                     any(DSSDocument.class), any(CAdESSignatureParameters.class));
             inOrder.verify(cryptoSigner).sign(
-                    any(ToBeSigned.class), any(PrivateKey.class),
+                    any(ToBeSigned.class), any(SigningMaterial.class),
                     any(DigestAlgorithm.class));
             inOrder.verify(cadesService).signDocument(
                     any(DSSDocument.class), any(CAdESSignatureParameters.class),
@@ -271,7 +278,7 @@ class CAdESSignatureServiceTest {
         }
 
         @Test
-        void shouldPassPrivateKeyAndCertificateToCryptoSigner() throws Exception {
+        void shouldPassSigningMaterialAndDigestToCryptoSigner() throws Exception {
             setupDefaultMocks();
             SigningMaterial material = createTestMaterial();
 
@@ -279,7 +286,7 @@ class CAdESSignatureServiceTest {
 
             verify(cryptoSigner).sign(
                     any(ToBeSigned.class),
-                    eq(testKeyPair.getPrivate()),
+                    eq(material),
                     eq(DigestAlgorithm.SHA256));
         }
 
@@ -289,7 +296,8 @@ class CAdESSignatureServiceTest {
                     .thenReturn(DigestAlgorithm.SHA512);
             ToBeSigned toBeSigned = new ToBeSigned(new byte[]{1});
             when(cadesService.getDataToSign(any(), any())).thenReturn(toBeSigned);
-            when(cryptoSigner.sign(any(), any(), any()))
+            when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
+                    any(DigestAlgorithm.class)))
                     .thenReturn(new SignatureValue(SignatureAlgorithm.RSA_SHA512, new byte[]{1}));
             when(cadesService.signDocument(any(), any(), any()))
                     .thenReturn(new InMemoryDocument(new byte[]{1}, "s.p7s"));
@@ -299,7 +307,7 @@ class CAdESSignatureServiceTest {
             service.signData(new ByteArrayInputStream("test".getBytes()), false, material);
 
             verify(cryptoSigner).sign(
-                    any(ToBeSigned.class), any(PrivateKey.class),
+                    any(ToBeSigned.class), any(SigningMaterial.class),
                     eq(DigestAlgorithm.SHA512));
         }
     }
@@ -358,7 +366,7 @@ class CAdESSignatureServiceTest {
                     .thenReturn(DigestAlgorithm.SHA256);
             when(cadesService.getDataToSign(any(DSSDocument.class), any(CAdESSignatureParameters.class)))
                     .thenReturn(new ToBeSigned(new byte[]{1}));
-            when(cryptoSigner.sign(any(ToBeSigned.class), any(PrivateKey.class),
+            when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
                     any(DigestAlgorithm.class)))
                     .thenThrow(new RuntimeException("HSM error"));
 
@@ -375,7 +383,8 @@ class CAdESSignatureServiceTest {
                     .thenReturn(DigestAlgorithm.SHA256);
             when(cadesService.getDataToSign(any(DSSDocument.class), any(CAdESSignatureParameters.class)))
                     .thenReturn(new ToBeSigned(new byte[]{1}));
-            when(cryptoSigner.sign(any(), any(), any()))
+            when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
+                    any(DigestAlgorithm.class)))
                     .thenReturn(new SignatureValue(SignatureAlgorithm.RSA_SHA256, new byte[]{1}));
             when(cadesService.signDocument(any(DSSDocument.class), any(CAdESSignatureParameters.class),
                     any(SignatureValue.class)))
@@ -395,7 +404,8 @@ class CAdESSignatureServiceTest {
             when(cadesService.getDataToSign(any(), any()))
                     .thenReturn(new ToBeSigned(new byte[]{1}));
             SignatureException original = new SignatureException("HSM_ERROR", "HSM connection lost");
-            when(cryptoSigner.sign(any(), any(), any())).thenThrow(original);
+            when(cryptoSigner.sign(any(ToBeSigned.class), any(SigningMaterial.class),
+                    any(DigestAlgorithm.class))).thenThrow(original);
 
             SigningMaterial material = createTestMaterial();
 

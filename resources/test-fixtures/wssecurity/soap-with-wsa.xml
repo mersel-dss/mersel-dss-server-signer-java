@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WS-Addressing header'ları içeren SOAP 1.2 envelope.
+
+  Beklenen kontrat: signer Security header'ı insert ederken WS-Addressing
+  child element'lerine dokunmamalı. Header sırası garantili değildir;
+  test sadece wsa:MessageID, wsa:To, wsa:Action ve wsa:ReplyTo element'lerinin
+  varlığını ve text content'ini sign sonrası teyit eder.
+-->
+<env:Envelope xmlns:env="http://www.w3.org/2003/05/soap-envelope"
+              xmlns:wsa="http://www.w3.org/2005/08/addressing"
+              xmlns:test="http://test.example.com">
+   <env:Header>
+      <wsa:MessageID>urn:uuid:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee</wsa:MessageID>
+      <wsa:To>https://efaturatest.gib.gov.tr/EarsivPortalIntegration</wsa:To>
+      <wsa:Action>http://test.example.com/SendDocument</wsa:Action>
+      <wsa:ReplyTo>
+         <wsa:Address>http://www.w3.org/2005/08/addressing/anonymous</wsa:Address>
+      </wsa:ReplyTo>
+   </env:Header>
+   <env:Body>
+      <test:SendDocumentRequest>
+         <test:RequestId>WSA-TEST-001</test:RequestId>
+         <test:Payload>
+            <test:Message>WS-Addressing header'larıyla SOAP imzalama testi</test:Message>
+         </test:Payload>
+      </test:SendDocumentRequest>
+   </env:Body>
+</env:Envelope>

@@ -1,0 +1,61 @@
+# syntax=docker/dockerfile:1.6
+#
+# pkcs11-integration test runner image.
+#
+# Bu image yalnızca CI ve geliştirici makinesinde "izole, sıfır-setup"
+# pkcs11-integration testlerini koşturmak içindir. Production runtime
+# image'i (../docker/Dockerfile) ile karıştırılmamalıdır.
+#
+# İçerdiği bileşenler:
+#   - Maven 3.9 + Eclipse Temurin JDK 8 (multi-arch: amd64 + arm64)
+#   - softhsm2 + opensc (PKCS#11 entegrasyon testlerinin native bağımlılıkları)
+#   - SOFTHSM2_MODULE env'i otomatik set edilir → SoftHsm2TestSupport bunu okur
+#
+# Neden ayrı image?
+#   PKCS#11 dünyası JNI tabanlıdır; libsofthsm2 host JVM'in process'ine
+#   dlopen edilir. Yani native lib + JVM AYNI process'te olmak zorunda.
+#   Testcontainers ile "yan container" yaklaşımı yetmez. Çözüm:
+#   test JVM'inin kendisini bu image'e taşımak — böylece JDK ABI ile
+#   libsofthsm2 ABI'si garanti uyumlu olur (amd64/amd64 veya arm64/arm64).
+#
+# Build:
+#   docker build -t mersel/dss-signer-pkcs11-tests:latest \
+#                -f devops/docker/Dockerfile.pkcs11-tests devops/docker
+#
+# Doğrudan kullanım yerine ../../scripts/run-pkcs11-tests.sh çağırmak önerilir;
+# wrapper script Docker socket mount, Maven cache reuse ve Testcontainers
+# host override gibi detayları halleder.
+
+FROM maven:3.9.6-eclipse-temurin-8-focal
+
+# Native bağımlılıklar:
+#   softhsm2          → libsofthsm2.so (JNI ile JVM'e yüklenir)
+#                       + softhsm2-util CLI (token init)
+#   opensc            → pkcs11-tool CLI (private key + cert import)
+#   ca-certificates   → mvn central + GHCR HTTPS pull için
+#
+# DEBIAN_FRONTEND noninteractive: tzdata gibi paketler prompt açmasın.
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+         softhsm2 \
+         opensc \
+         ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# SOFTHSM2_MODULE: SoftHsm2TestSupport.requireSoftHsmModule() bu env'i ilk
+# olarak okur; bulamazsa candidate path listesinde arar. Ubuntu/Debian'da
+# libsofthsm2.so yolu sabit olduğundan explicit set ederek path-probing'i
+# kısa devre yapıyoruz.
+ENV SOFTHSM2_MODULE=/usr/lib/softhsm/libsofthsm2.so
+
+# /work: project bind-mount edilecek hedef.
+# /root/.m2: Maven local repo cache mount edilecek hedef (host'tan reuse).
+WORKDIR /work
+
+# Entrypoint mvn — geriye sadece goal + arg'lar kalır.
+# Örnek:
+#   docker run --rm mersel/dss-signer-pkcs11-tests:latest \
+#              test -B -Dgroups=pkcs11-integration -DexcludedGroups=
+ENTRYPOINT ["mvn"]
+CMD ["test", "-B", "-Dgroups=pkcs11-integration", "-DexcludedGroups="]

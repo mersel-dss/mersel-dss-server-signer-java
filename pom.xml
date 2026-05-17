@@ -23,6 +23,24 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jcifs.version>1.3.1</jcifs.version>
         <sqlite.jdbc.version>3.7.2</sqlite.jdbc.version>
+        <!--
+            JUnit 5 tag-based test exclusion default'u.
+            'verifier-e2e' tag'i Docker gerektiren E2E testleri işaretler.
+            'pkcs11-integration' tag'i native SoftHSM2/OpenSC araçları gerektirir.
+            CLI'dan -DexcludedGroups= ile boşaltıp e2e dahil edebilirsin
+            (Surefire'ın native property adı 'excludedGroups').
+        -->
+        <excludedGroups>verifier-e2e,pkcs11-integration</excludedGroups>
+
+        <!--
+            Allure 2.27.0 + AspectJ Weaver 1.9.21: JUnit 5 annotation
+            (@Epic, @Feature, @Story, @Severity, @Description, @Step) ve
+            Allure.addAttachment() çağrılarını runtime'da yakalamak için
+            JVM javaagent olarak inject ediliyor (Surefire argLine'a).
+            Allure docs'ta önerilen kombo. Java 8 baseline ile uyumlu.
+        -->
+        <allure.version>2.27.0</allure.version>
+        <aspectj.version>1.9.21</aspectj.version>
     </properties>
 
     <dependencies>
@@ -214,10 +232,39 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!--
+            IAIK PKCS#11 Wrapper (xipki fork)
+            ===================================
+            SunPKCS11'in P11KeyStore alias-mapping katmanı bazı HSM'lerde
+            (SafeNet ProtectToolkit / ProtectServer K7 gibi CKF_LOGIN_REQUIRED
+            set EDİLMEMİŞ tokenlerde) boş alias map üretiyor — JCA
+            keyStore.aliases() sıfır entry döndürüyor ve hem listing hem imza
+            akışı patlıyor.
+
+            IAIK Wrapper SunPKCS11'in JCA katmanını tamamen by-pass eder;
+            doğrudan PKCS#11 native bridge üzerinden C_FindObjects / C_Sign
+            çağırır. Vendor-agnostik, eIDAS sertifikalı kütüphane.
+
+            Lisans: xipki kodu Apache 2.0; orijinal IAIK Graz kodu BSD tipi
+            5-maddelik lisans (ticari kullanım serbest, sadece üründe
+            "This product includes software developed by IAIK of Graz
+            University of Technology." acknowledgment'ı gerekiyor).
+
+            NOT: Eski `org.xipki.iaik:sunpkcs11-wrapper` paketi xipki tarafından
+            archive edildi (Nis 2023). Aktif sürdürülen halefi
+            `org.xipki:ipkcs11wrapper` (IAIK PKCS#11 Wrapper 1.6.8 kod tabanından);
+            yeni paket adı `org.xipki.pkcs11.wrapper.*` altında. Son release
+            v1.0.9 (Tem 2024), son commit Kas 2024.
+
+            JDK 17+'da çalıştırırken JVM argümanı gereklidir:
+              add-exports=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED
+            (iki-tireli yazımı XML yorumunda kullanmıyoruz; gerçek JVM
+            argümanında baştaki iki tire ile yazılır.)
+        -->
         <dependency>
-            <groupId>sun.security.pkcs11</groupId>
-            <artifactId>sunpkcs11</artifactId>
-            <version>1.0.0</version>
+            <groupId>org.xipki</groupId>
+            <artifactId>ipkcs11wrapper</artifactId>
+            <version>1.0.9</version>
         </dependency>
 
         <dependency>
@@ -280,43 +327,85 @@
             <artifactId>mockito-core</artifactId>
             <scope>test</scope>
         </dependency>
-    </dependencies>
 
-    <repositories>
-        <repository>
-            <id>sun.security.pkcs11</id>
-            <name>sun.security.pkcs11.sunpkcs11</name>
-            <url>file://${basedir}/src/main/lib</url>
-        </repository>
-    </repositories>
+        <!--
+            Testcontainers — Docker tabanlı uçtan-uca testler için.
+            E2E test sınıflarımız ghcr.io/mersel-dss/mersel-dss-verifier-api-java
+            imajını ayağa kaldırıp gerçek imza→doğrulama akışını koşar.
+
+            Sürüm notu: 1.20.x serisi Java 8 ile çalışan son ana hat.
+            1.21+ Java 11+ gerektirir; pom'umuz hala java.version=1.8 olduğu
+            için 1.20.4'te kalıyoruz. Yükseltmek isterseniz önce JDK
+            baseline'ını yukarı çekin.
+
+            Bu testler @Tag("verifier-e2e") ile etiketli ve varsayılan
+            'mvn test' koşusunda Surefire 'excludedGroups' ile dışlanır.
+            Çalıştırmak için: mvn test -Dgroups=verifier-e2e
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>1.20.4</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Allure 2.27.0 — JUnit 5 test execution + attachment + Behaviors
+            (Epic/Feature/Story) annotations. Pages "Evidence Site" üzerinde
+            her test case için signed artifact + verifier-api response JSON
+            attachment olarak görünür; trend grafiği + history için workflow
+            tarafında allure-history cache + allure:report goal'u kullanılır.
+            Java 8 baseline ile uyumlu (Allure 2.x kaynak hedefi Java 8).
+        -->
+        <dependency>
+            <groupId>io.qameta.allure</groupId>
+            <artifactId>allure-junit5</artifactId>
+            <version>${allure.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            AspectJ Weaver — Allure'un @Step, @Attachment ve life-cycle
+            annotation'larını intercept etmek için javaagent olarak yükleniyor.
+            Surefire argLine'da bu JAR'ın yolu inject ediliyor. Test scope
+            yeterli; production'a paketlenmez.
+        -->
+        <dependency>
+            <groupId>org.aspectj</groupId>
+            <artifactId>aspectjweaver</artifactId>
+            <version>${aspectj.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
     <build>
         <plugins>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-install-plugin</artifactId>
-                <version>2.5.1</version>
-                <executions>
-                    <execution>
-                        <id>install-sunpkcs11</id>
-                        <goals>
-                            <goal>install-file</goal>
-                        </goals>
-                        <phase>validate</phase>
-                        <configuration>
-                            <groupId>sun.security.pkcs11</groupId>
-                            <artifactId>sunpkcs11</artifactId>
-                            <version>1.0.0</version>
-                            <packaging>jar</packaging>
-                            <file>src/main/lib/sunpkcs11.jar</file>
-                            <generatePom>true</generatePom>
-                        </configuration>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <!--
+                    `mvn spring-boot:run` çalıştırıldığında otomatik olarak
+                    'local' Spring profile'ı aktif olur → src/main/resources/
+                    application-local.properties yüklenir → test PFX + dummy
+                    config ile uygulama hemen ayağa kalkar. Geliştirici
+                    elle PFX_PATH / CERTIFICATE_PIN env var set etmek
+                    zorunda kalmaz.
+
+                    Production deployment'ları `java -jar` ile çalıştırılır
+                    (bu plugin'in goal'lerini değil); orada profile aktif
+                    olmaz, prod-grade env var'lar zorunlu kalır.
+                -->
+                <configuration>
+                    <profiles>
+                        <profile>local</profile>
+                    </profiles>
+                </configuration>
                 <executions>
                     <execution>
                         <configuration>
@@ -324,6 +413,178 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+
+            <!--
+                Surefire — JUnit 5 tag tabanlı izolasyon.
+
+                Varsayılan 'mvn test' koşusunda 'verifier-e2e' ve
+                'pkcs11-integration' tag'li testler ATLANIR. Bunun nedeni:
+                verifier-e2e Docker'a ihtiyaç duyar ve ghcr.io'dan ~700MB'lık
+                verifier imajını çeker; pkcs11-integration ise native
+                SoftHSM2/OpenSC araçları gerektirir.
+
+                Kullanım:
+                  - Sadece unit testler (default):
+                      mvn test
+                  - SADECE E2E (verifier roundtrip):
+                      mvn test -Dgroups=verifier-e2e -DexcludedGroups=
+                  - SADECE SoftHSM2 PKCS#11 integration:
+                      mvn test -Dgroups=pkcs11-integration -DexcludedGroups=
+                  - Hepsi:
+                      mvn test -DexcludedGroups=
+            -->
+            <!--
+                Surefire 3.2.5: Spring Boot 2.x parent default'u 2.22.2'dir;
+                bu sürüm @ParameterizedTest hata raporlamasını silently
+                strip ediyor (gerçek stack trace yerine "Caused by: NPE"
+                gibi tek satır). 3.x bunu düzeltir, Jupiter 5.8.2 ile
+                tam uyumlu.
+
+                argLine: -XX:-OmitStackTraceInFastThrow → JIT'in
+                tekrarlanan exception stack'lerini sıkıştırmasını kapatır,
+                CI dump'larında her zaman tam stack alırız.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <excludedGroups>${excludedGroups}</excludedGroups>
+                    <!--
+                        argLine bileşenleri (sıra önemli):
+                          1) @{argLine}        → JaCoCo prepare-agent goal'unun
+                                                 runtime'da inject ettiği -javaagent
+                                                 (line/branch coverage için).
+                                                 '@{...}' late-evaluation; '${...}'
+                                                 erken-evaluation olduğundan JaCoCo
+                                                 inject'i kaybolurdu.
+                          2) -XX:-OmitStackTraceInFastThrow → JIT'in tekrarlanan
+                                                 exception stack'lerini sıkıştırmasını
+                                                 kapatır (tam stack CI dump'ında her
+                                                 zaman görünsün).
+                          3) -javaagent:aspectjweaver → Allure 2.x'in @Step / @Epic /
+                                                 @Feature / Allure.addAttachment()
+                                                 çağrılarını runtime'da yakalaması
+                                                 için zorunlu. Path'i Maven local
+                                                 repo'dan resolve ediyoruz, aspectj
+                                                 dependency yukarıda test scope'da
+                                                 declare edilmiş.
+                    -->
+                    <argLine>@{argLine} -XX:-OmitStackTraceInFastThrow -javaagent:"${settings.localRepository}/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar"</argLine>
+                    <!--
+                        Allure JUnit 5 entegrasyonu: allure-junit5 dependency
+                        kendisi auto-register olur; ayrıca Allure'un results
+                        directory'sini default 'allure-results' yerine target/
+                        altına aldırıyoruz ki mvn clean ile temizlensin.
+                    -->
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
+                    <!--
+                        SOFTHSM2_CONF: JVM seviyesinde set edilmeli. PKCS#11
+                        entegrasyon testleri token'ları subprocess (softhsm2-util,
+                        pkcs11-tool) ile yaratır ancak imzalama anında JVM JNI
+                        ile libsofthsm2'yi yükler. JVM env'inde SOFTHSM2_CONF
+                        YOKSA libsofthsm2 default sistem config'ini
+                        (/etc/softhsm/softhsm2.conf veya ~/.config/softhsm2/
+                        softhsm2.conf) okur ve testte yaratılan token'ı GÖRMEZ
+                        → "PKCS11_SLOT=... için token bulunamadı" hatası verir.
+                        Bu env subprocess'lere de propagate edilir; böylece
+                        CLI ile JVM aynı config dosyasını ve token deposunu
+                        paylaşır.
+                    -->
+                    <environmentVariables>
+                        <SOFTHSM2_CONF>${project.build.directory}/softhsm-test/softhsm2.conf</SOFTHSM2_CONF>
+                    </environmentVariables>
+                </configuration>
+            </plugin>
+
+            <!--
+                JaCoCo — line/branch/method coverage. Surefire argLine'ına
+                runtime'da -javaagent inject eder (prepare-agent goal); test
+                bittiğinde execution data'yı işleyip HTML report üretir
+                (report goal). Pages/coverage/ altında publish edilir.
+
+                Java 8 baseline: 0.8.11 son Java 8 uyumlu versiyon.
+            -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Allure Maven Plugin — allure-results/ JSON dump'ından
+                offline HTML report üretir (allure:report goal). CI'da
+                history/ klasörü actions/cache@v4 ile previous-build
+                içeriği restore edilirse trend grafiği zenginleşir.
+                Goal'u explicit invoke ediyoruz (workflow'da); phase'e
+                bind etmiyoruz ki normal 'mvn test' koşumunda overhead
+                yaratmasın.
+            -->
+            <plugin>
+                <groupId>io.qameta.allure</groupId>
+                <artifactId>allure-maven</artifactId>
+                <version>2.12.0</version>
+                <configuration>
+                    <resultsDirectory>${project.build.directory}/allure-results</resultsDirectory>
+                    <reportDirectory>${project.build.directory}/site/allure-maven-plugin</reportDirectory>
+                    <reportVersion>${allure.version}</reportVersion>
+                </configuration>
+            </plugin>
+
+            <!--
+                OWASP Dependency-Check — CVE bilinen 3rd-party dependency
+                tarama. HTML + JSON output. NVD-API key environment'tan
+                opsiyonel okunur (CI'da secret olarak set edilebilir,
+                yoksa rate-limited ama yine çalışır).
+
+                'check' goal'unu phase'e bind ETMİYORUZ — workflow explicit
+                invoke eder; default 'mvn verify' koşumunda 5+ dakika
+                eklemesi istenmiyor.
+
+                failBuildOnCVSS=11: CVSS skoru max 10'dur; 11 → asla
+                fail etme. Rapor info-only; auditor için kanıt, build
+                gatekeeper değil.
+            -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>9.2.0</version>
+                <configuration>
+                    <failBuildOnCVSS>11</failBuildOnCVSS>
+                    <formats>
+                        <format>HTML</format>
+                        <format>JSON</format>
+                    </formats>
+                    <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                    <!--
+                        NVD veri dosyasını cwd-relative bir konuma değil
+                        ~/.m2/repository altına yazıyoruz; GitHub Actions
+                        cache hit'inde re-download yapmayalım (~5 dk
+                        tasarruf).
+                    -->
+                    <dataDirectory>${settings.localRepository}/org/owasp/dependency-check-data</dataDirectory>
+                    <suppressionFiles>
+                        <!-- İleride false-positive'leri buraya konabilir -->
+                    </suppressionFiles>
+                </configuration>
             </plugin>
         </plugins>
     </build>

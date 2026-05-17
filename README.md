@@ -2,14 +2,32 @@
 
 Türkiye e-imza standartlarına uygun elektronik imza (XAdES, PAdES, WS-Security) servisi.
 
-[![Java](https://img.shields.io/badge/Java-8+-orange.svg)](https://www.oracle.com/java/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7-green.svg)](https://spring.io/projects/spring-boot)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![DSS](https://img.shields.io/badge/DSS-6.3-blue.svg)](https://github.com/esig/dss)
-[![Version](https://img.shields.io/badge/version-0.1.0-brightgreen.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/releases)
-[![Tests](https://img.shields.io/badge/tests-115%20passed-success.svg)](https://dss.mersel.dev/sign-api/testing)
-[![GHCR](https://ghcr-badge.egpl.dev/mersel-dss/mersel-dss-server-signer-java/latest_tag?trim=major&label=ghcr.io)](https://github.com/mersel-dss/mersel-dss-server-signer-java/pkgs/container/mersel-dss-server-signer-java)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![CI](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/ci.yml/badge.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/ci.yml)
+[![Integration Tests](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/integration-tests.yml/badge.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/integration-tests.yml)
+[![Publish Evidence Pages](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/publish-pages.yml/badge.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/workflows/publish-pages.yml)
+
+**📊 Kanıt-temelli test merkezi: [Evidence Site →](https://mersel-dss.github.io/mersel-dss-server-signer-java/)**
+&nbsp;&nbsp;·&nbsp;&nbsp; 290+ E2E test (XAdES/CAdES/PAdES/WS-Security) · Her imzalı dosyanın yanında `mersel-verifier-api` doğrulama yanıtı · JaCoCo coverage · OpenAPI · OWASP Dependency-Check raporları her main push'unda otomatik yayımlanır.
+
+> **Local preview** — Pages'e push edilenin birebir aynısını kendi makinende görmek için:
+>
+> ```bash
+> ./scripts/serve-pages-locally.sh --fast       # unit testler + Allure + JaCoCo + landing (≈ 2 dk)
+> ./scripts/serve-pages-locally.sh              # tam koşum (unit + E2E + OWASP + OpenAPI snapshot)
+> ./scripts/serve-pages-locally.sh --skip-tests # mevcut target/'i kullan (en hızlı sanity)
+> ```
+>
+> Script `pages-output/` klasörünü üretir ve `http://localhost:8765/`'te serve eder (Allure, JaCoCo,
+> Scalar API Reference, OWASP — hepsi tek tarayıcı sekmesinde). Detaylı flag listesi için `--help`.
+
+[Java](https://www.oracle.com/java/)
+[Spring Boot](https://spring.io/projects/spring-boot)
+[License](LICENSE)
+[DSS](https://github.com/esig/dss)
+[Version](https://github.com/mersel-dss/mersel-dss-server-signer-java/releases)
+[Tests](https://dss.mersel.dev/sign-api/testing)
+[GHCR](https://github.com/mersel-dss/mersel-dss-server-signer-java/pkgs/container/mersel-dss-server-signer-java)
+[PRs Welcome](CONTRIBUTING.md)
 
 ---
 
@@ -23,34 +41,40 @@ Açık kaynağın gücüne inanıyor ve birlikte daha iyisini üretmeye devam ed
 
 ### Bireysel Katkı Sahipleri
 
-| Katkıda Bulunan | Kurum |
-| --- | --- |
-| [@hasanyildiz](https://github.com/hasanyildiz) | İZİBİZ Bilişim Teknolojileri Anonim Şirketi |
-| [@emresimsk](https://github.com/emresimsk) | IDECON DANIŞMANLIK HİZMETLERİ ANONİM ŞİRKETİ |
-| [@Burak-Attila](https://github.com/Burak-Attila) | EDM Bilişim |
+
+| Katkıda Bulunan                                  | Kurum                                                |
+| ------------------------------------------------ | ---------------------------------------------------- |
+| [@hasanyildiz](https://github.com/hasanyildiz)   | İZİBİZ Bilişim Teknolojileri Anonim Şirketi          |
+| [@emresimsk](https://github.com/emresimsk)       | IDECON DANIŞMANLIK HİZMETLERİ ANONİM ŞİRKETİ         |
+| [@Burak-Attila](https://github.com/Burak-Attila) | EDM Bilişim                                          |
 | [@batuhanonerr](https://github.com/batuhanonerr) | NİLVERA YAZILIM VE BİLİŞİM HİZMETLERİ TİC. LTD. ŞTİ. |
-| [@ozlemkzn](https://github.com/ozlemkzn) | e-Platform Bulut Bilişim A.Ş. |
+| [@ozlemkzn](https://github.com/ozlemkzn)         | e-Platform Bulut Bilişim A.Ş.                        |
+
 
 ### Kurumsal Destekçiler
 
-| Kurum | Katkı Türü |
-| --- | --- |
-| İzibiz | Geliştirme desteği |
-| İdecon | Geliştirme desteği |
-| EDM | Geliştirme desteği |
-| NİLVERA | Geliştirme desteği |
+
+| Kurum      | Katkı Türü         |
+| ---------- | ------------------ |
+| İzibiz     | Geliştirme desteği |
+| İdecon     | Geliştirme desteği |
+| EDM        | Geliştirme desteği |
+| NİLVERA    | Geliştirme desteği |
 | e-Platform | Geliştirme desteği |
+
 
 ### Öne Çıkan Pull Request / Issue Katkıları
 
-| Tür | Referans | Açıklama | Katkıda Bulunan |
-| --- | --- | --- | --- |
-| PR | [#3](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/3) | TÜBİTAK XAdES için ECDSA doğrulama özelleştirmeleri | [@hasanyildiz](https://github.com/hasanyildiz) |
-| PR | [#6](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/6) | PKCS#11 `slot` ve `slotListIndex` yapılandırması geliştirmesi | [@hasanyildiz](https://github.com/hasanyildiz) |
-| PR | [#8](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/8) | WS-Security imzalama düzeltmesi | [@batuhanonerr](https://github.com/batuhanonerr) |
-| PR | [#10](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/10) | UBLExtensions eksik element oluşturma düzeltmesi | [@batuhanonerr](https://github.com/batuhanonerr) |
-| PR | [#11](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/11) | CAdES-BES imzalama desteği | [@Burak-Attila](https://github.com/Burak-Attila) |
-| PR | [#12](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/12) | e-Bilet rapor tipi ve XAdES-A desteği | [@ozlemkzn](https://github.com/ozlemkzn) |
+
+| Tür | Referans                                                                   | Açıklama                                                      | Katkıda Bulunan                                  |
+| --- | -------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------------------------------------------ |
+| PR  | [#3](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/3)   | TÜBİTAK XAdES için ECDSA doğrulama özelleştirmeleri           | [@hasanyildiz](https://github.com/hasanyildiz)   |
+| PR  | [#6](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/6)   | PKCS#11 `slot` ve `slotListIndex` yapılandırması geliştirmesi | [@hasanyildiz](https://github.com/hasanyildiz)   |
+| PR  | [#8](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/8)   | WS-Security imzalama düzeltmesi                               | [@batuhanonerr](https://github.com/batuhanonerr) |
+| PR  | [#10](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/10) | UBLExtensions eksik element oluşturma düzeltmesi              | [@batuhanonerr](https://github.com/batuhanonerr) |
+| PR  | [#11](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/11) | CAdES-BES imzalama desteği                                    | [@Burak-Attila](https://github.com/Burak-Attila) |
+| PR  | [#12](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/12) | e-Bilet rapor tipi ve XAdES-A desteği                         | [@ozlemkzn](https://github.com/ozlemkzn)         |
+
 
 ---
 
@@ -79,11 +103,13 @@ Açık kaynağın gücüne inanıyor ve birlikte daha iyisini üretmeye devam ed
 ### Test Sertifikası ile (5 Dakika)
 
 **Unix/Linux/macOS:**
+
 ```bash
 ./scripts/unix/quick-start-with-test-certs.sh
 ```
 
 **Windows:**
+
 ```powershell
 .\scripts\windows\quick-start-with-test-certs.ps1
 ```
@@ -98,14 +124,27 @@ docker-compose up -d
 ### Manuel
 
 ```bash
-export PFX_PATH=./resources/test-certs/testkurum01@test.com.tr_614573.pfx
-export CERTIFICATE_PIN=614573
 mvn spring-boot:run
 ```
 
-**API:** http://localhost:8085  
-**Docs:** http://localhost:8085/ (Scalar UI)  
-**Health:** http://localhost:8085/actuator/health
+> Tek komut yeter. `spring-boot-maven-plugin` otomatik olarak `local`
+> profile'ını aktif eder → [`application-local.properties`](src/main/resources/application-local.properties)
+> yüklenir → repo'daki test PFX (`resources/test-certs/testkurum01_rsa2048@...`)
+> + dummy PIN ile uygulama anında ayağa kalkar. **Production'a sızmaz**: jar
+> doğrudan `java -jar` ile başlatıldığında bu profile aktif olmaz, prod-grade
+> env variable'lar (`PFX_PATH`, `CERTIFICATE_PIN`, vb.) zorunlu kalır.
+
+Profile'sız (kendi PFX'inizle) çalıştırmak isterseniz:
+
+```bash
+export PFX_PATH=/path/to/your.pfx
+export CERTIFICATE_PIN=your-pin
+mvn spring-boot:run -Dspring-boot.run.profiles=
+```
+
+- **API:** [http://localhost:8085](http://localhost:8085)
+- **Docs:** [http://localhost:8085/](http://localhost:8085/) (Scalar UI)
+- **Health:** [http://localhost:8085/actuator/health](http://localhost:8085/actuator/health)
 
 ---
 
@@ -155,12 +194,63 @@ curl -X POST http://localhost:8085/v1/padessign \
 
 ```
 sign-api/
-├── src/main/java/          # Java kaynak kodları
-├── devops/                 # Docker, K8s, monitoring
-├── scripts/                # Yardımcı scriptler
-├── resources/test-certs/   # Test sertifikaları
-└── examples/               # Kullanım örnekleri
+├── src/main/java/              # Java kaynak kodları
+├── devops/                     # Docker, K8s, monitoring
+├── scripts/                    # Yardımcı scriptler
+├── resources/test-certs/       # Test sertifikaları (PFX)
+├── resources/test-fixtures/    # E2E fixture'lar (XAdES, WS-Security)
+└── examples/                   # Kullanım örnekleri
 ```
+
+---
+
+## 🧪 Testler
+
+```bash
+# Hızlı: 270+ unit/servis testi (ek kurulum yok)
+mvn test
+```
+
+İki ek **integration** test grubu da var; default `mvn test`'te dışlanır.
+
+### `verifier-e2e` — DSS Verifier API roundtrip
+
+CAdES/PAdES/XAdES imzala → Testcontainers ile ayağa kalkan verifier API'ye gönder → `TOTAL_PASSED` bekle. **Gereksinim:** Docker daemon.
+
+```bash
+mvn test -Dgroups=verifier-e2e -DexcludedGroups=
+```
+
+### `pkcs11-integration` — Gerçek SoftHSM2 + IAIK PKCS#11
+
+Her PFX test sertifikası gerçek bir SoftHSM2 token'a yüklenir; IAIK wrapper üzerinden `C_Sign` çağrılır. Üst seviye `XadesSoftHsmVerifierE2ETest` ayrıca verifier API ile uçtan-uca doğrular (5 PFX × 5 XAdES belge = 25 senaryo).
+
+#### Yol 1 — Sıfır kurulum (önerilen)
+
+Sadece Docker yeter; native bağımlılıklar container içindedir.
+
+```bash
+./scripts/run-pkcs11-tests.sh
+```
+
+İlk koşumda ~600MB image build edilir, sonra layer-cached. macOS / Linux / WSL2 üzerinde **bit-for-bit aynı ortam**, CI runner'ı ile de aynı.
+
+#### Yol 2 — Host'a native kur (IDE'den koşturmak istiyorsan)
+
+
+| Platform            | Kurulum                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------ |
+| **macOS**           | `brew install softhsm opensc` (+ Apple Silicon ise arm64 JDK 8: `sdk install java 8.0.492-zulu`) |
+| **Ubuntu / Debian** | `sudo apt-get install -y softhsm2 opensc`                                                        |
+| **Fedora / RHEL**   | `sudo dnf install -y softhsm opensc`                                                             |
+| **Windows**         | WSL2 + yukarıdaki Ubuntu komutu (Windows native desteklenmiyor)                                  |
+
+
+```bash
+mvn test -Dgroups=pkcs11-integration -DexcludedGroups=
+```
+
+> Native araç bulunamazsa testler **sessizce atlanır** (build kırılmaz). CI'da (`.github/workflows/integration-tests.yml`) her PR'da otomatik koşar; eksik araç durumunda CI workflow'u açıkça fail eder.
 
 ---
 
@@ -173,6 +263,7 @@ Sistem üç farklı resolver tipini destekler. `TRUSTED_ROOT_RESOLVER_TYPE` para
 #### 1. KamuSM XML Depo Online (Varsayılan)
 
 Varsayılan olarak, KamuSM root ve ara sertifikaları **otomatik** olarak şu adresten yüklenir:
+
 - [http://depo.kamusm.gov.tr/depo/SertifikaDeposu.xml](http://depo.kamusm.gov.tr/depo/SertifikaDeposu.xml)
 
 Bu sayede her zaman güncel sertifikalar kullanılır. Periyodik olarak otomatik yenilenir (varsayılan: her gün saat 03:15).
@@ -195,6 +286,7 @@ export KAMUSM_ROOT_OFFLINE_PATH=classpath:certs/SertifikaDeposu.xml
 ```
 
 **Offline Mod Kullanım Senaryoları:**
+
 - Air-gapped (izole) sistemler
 - İnternet bağlantısı olmayan ortamlar
 - Güvenlik gereksinimleri nedeniyle dış bağlantı kısıtlamaları
@@ -214,6 +306,7 @@ export TRUSTED_ROOT_CERT_FOLDER_PATH=file:/path/to/certificates
 ```
 
 **Certificate Folder Resolver Kullanım Senaryoları:**
+
 - Özel sertifika klasörlerinden yükleme
 - Kurumsal CA sertifikalarının toplu yüklenmesi
 - Test ortamlarında özel sertifika kullanımı
@@ -225,15 +318,17 @@ export TRUSTED_ROOT_CERT_FOLDER_PATH=file:/path/to/certificates
 
 ## 🔗 Önemli Bağlantılar
 
-| Dosya | Açıklama |
-|-------|----------|
-| [**dss.mersel.dev**](https://dss.mersel.dev) | 📚 **Merkezi Dökümantasyon** |
-| [LICENSE](LICENSE) | MIT Lisansı |
-| [CHANGELOG.md](CHANGELOG.md) | Versiyon geçmişi |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Katkıda bulunma rehberi |
-| [SECURITY.md](SECURITY.md) | Güvenlik politikası |
-| [TEST_CERTIFICATES.md](TEST_CERTIFICATES.md) | Test sertifikaları |
-| [DSS_OVERRIDE.md](DSS_OVERRIDE.md) | DSS özelleştirmeleri |
+
+| Dosya                                        | Açıklama                     |
+| -------------------------------------------- | ---------------------------- |
+| **[dss.mersel.dev](https://dss.mersel.dev)** | 📚 **Merkezi Dökümantasyon** |
+| [LICENSE](LICENSE)                           | MIT Lisansı                  |
+| [CHANGELOG.md](CHANGELOG.md)                 | Versiyon geçmişi             |
+| [CONTRIBUTING.md](CONTRIBUTING.md)           | Katkıda bulunma rehberi      |
+| [SECURITY.md](SECURITY.md)                   | Güvenlik politikası          |
+| [TEST_CERTIFICATES.md](TEST_CERTIFICATES.md) | Test sertifikaları           |
+| [DSS_OVERRIDE.md](DSS_OVERRIDE.md)           | DSS özelleştirmeleri         |
+
 
 ---
 

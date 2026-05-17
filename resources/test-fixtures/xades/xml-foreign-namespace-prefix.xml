@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+    xmlns:tcac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+    xmlns:tcbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+    xmlns:ccts="urn:un:unece:uncefact:documentation:2"
+    xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+    xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+    xmlns:qdt="urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2"
+    xmlns:ubltr="urn:oasis:names:specification:ubl:schema:xsd:TurkishCustomizationExtensionComponents"
+    xmlns:udt="urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2"
+    xmlns:xades="http://uri.etsi.org/01903/v1.3.2#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2 UBL-Invoice-2.1.xsd">
+    <ext:UBLExtensions>
+        <ext:UBLExtension>
+            <ext:ExtensionContent />
+        </ext:UBLExtension>
+    </ext:UBLExtensions>
+    <tcbc:UBLVersionID>2.1</tcbc:UBLVersionID>
+    <tcbc:CustomizationID>TR1.2</tcbc:CustomizationID>
+    <tcbc:ProfileID>TEMELFATURA</tcbc:ProfileID>
+    <tcbc:ID>MRS2026000000001</tcbc:ID>
+    <tcbc:CopyIndicator>false</tcbc:CopyIndicator>
+    <tcbc:UUID>00000000-0000-0000-0000-000000000000</tcbc:UUID>
+    <tcbc:IssueDate>2026-05-16</tcbc:IssueDate>
+    <tcbc:IssueTime>17:51:30</tcbc:IssueTime>
+    <tcbc:InvoiceTypeCode>SATIS</tcbc:InvoiceTypeCode>
+    <tcbc:Note>YALNIZ : ALTIYÜZ TL SIFIR Kr.</tcbc:Note>
+    <tcbc:DocumentCurrencyCode>TRY</tcbc:DocumentCurrencyCode>
+    <tcbc:LineCountNumeric>1</tcbc:LineCountNumeric>
+    <tcac:Signature>
+        <tcbc:ID schemeID="VKN_TCKN">9999999999</tcbc:ID>
+        <tcac:SignatoryParty>
+            <tcbc:WebsiteURI>https://mersel.io</tcbc:WebsiteURI>
+            <tcac:PartyIdentification>
+                <tcbc:ID schemeID="VKN">9999999999</tcbc:ID>
+            </tcac:PartyIdentification>
+            <tcac:PartyName>
+                <tcbc:Name>MERSEL YAZILIM A.Ş.</tcbc:Name>
+            </tcac:PartyName>
+            <tcac:PostalAddress>
+                <tcbc:StreetName>ANONİM SOKAK NO: 1</tcbc:StreetName>
+                <tcbc:CitySubdivisionName>Merkez</tcbc:CitySubdivisionName>
+                <tcbc:CityName>İstanbul</tcbc:CityName>
+                <tcbc:PostalZone>34000</tcbc:PostalZone>
+                <tcac:Country>
+                    <tcbc:IdentificationCode>TR</tcbc:IdentificationCode>
+                    <tcbc:Name>Türkiye</tcbc:Name>
+                </tcac:Country>
+            </tcac:PostalAddress>
+            <tcac:PartyTaxScheme>
+                <tcac:TaxScheme>
+                    <tcbc:Name>ANONİM V.D.</tcbc:Name>
+                </tcac:TaxScheme>
+            </tcac:PartyTaxScheme>
+            <tcac:Contact>
+                <tcbc:Telephone>0212 000 00 00</tcbc:Telephone>
+                <tcbc:ElectronicMail>info@mersel.io</tcbc:ElectronicMail>
+            </tcac:Contact>
+        </tcac:SignatoryParty>
+        <tcac:DigitalSignatureAttachment>
+            <tcac:ExternalReference>
+                <tcbc:URI>#Signature_MRS2026000000001</tcbc:URI>
+            </tcac:ExternalReference>
+        </tcac:DigitalSignatureAttachment>
+    </tcac:Signature>
+    <tcac:AccountingSupplierParty>
+        <tcac:Party>
+            <tcac:PartyIdentification>
+                <tcbc:ID schemeID="VKN">9999999999</tcbc:ID>
+            </tcac:PartyIdentification>
+            <tcac:PartyIdentification>
+                <tcbc:ID schemeID="MERSISNO">0999999999900001</tcbc:ID>
+            </tcac:PartyIdentification>
+            <tcac:PartyIdentification>
+                <tcbc:ID schemeID="TICARETSICILNO">000000-0</tcbc:ID>
+            </tcac:PartyIdentification>
+            <tcac:PartyName>
+                <tcbc:Name>MERSEL YAZILIM TEKNOLOJİLERİ A.Ş.</tcbc:Name>
+            </tcac:PartyName>
+            <tcac:PostalAddress>
+                <tcbc:StreetName>ANONİM SOKAK NO: 1</tcbc:StreetName>
+                <tcbc:CitySubdivisionName>Merkez</tcbc:CitySubdivisionName>
+                <tcbc:CityName>İstanbul</tcbc:CityName>
+                <tcac:Country>
+                    <tcbc:Name>TÜRKİYE</tcbc:Name>
+                </tcac:Country>
+            </tcac:PostalAddress>
+            <tcac:PartyTaxScheme>
+                <tcac:TaxScheme>
+                    <tcbc:Name>ANONİM V.D.</tcbc:Name>
+                </tcac:TaxScheme>
+            </tcac:PartyTaxScheme>
+            <tcac:Contact>
+                <tcbc:Telephone>+90(212) 000 00 00</tcbc:Telephone>
+                <tcbc:ElectronicMail>info@mersel.io</tcbc:ElectronicMail>
+            </tcac:Contact>
+        </tcac:Party>
+    </tcac:AccountingSupplierParty>
+    <tcac:AccountingCustomerParty>
+        <tcac:Party>
+            <tcac:PartyIdentification>
+                <tcbc:ID schemeID="TCKN">11111111111</tcbc:ID>
+            </tcac:PartyIdentification>
+            <tcac:PostalAddress>
+                <tcbc:StreetName>ANONİM MÜŞTERİ ADRESİ</tcbc:StreetName>
+                <tcbc:CitySubdivisionName>ANONİM</tcbc:CitySubdivisionName>
+                <tcbc:CityName>ANONİM</tcbc:CityName>
+                <tcac:Country>
+                    <tcbc:Name>TÜRKİYE</tcbc:Name>
+                </tcac:Country>
+            </tcac:PostalAddress>
+            <tcac:PartyTaxScheme>
+                <tcac:TaxScheme>
+                    <tcbc:Name>ANONİM V.D.</tcbc:Name>
+                </tcac:TaxScheme>
+            </tcac:PartyTaxScheme>
+            <tcac:Contact>
+                <tcbc:Telephone>(500)-000-00-00</tcbc:Telephone>
+                <tcbc:ElectronicMail>anonim@musteri.com</tcbc:ElectronicMail>
+            </tcac:Contact>
+            <tcac:Person>
+                <tcbc:FirstName>ANONİM</tcbc:FirstName>
+                <tcbc:FamilyName>ALICI</tcbc:FamilyName>
+            </tcac:Person>
+        </tcac:Party>
+    </tcac:AccountingCustomerParty>
+    <tcac:TaxTotal>
+        <tcbc:TaxAmount currencyID="TRY">100.00</tcbc:TaxAmount>
+        <tcac:TaxSubtotal>
+            <tcbc:TaxableAmount currencyID="TRY">500.00</tcbc:TaxableAmount>
+            <tcbc:TaxAmount currencyID="TRY">100.00</tcbc:TaxAmount>
+            <tcbc:Percent>20</tcbc:Percent>
+            <tcac:TaxCategory>
+                <tcac:TaxScheme>
+                    <tcbc:Name>KATMA DEĞER VERGİSİ</tcbc:Name>
+                    <tcbc:TaxTypeCode>0015</tcbc:TaxTypeCode>
+                </tcac:TaxScheme>
+            </tcac:TaxCategory>
+        </tcac:TaxSubtotal>
+    </tcac:TaxTotal>
+    <tcac:LegalMonetaryTotal>
+        <tcbc:LineExtensionAmount currencyID="TRY">500.00</tcbc:LineExtensionAmount>
+        <tcbc:TaxExclusiveAmount currencyID="TRY">500.00</tcbc:TaxExclusiveAmount>
+        <tcbc:TaxInclusiveAmount currencyID="TRY">600.00</tcbc:TaxInclusiveAmount>
+        <tcbc:AllowanceTotalAmount currencyID="TRY">0</tcbc:AllowanceTotalAmount>
+        <tcbc:ChargeTotalAmount currencyID="TRY">0</tcbc:ChargeTotalAmount>
+        <tcbc:PayableAmount currencyID="TRY">600.00</tcbc:PayableAmount>
+    </tcac:LegalMonetaryTotal>
+    <tcac:InvoiceLine>
+        <tcbc:ID>1</tcbc:ID>
+        <tcbc:InvoicedQuantity unitCode="C62">50</tcbc:InvoicedQuantity>
+        <tcbc:LineExtensionAmount currencyID="TRY">500.00</tcbc:LineExtensionAmount>
+        <tcac:TaxTotal>
+            <tcbc:TaxAmount currencyID="TRY">100.00</tcbc:TaxAmount>
+            <tcac:TaxSubtotal>
+                <tcbc:TaxableAmount currencyID="TRY">500.00</tcbc:TaxableAmount>
+                <tcbc:TaxAmount currencyID="TRY">100.00</tcbc:TaxAmount>
+                <tcbc:Percent>20</tcbc:Percent>
+                <tcac:TaxCategory>
+                    <tcac:TaxScheme>
+                        <tcbc:Name>KATMA DEĞER VERGİSİ</tcbc:Name>
+                        <tcbc:TaxTypeCode>0015</tcbc:TaxTypeCode>
+                    </tcac:TaxScheme>
+                </tcac:TaxCategory>
+            </tcac:TaxSubtotal>
+        </tcac:TaxTotal>
+        <tcac:Item>
+            <tcbc:Name>e-Belge Kontör Bedeli: 50 Adet</tcbc:Name>
+        </tcac:Item>
+        <tcac:Price>
+            <tcbc:PriceAmount currencyID="TRY">10.00000000</tcbc:PriceAmount>
+        </tcac:Price>
+    </tcac:InvoiceLine>
+</Invoice>

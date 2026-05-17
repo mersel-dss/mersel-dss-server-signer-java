@@ -28,10 +28,15 @@ SUCCESS_COUNT=0
 ERROR_COUNT=0
 TOTAL_REQUESTS=0
 
-# Script dizinini bul (resources/test-documents'e erişmek için)
+# Fixture'lar 0.3+ sonrası test-fixtures/ altında belge tipine göre ayrılmıştır.
+# XAdES tarafı resources/test-fixtures/xades/, WS-Security tarafı
+# resources/test-fixtures/wssecurity/ klasöründe.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TEST_DOCS_DIR="$PROJECT_ROOT/resources/test-documents"
+FIXTURES_DIR="$PROJECT_ROOT/resources/test-fixtures"
+XADES_FIXTURE="$FIXTURES_DIR/xades/efatura.xml"
+WS_SOAP11_FIXTURE="$FIXTURES_DIR/wssecurity/soap-1.1-envelope.xml"
+WS_SOAP12_FIXTURE="$FIXTURES_DIR/wssecurity/soap-1.2-envelope.xml"
 
 # Test dosyası oluştur (basit bir PDF)
 create_test_pdf() {
@@ -148,24 +153,24 @@ echo "🔧 Test dosyaları hazırlanıyor..."
 create_test_pdf
 
 # Test dokümanlarını kontrol et
-if [ ! -f "$TEST_DOCS_DIR/EFATURA.xml" ]; then
-    echo -e "${RED}⚠️  e-Fatura dosyası bulunamadı: $TEST_DOCS_DIR/EFATURA.xml${NC}"
+if [ ! -f "$XADES_FIXTURE" ]; then
+    echo -e "${RED}⚠️  e-Fatura fixture bulunamadı: $XADES_FIXTURE${NC}"
     exit 1
 fi
 
-if [ ! -f "$TEST_DOCS_DIR/soap-1.1-envelope.xml" ]; then
-    echo -e "${RED}⚠️  SOAP 1.1 envelope dosyası bulunamadı: $TEST_DOCS_DIR/soap-1.1-envelope.xml${NC}"
+if [ ! -f "$WS_SOAP11_FIXTURE" ]; then
+    echo -e "${RED}⚠️  SOAP 1.1 envelope bulunamadı: $WS_SOAP11_FIXTURE${NC}"
     exit 1
 fi
 
-if [ ! -f "$TEST_DOCS_DIR/soap-1.2-envelope.xml" ]; then
-    echo -e "${RED}⚠️  SOAP 1.2 envelope dosyası bulunamadı: $TEST_DOCS_DIR/soap-1.2-envelope.xml${NC}"
+if [ ! -f "$WS_SOAP12_FIXTURE" ]; then
+    echo -e "${RED}⚠️  SOAP 1.2 envelope bulunamadı: $WS_SOAP12_FIXTURE${NC}"
     exit 1
 fi
 
-echo "✓ e-Fatura: $TEST_DOCS_DIR/EFATURA.xml"
-echo "✓ SOAP 1.1 envelope: $TEST_DOCS_DIR/soap-1.1-envelope.xml"
-echo "✓ SOAP 1.2 envelope: $TEST_DOCS_DIR/soap-1.2-envelope.xml"
+echo "✓ e-Fatura: $XADES_FIXTURE"
+echo "✓ SOAP 1.1 envelope: $WS_SOAP11_FIXTURE"
+echo "✓ SOAP 1.2 envelope: $WS_SOAP12_FIXTURE"
 echo ""
 
 # Ana test döngüsü
@@ -187,14 +192,14 @@ for i in $(seq 1 $ITERATIONS); do
     # 4. PDF Signing (RSA veya EC384 - SHA256withRSA/ECDSA)
     call_api "/v1/padessign" "POST" "/tmp/test.pdf" "PDF Sign (RSA/EC384 Dynamic)"
     
-    # 5. XAdES Signing (EFATURA.xml ile)
-    call_api "/v1/xadessign" "POST" "$TEST_DOCS_DIR/EFATURA.xml" "XAdES Sign e-Fatura (RSA/EC384)" '-F "documentType=UblDocument"'
+    # 5. XAdES Signing (e-Fatura fixture ile)
+    call_api "/v1/xadessign" "POST" "$XADES_FIXTURE" "XAdES Sign e-Fatura (RSA/EC384)" '-F "documentType=UblDocument"'
     
     # 6. SOAP 1.1 WS-Security Signing
-    call_api "/v1/wssecuritysign" "POST" "$TEST_DOCS_DIR/soap-1.1-envelope.xml" "SOAP 1.1 Sign (RSA/EC384)" '-F "soap1Dot2=false"'
+    call_api "/v1/wssecuritysign" "POST" "$WS_SOAP11_FIXTURE" "SOAP 1.1 Sign (RSA/EC384)" '-F "soap1Dot2=false"'
     
     # 7. SOAP 1.2 WS-Security Signing
-    call_api "/v1/wssecuritysign" "POST" "$TEST_DOCS_DIR/soap-1.2-envelope.xml" "SOAP 1.2 Sign (RSA/EC384)" '-F "soap1Dot2=true"'
+    call_api "/v1/wssecuritysign" "POST" "$WS_SOAP12_FIXTURE" "SOAP 1.2 Sign (RSA/EC384)" '-F "soap1Dot2=true"'
     
     # 8. Invalid endpoint (404 hatası generate et)
     call_api "/v1/invalid-endpoint-$(date +%s)" "GET" "" "Invalid Endpoint (404 error)"

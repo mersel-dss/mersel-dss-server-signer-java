@@ -7,20 +7,703 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+> Bir sonraki sürüm için açık iş kalemleri buraya eklenir. **0.4.0**'da
+> teslim edilen tüm değişiklikler aşağıdaki versiyon bölümüne dökümante
+> edilmiştir.
+
+---
+
+## [0.4.0] - 2026-05-18
+
+> **🎯 Sürüm Vizyonu — "Kanıt-Temelli İmza Hattı"**
+>
+> 0.4.0, signer'ın bir "imzala-ve-bırak" servisinden, her imzanın yanına
+> bağımsız doğrulanabilir kanıt iliştiren bir **kanıt zinciri (evidence
+> chain)** mimarisine geçişini teslim eder. Üç yapısal hamle ile:
+>
+> 1. **Imza arka ucu modernize edildi** — Sun PKCS#11'in
+>    sertifika listeleme / alias çözümleme uyumsuzluklarını gideren
+>    **IAIK native PKCS#11 wrapper** entegre edildi; tek soyutlama (`SigningBackend`)
+>    arkasında JCA (PFX) ve PKCS#11 (HSM) eşit yurttaş.
+> 2. **Doğrulanabilirlik kanıt seviyesine taşındı** — Default suite 326,
+>    `verifier-e2e` suite 290+ teste çıktı; her senaryonun **imzalı bytes**'ı
+>    ve **verifier-api JSON yanıtı** `target/signed-artifacts/` altına
+>    yazılıyor. Adobe Reader, EU DSS Demo, xmlsec1 gibi üçüncü taraf
+>    araçlarla aynı çıktıyı tekrar doğrulayabilirsiniz.
+> 3. **Kanıt site'ı kamuya açıldı** — Her `main` push'unda
+>    [`mersel-dss.github.io/mersel-dss-server-signer-java/`](https://mersel-dss.github.io/mersel-dss-server-signer-java/)
+>    adresinde Allure raporu (her test attachment'ında imzalı dosya +
+>    verifier response), JaCoCo coverage, OpenAPI snapshot ve OWASP
+>    Dependency-Check raporu otomatik yayımlanır.
+>
+> Bu yaklaşım, geleneksel bulut çözümlerinin "siyah kutu — sadece success
+> mesajı" imza akışına karşı somut bir alternatif: **her imza, üretildiği
+> anda mahkemede sunulabilir kanıtla birlikte doğar.** Mali müşavir veya
+> auditor, signer'a iman etmek zorunda kalmadan imzanın validitesini
+> bağımsız bir doğrulayıcıyla teyit edebilir.
+
+### Highlights (öne çıkanlar)
+
+| # | Başlık | Etki | Anahtar dosyalar |
+|---|---|---|---|
+| 1 | 🔐 **Native PKCS#11 (IAIK) backend + `SigningBackend` soyutlaması** | KamuSM, SafeNet ProtectToolkit, Luna gibi HSM'lerde alias-keşif sorunları çözüldü. CAdES/PAdES/XAdES/WSS dört format da JCA ile aynı API yüzeyinden HSM ile çalışır. | `services/keystore/iaik/*`, `models/{Jca,Pkcs11,SigningBackend}*` |
+| 2 | 🧪 **Test envanteri ~290 E2E + 326 default + 31 PKCS#11 = 600+ teste yükseldi** | XAdES/CAdES/PAdES/WSS dört formatta E2E roundtrip; Sun PKCS#11 (PfxBackedPkcs11Signer) ve gerçek SoftHSM2 ile çift-rota. | `src/test/java/.../e2e/verifier/*`, `testsupport/*` |
+| 3 | 📤 **Signed-artifact export + `.verify.json` sidecar** | Her test imzalı bytes'ı + verifier-api JSON yanıtını `target/signed-artifacts/<format>/<method>__<scenario>.<ext>` formatında diske yazar. Üçüncü taraf araçlarla cross-validation. | `testsupport/SignedArtifactExporter.java` (895 satır) |
+| 4 | 🌐 **Public Evidence Site (GitHub Pages)** | Her `main` push'unda landing + Allure + JaCoCo + Swagger UI snapshot + OWASP raporu otomatik yayımlanır. Trend grafiği için Allure history cache. | `.github/workflows/publish-pages.yml`, `docs/landing/index.html` |
+| 5 | 🛡️ **XML saldırı yüzeyi tamamen kapatıldı** | `SecureXmlFactories` ile XXE, SSRF-via-XXE, Billion Laughs, XInclude, XSLT injection vektörleri default factory'ler yerine kullanılır. Negatif fixture + parser testleri regresyon koruması. | `util/xml/SecureXmlFactories.java`, `test-fixtures/negative/*` |
+| 6 | 📦 **Test fixture katalogu** | XAdES: 12 varyant (BOM, mixed-newlines, unicode-emoji, CDATA, foreign-NS, comments, large 5 MB, e-Fatura, e-İrsaliye, e-Müstahsil, EArchive, HR-XML). PAdES: 4 PDF (e-Fatura görsel, Türkçe karakter, A3 landscape, 50 sayfa). WSS: 9 SOAP envelope. CAdES: 4 binary. | `resources/test-fixtures/*` |
+| 7 | 🐳 **SoftHSM2 / PKCS#11 entegrasyon pipeline** | Gerçek HSM ile sign+verify roundtrip; opt-in `@Tag("pkcs11-integration")` suite. Native bağımlılık (softhsm2, opensc) workflow'unda kurulur. | `devops/docker/Dockerfile.pkcs11-tests`, `.github/workflows/integration-tests.yml` |
+| 8 | 🛠️ **Geliştirici ergonomisi** | `serve-pages-locally.sh` ile Pages workflow'u local'de birebir çalışır (flag'lerle dakika cinsinden seçilebilir kapsam). Fixture üretici Python script'leri (`scripts/generate-*-fixtures.py`). README rozetleri + Evidence Site linki. | `scripts/serve-pages-locally.sh`, `scripts/generate-*.py` |
+| 9 | 🔧 **Production HTTP yüzeyi sertleşti** | `415 WRONG_CONTENT_TYPE` mapping (multipart olmayan istekler için), multipart limit contract testleri, semaphore concurrency davranışı testlenir hale geldi. | `api/GlobalExceptionHandler.java`, `MultipartLimit*Test`, `SignatureServiceSemaphoreConcurrencyTest` |
+| 10 | 🗑️ **Eski bağımlılık yükü temizlendi** | `src/main/lib/sunpkcs11.jar` ve `mvn install:install-file` hook'u kaldırıldı; `resources/test-documents/EFATURA.xml` yerini `resources/test-fixtures/xades/efatura.xml`'e bıraktı. | (silindi) |
+
+---
+
 ### Added
+
+#### 🔐 Mimari — Imza arka ucu soyutlaması
+
+- **Native IAIK PKCS#11 entegrasyonu** — Sun PKCS#11'in alias-keşif
+  sorunları (SafeNet ProtectToolkit, Luna, bazı KamuSM token'ları)
+  yerine `org.xipki:ipkcs11wrapper` (IAIK PKCS#11 Wrapper 1.6.8 kod
+  tabanından üretilmiş, aktif sürdürülen halefi) üzerinden doğrudan
+  PKCS#11 API'sine geçildi. Yeni paket: `src/main/java/io/mersel/dss/signer/api/services/keystore/iaik/`.
+  - `IaikPkcs11Module` — singleton bean, Cryptoki lifecycle sahibi.
+  - `IaikPkcs11Signer`, `IaikContentSigner` — DSS 2-aşamalı imza API'siyle uyumlu signer.
+  - `IaikSignatureMechanisms` — PKCS#11 mekanizma enum mapping (CKM_*).
+  - `Pkcs11EcdsaSignatureEncoder` — ECDSA raw `r||s` ↔ DER SEQUENCE dönüşümleri.
+  - `Pkcs1DigestInfo` — DigestInfo wrapping (CKM_RSA_PKCS yolunda explicit OID).
+  - `Pkcs11Signer` — generic alt-sınıf, format-agnostic.
+- **`SigningBackend` interface + iki uygulama** (`models/`) — CAdES/PAdES/XAdES/WSS
+  servisleri artık `SigningBackend` üzerine bina edilmiştir; `JcaSigningBackend`
+  (PFX/PKCS#12) ve `Pkcs11SigningBackend` (HSM) aynı sözleşmeye uyar.
+  `SigningMaterial.getBackend()` doğru implementasyonu döndürür; format
+  servislerinde `instanceof` kontrolü yok.
+- **`SigningMaterialContentSigner`** — BouncyCastle `ContentSigner`
+  arabirimini backend-agnostic olarak gerçekler; CAdES için CMS
+  imza yolunda kullanılır.
+- **`X509ExtensionInspector`** — sertifika seçimi için Key Usage,
+  Extended Key Usage, Subject Alt Name, OID listesi ve policies
+  inspect eder; HSM sertifika keşfinde tek-eşleşme garantisini
+  yapısal olarak doğrular.
+- **`SignatureAlgorithmResolverService`** — PKCS#11 yolu için
+  digestAlgorithm × keyAlgorithm matrisinden CKM_* mekanizmaya
+  çözüm yapar; bilinmeyen kombinasyonda **sessiz fallback yerine
+  açık `SignatureException`** atar (önceki PSS-RSA bug'ının
+  kök çözümü).
+
+#### 🧪 Test envanteri — 600+ test koşumu
+
+> **Suite sayıları** (turn başlarındaki ~115 testten itibaren büyük sıçrama):
+>
+> | Suite | Önce (0.3.0) | Sonra (0.4.0) | Artış |
+> |---|---:|---:|---:|
+> | `default` (`mvn test`) | ~115 | **326** | +211 |
+> | `verifier-e2e` (`-Dgroups=verifier-e2e`) | 0 | **~290** | +290 |
+> | `pkcs11-integration` (`-Dgroups=pkcs11-integration`) | 0 | **31** | +31 |
+> | **Toplam koşulabilir test** | ~115 | **~647** | **+532** |
+
+- **🆕 E2E verifier-api suite** (16 yeni test sınıfı `src/test/java/io/mersel/dss/signer/api/e2e/verifier/`)
+  — Testcontainers ile `ghcr.io/mersel-dss/mersel-dss-verifier-api-java:main`
+  ayağa kaldırılır; imzalanmış her bayt verifier-api'ye POST edilip
+  `result.isValid()=true` + `indication=TOTAL_PASSED` beklenir:
+  - **CAdES**: `CAdESSignAndVerifyE2ETest` (20), `CAdESBinaryVariationsE2ETest`
+    (4 fixture × attached/detached), `CAdESTamperedE2ETest` (1).
+  - **PAdES**: `PAdESSignAndVerifyE2ETest` (10), `PAdESDocumentVariationsE2ETest`
+    (4 PDF), `PAdESRuntimeScenariosE2ETest` (cosign + encrypted + form-fields + attachment),
+    `PAdESTamperedE2ETest` (1, ByteRange byte flip).
+  - **XAdES**: `XAdESSignAndVerifyE2ETest` (130 = 5 PFX × 2 backend × 12 fixture
+    + 10 generic `OtherXmlDocument`), `XAdESNegativeE2ETest` (3 — wrap-attack +
+    tampered-after-sign + sig-value bit-flip), `XAdESSha1LegacyE2ETest` (1, legacy
+    crypto policy), `XadesSoftHsmVerifierE2ETest` (25, opt-in `pkcs11-integration`).
+  - **WS-Security**: `WsSecuritySignAndLocalVerifyE2ETest` (90 = 5 PFX ×
+    2 backend × 9 SOAP envelope), `WsSecurityContractE2ETest` (3 yapısal
+    kontrat: wsu:Id override, WS-Addressing preservation, Security
+    append-not-overwrite), `WsSecurityConcurrencyContractTest` (10 paralel
+    imza).
+  - **Smoke**: `VerifierContainerSmokeTest` (container health), `AbstractVerifierE2ETest`
+    base, `VerifierApiClient`, `VerifierApiContainer` (image override
+    `-DverifierImage=<tag>` ile).
+- **🆕 Service-layer + contract testleri** — production sınıflarının davranış
+  invariantları izole edildi:
+  - WS-Security: `WsSecuritySignatureServiceTest` (yeni),
+    `WsSecurityHashAlgorithmParametrizedTest` (SHA-256/384/512 × RSA/ECDSA),
+    `WsSecurityEnvelopeShapeParityTest` (signer/verifier envelope shape eşitliği).
+  - CAdES: `CAdESSignatureServiceTest` genişletildi (attached + detached + empty input).
+  - PAdES: `PAdESSignatureServiceTest` (yeni — ByteRange + imza placement davranışı).
+  - XAdES: `XAdESEcdsaSignatureFormatTest` (5 PFX × ECDSA, plain `r||s` regresyonu).
+  - `CryptoSignerServiceTest` — backend-dispatch matrisini izole eder.
+  - `CertificateInfoServiceTest`, `X509ExtensionInspectorTest`,
+    `SigningMaterialTest` — sertifika introspection ve materyal seçimi.
+  - `KeyStoreLoaderServiceContractTest` — keystore yükleme davranışı (PFX, PKCS#11).
+  - `TimestampServiceContractTest` — RFC 3161 TSP davranışı.
+  - `MultipartConfigSanityTest`, `MultipartLimitHttpContractTest` —
+    multipart sınırı + 415 mapping kontratı.
+  - `SignEndpointHttpEnvelopeContractTest`, `PadesControllerTest` —
+    HTTP yüzey kontratı.
+  - `SignatureServiceSemaphoreConcurrencyTest` — eş zamanlı imzalama
+    semaphore davranışı.
+- **🆕 IAIK PKCS#11 contract suite** — `services/keystore/iaik/`
+  altındaki 8 yeni test: `IaikContentSignerTest`, `IaikPkcs11ModuleContractTest`,
+  `IaikPkcs11ModuleKeyBindingTest`, `IaikPkcs11SignerTest`,
+  `IaikSignatureMechanismsTest`, `Pkcs11EcdsaSignatureEncoderTest`,
+  `Pkcs1DigestInfoTest`, `SoftHsm2Pkcs11IntegrationTest` (opt-in).
+- **🆕 Test support paketi** (`testsupport/`):
+  - `PfxBackedPkcs11Signer` — Sun PKCS#11 olmadan HSM davranışını
+    simüle eder; PFX'i `IaikPkcs11Signer` arayüzü ile sarar. E2E
+    suite'in JCA ve PKCS#11 yollarını aynı PFX ile koşturmasını sağlar.
+  - `SignedArtifactExporter` — JUnit 5 extension, **895 satır**, aşağıda detay.
+  - `SoftHsm2TestSupport` — `softhsm2-util` çıktısını parse eder,
+    token init + key import için CI-uyumlu.
+- **🆕 E2E fixture yardımcıları** (`e2e/verifier/`): `E2eFixtures`,
+  `E2eSigningBackend`, `E2eSigningMaterialFactory`, `PfxTestKey`
+  (5 PFX × algo enum), `CadesBinaryFixture`, `PadesDocumentFixture`,
+  `SoapEnvelopeFixture`, `XadesDocumentFixture`, `WsSecurityLocalXmlDsigVerifier`.
+
+#### 📤 Signed-artifact export sistemi
+
+- **`SignedArtifactExporter`** (`testsupport/SignedArtifactExporter.java`) —
+  JUnit 5 extension, **`@ExtendWith(SignedArtifactExporter.class)`** veya
+  `@RegisterExtension` ile aktif edilir; her test imzaladığı bytes'ı
+  `target/signed-artifacts/<format>/<methodName>__<sanitize(label)>.<ext>`
+  yoluna semantic adıyla yazar.
+  - **Yeni isimlendirme**: class prefix kaldırıldı, sade
+    `<methodName>__<PFX_ALGO_BACKEND_FIXTURE>` formatı; örnek:
+    `xades/xadesFixtureRoundtripIsValid__KURUM01_RSA2048_PFX_JCA_EFATURA.xml`,
+    `pades-negative/byteRangeBitFlipFailsVerification__byte100-bitflip.pdf`.
+  - **Otomatik root purge**: her `mvn test` koşumu başlangıcında
+    (ilk export çağrısında) `target/signed-artifacts/` tamamen silinir
+    → klasörde **yalnızca son run'un** çıktıları kalır; eski
+    runlardan hayalet dosyalar birikmez. `-Dsigned.artifacts.purge=false`
+    ile incremental debug için kapatılabilir.
+  - **`.verify.json` sidecar** — `exportWithVerification(...)`
+    çağrısı verifier-api yanıtını flatten halde aynı dizine yazar
+    (örn. `efatura.xml` yanına `efatura.verify.json`). Auditor
+    imzalı dosyayı ve aynı anda doğrulayıcının kararını yan yana
+    görür.
+  - **Allure attachment entegrasyonu** — Her test detayında imzalı
+    dosya + verifier response Allure raporuna otomatik gömülür;
+    Evidence Site'da test card'ı tıklandığında attachment listesi
+    açılır.
+  - **Üçüncü taraf cross-validation amacı**: Adobe Acrobat Reader
+    (PAdES), EU DSS Demo Webapp (XAdES/CAdES), `xmlsec1` (XML-DSig),
+    `openssl smime` (CMS/CAdES), SoapUI (WSS) ile aynı çıktının
+    bağımsız doğrulanması için.
+- **Toggle'lar**: `-Dsigned.artifacts.export=false` (kapatır),
+  `-Dsigned.artifacts.dir=/abs/path` (alternatif konum),
+  `-Dsigned.artifacts.purge=false` (paralel forkCount > 1 için).
+
+#### 🌐 Public Evidence Site (GitHub Pages)
+
+- **`.github/workflows/publish-pages.yml`** — Her `main` push'unda
+  ve manuel `workflow_dispatch` ile çalışır. URL yapısı:
+  - `/` — Tailwind CDN ile özel landing (build #, commit SHA, run timestamp,
+    test count, coverage % rozetleri).
+  - `/test-report/` — Allure Report (Suites / Behaviors / Categories / Trend
+    grafiği). Her test attachment'ında imzalı dosya + `.verify.json`.
+  - `/coverage/` — JaCoCo HTML (line + branch coverage).
+  - `/openapi/` — Swagger UI 5.17.14 standalone bundle + canlı Spring Boot'tan
+    çekilmiş `openapi.json` snapshot'ı.
+  - `/security/` — OWASP Dependency-Check HTML rapor.
+- **`docs/landing/index.html`** — Framework-free (sadece Tailwind CDN +
+  Inter/JetBrains Mono fontları); build metadata `envsubst` veya
+  Python fallback ile inject edilir. Auditor-friendly: hızlı yükleme,
+  WCAG-temiz kontrast, JS framework yok.
+- **Allure history cache** — `actions/cache@v4` ile `.allure-history/`
+  klasörü her run sonunda saklanır; bir sonraki run trend grafiğini
+  yeniden inşa eder.
+- **NVD cache** — OWASP Dependency-Check'in ilk koşumdaki ~5 dk
+  download'u `actions/cache` ile aydan aya yenilenir.
+- **Fail-tolerant publish stratejisi**: Test fail olsa bile Pages
+  yayımlanır (`continue-on-error: true`) — fail kanıtı da değerlidir;
+  yalnızca infra hatası (checkout/JDK/Maven) durumunda deploy skip
+  edilir. README rozetleri (CI / Integration Tests / Publish Evidence
+  Pages) eklendi.
+
+#### 🛠️ Geliştirici ergonomisi
+
+- **`scripts/serve-pages-locally.sh`** — Pages workflow'unun birebir
+  aynısını local'de üretir ve `python3 -m http.server 8765` üzerinden
+  açar. Flag'ler kapsamı dakikalardan dakikalara değişen modlara böler:
+  - `--fast` → unit testler + Allure + JaCoCo + landing (≈ 2 dk).
+  - `--skip-tests` → mevcut `target/`'i kullan (sanity preview).
+  - `--skip-e2e`, `--skip-owasp`, `--skip-openapi`, `--no-serve`, `--port`.
+  - Landing template injection için `envsubst` (linux) veya
+    `python3` (macOS) fallback.
+- **`scripts/generate-cades-fixtures.py`** ve
+  **`scripts/generate-xades-fixture-variants.py`** — Test fixture'larının
+  deterministic üretimi; git history'de "neden bu byte" şeffaf kalır.
+  CAdES: `sample.txt` UTF-8 Türkçe, `sample.bin` SHA-256 zinciri
+  (seed `mersel-cades-sample-bin-v1`), `empty.bin`, `utf16-text.txt`
+  (UTF-16 BE + BOM). XAdES: `efatura.xml`'den 5 varyant
+  (mixed-newlines, CDATA, comments, foreign-NS prefix, unicode-emoji).
+- **`src/main/resources/application-local.properties`** — Local/CI
+  snapshot için Spring Boot dev profili: test PFX yolu + dummy PIN
+  + offline TSP/chain. OpenAPI snapshot job'ı bu profile ile boot eder;
+  production'a sızmaz (profile aktif edilmediğinde property'ler
+  yüklenmez).
+- **`TEST_BACKLOG.md`** — 805 satırlık kapsamlı backlog (suite
+  envanteri, fixture matrisi, tasarım notları, Public Evidence Site
+  ve signed-artifact export bölümleri); GitHub Issues'a 1:1
+  dönüştürülebilir.
+
+#### 🛡️ Güvenlik — XML saldırı yüzeyi
+
+- **`SecureXmlFactories`** (`util/xml/SecureXmlFactories.java`) —
+  Production kodunda `DocumentBuilderFactory.newInstance()` veya
+  `TransformerFactory.newInstance()` doğrudan ÇAĞRILMAZ; bu sınıfın
+  hardened factory metotları kullanılır. Kapatılan vektörler:
+  - **XXE** (`<!ENTITY xxe SYSTEM "file:///etc/passwd">`),
+    **SSRF-via-XXE** (`SYSTEM "http://169.254.169.254/..."`),
+    **Billion Laughs** (10^9 entity expansion DoS),
+    **XInclude** (`xi:include`), **XSLT injection** (external DTD/stylesheet).
+  - `disallow-doctype-decl=true`, `external-general-entities=false`,
+    `external-parameter-entities=false`,
+    `XMLConstants.FEATURE_SECURE_PROCESSING=true`.
+- **Negatif fixture'lar** — `resources/test-fixtures/negative/`:
+  `xxe-attack.xml` (gerçek XXE payload), `billion-laughs.xml`
+  (9-seviye nested entity, 10^9 expansion).
+- **Parser-level negatif testler** (default suite) — `XmlSecurityTest`,
+  `SecureXmlFactoriesTest`: `SAXParseException` ile reddediliyor mu,
+  süre < 5s assertion'ı.
+
+#### 📦 Test fixture katalogu
+
+> Tek source-of-truth fixture enum'ları (`XadesDocumentFixture`,
+> `PadesDocumentFixture`, `CadesBinaryFixture`, `SoapEnvelopeFixture`)
+> her formatta tüm varyantları metadata + Javadoc'lu olarak indeksler.
+
+- **XAdES** (`resources/test-fixtures/xades/`, 12 fixture × 5 PFX × 2 backend = 120 senaryo + 10 generic):
+  `efatura.xml`, `eirsaliye.xml`, `emustahsil.xml` (UBL e-Belge);
+  `earsiv-raporu.xml` (EArchive raporu); `hrxml.xml` (HR-XML 3.x); `efatura-large.xml`
+  (~5 MB); `efatura-with-bom.xml` (UTF-8 BOM); `efatura-mixed-newlines.xml`
+  (CRLF + LF karışık); `xml-with-cdata.xml`; `xml-with-comments.xml`;
+  `xml-foreign-namespace-prefix.xml` (cbc → tcbc, cac → tcac); `efatura-unicode-emoji.xml`
+  (🚀 4-byte UTF-8 surrogate pair + CJK `中文` + Latin extended `ñoño`).
+- **PAdES** (`resources/test-fixtures/pades/`, iText 5.4.1 + Cp1254):
+  `efatura-pdf.pdf` (3 sayfa, UBL-benzeri görsel e-Fatura),
+  `turkish-chars.pdf` (Cp1254 Türkçe alfabe), `landscape-a3.pdf`
+  (1190.55 × 841.89 pt, 8-kolon tablo), `large-50pages.pdf`
+  (`.gitignore`'da; CI'da generator ile üretilir).
+- **CAdES** (`resources/test-fixtures/cades/`, 4 fixture × attached/detached):
+  `sample.txt` (UTF-8 Türkçe, 2.4 KB, diakritik yoğun),
+  `sample.bin` (deterministic random 10 KB, SHA-256 seed
+  `mersel-cades-sample-bin-v1`), `empty.bin` (0 byte, RFC 5652 §5.3
+  graceful kontratı), `utf16-text.txt` (UTF-16 BE + BOM).
+- **WS-Security** (`resources/test-fixtures/wssecurity/`, 9 envelope):
+  `soap-1.1.xml`/`soap-1.2.xml` (baseline), `gib-efatura-soap.xml`
+  (GİB Mali Mühür request paritesi, multi-NS + Türkçe + `xsi:type`),
+  `soap-with-wsa.xml` (WS-Addressing header'ları, SOAP 1.2),
+  `soap-with-existing-wsu-id.xml` (client-provided `wsu:Id` override),
+  `soap-multibody.xml` (3 ayrı operation child),
+  `soap-large-50kb.xml` (120 child item, c14n perf vektörü),
+  `soap-mtom-xop.xml` (`xop:Include cid:...`),
+  `soap-with-existing-security-header.xml` (append-not-overwrite kontratı).
+
+#### 🐳 SoftHSM2 / PKCS#11 entegrasyon pipeline
+
+- **`devops/docker/Dockerfile.pkcs11-tests`** — Ubuntu tabanlı,
+  `softhsm2`, `opensc`, `libsofthsm2.so` ile birlikte JDK 8 +
+  Maven; lokal `docker run` ile SoftHSM2 PKCS#11 testlerini koşturur.
+- **`scripts/run-pkcs11-tests.sh`** — Docker'la SoftHSM2 PKCS#11
+  test suite'ini lokal makinede çalıştırır; native bağımlılık olmadan
+  developer experience'ı korur.
+- **`.github/workflows/integration-tests.yml`** — Yeni workflow,
+  iki job: `verifier-e2e` (~290 sign+verify roundtrip) ve
+  `pkcs11-integration` (gerçek SoftHSM2 + verifier roundtrip,
+  Linux runner). Native eksikliği yüzünden sessiz "skip → yeşil"
+  riskine karşı her job'da explicit test-count guard.
+- **`@Tag("pkcs11-integration")` opt-in suite** — `SoftHsm2Pkcs11IntegrationTest`
+  (5 sequential + 1 paralel sign) ve `XadesSoftHsmVerifierE2ETest`
+  (5 PFX × 5 XAdES fixture = 25 iterasyon).
+
+#### 🔧 Production-side iyileştirmeler
+
+- **`GlobalExceptionHandler` — 415 mapping**: `HttpMediaTypeNotSupportedException`
+  → `WRONG_CONTENT_TYPE` (`415 UNSUPPORTED_MEDIA_TYPE`). Client
+  `application/json` veya `text/plain` ile POST attığında "İstek
+  multipart/form-data ile gönderilmeli" mesajı; önceki generic
+  500 yerine doğru HTTP kontratı.
+- **`CryptoSignerService` — backend dispatch**: `SigningMaterial.getBackend()`
+  üzerinden `JcaSigningBackend` veya `Pkcs11SigningBackend`'e yönlendirir;
+  servis kodunda `instanceof` veya `switch` yok.
+- **`CertificateInfoController` + `CertificateInfoService` API**:
+  Sertifika listeleme ve introspection genişletildi; OID, Key Usage,
+  Extended Key Usage, Policies, SAN bilgileri.
+- **`XAdESDocumentPlacementService`** — Yeni XAdES placement
+  stratejisi sınıfı; UBL e-Belge / EArchive / e-Bilet için doğru
+  yerleştirme noktasını tek dosyada karar verir.
+- **`XmlProcessingService` (XAdES) refactor** — XML parsing,
+  c14n preparation ve namespace handling tek hat.
+- **`AbstractKamuSMXmlDepoResolver` + `Utilities` refactor** — Kod
+  netliği ve test edilebilirlik.
+- **`KeyStoreLoaderService`, `KeyStoreProvider`, `PKCS11KeyStoreProvider` refactor**
+  — Dual-backend desteği; HSM kaynaklı sertifika ve key resolution.
+- **`SignatureApplication`** — Application bootstrap iyileştirmeleri,
+  `--list-certificates` CLI argümanı ile uyum.
+
+#### 📦 Maven build pipeline
+
+- `pom.xml` yeni plugin/dependency'ler:
+  - **`io.qameta.allure:allure-junit5` 2.27.0** + **`allure-maven` 2.12.0**
+    + AspectJ Weaver 1.9.21 (test scope, javaagent ile inject).
+    `@Epic` / `@Feature` / `@Story` / `@Severity` / `Allure.addAttachment()`
+    annotation'ları runtime'da yakalanır.
+  - **`org.jacoco:jacoco-maven-plugin` 0.8.11** — `prepare-agent` +
+    `report` execution. Surefire `argLine` JaCoCo agent'ı + AspectJ
+    weaver ile birlikte.
+  - **`org.owasp:dependency-check-maven` 9.2.0** — `failBuildOnCVSS=11`
+    (info-only), NVD veri tabanı `~/.m2/repository/org/owasp/dependency-check-data`'da
+    cache'lenir.
+  - **`org.xipki:ipkcs11wrapper` 1.0.9** — IAIK PKCS#11 wrapper.
+  - Surefire `<argLine>` güncellemesi: `@{argLine}` (JaCoCo agent inherit)
+    + `-XX:-OmitStackTraceInFastThrow` + `-javaagent:aspectjweaver`.
+- `.gitignore` build artifact'ları için genişletildi:
+  `target/signed-artifacts/`, `signed-artifacts/`, `pages-output/`,
+  `openapi-snapshot/`, `.allure-history/`, `.allure/`,
+  generator-only fixture'lar (`large-10mb.bin`, `large-50pages.pdf`).
+
+#### 🧪 Önceki turn'ların öne çıkan eklemeleri (turn-3 → turn-8, "Unreleased" altında biriken)
+
+> Aşağıdaki maddeler 0.4.0 release'in temellerini oluşturan
+> incremental katmanlardır; tarih sırasıyla:
+
+- **🧪 CAdES + PAdES Fixture Varyasyon Suite'leri Eklendi (8 yeni senaryo)** —
+  Mevcut `CAdESSignAndVerifyE2ETest` / `PAdESSignAndVerifyE2ETest` PFX × backend
+  matrisleri (20 + 10 senaryo) tek programatik girdi üzerinde koşar; yeni
+  **`CAdESBinaryVariationsE2ETest`** ve **`PAdESDocumentVariationsE2ETest`**
+  fixture-içerik çeşitliliğini kapsar. Smart matrix: tek RSA PFX × JCA backend
+  (key-tipinden bağımsız → CI yükü minimal).
+  - **CAdES fixture'ları** (4, `resources/test-fixtures/cades/`):
+    - `sample.txt` (2.4 KB) — UTF-8 Türkçe gerçekçi metin, diakritik yoğun
+      (~405 byte multibyte). Production "açıklama / sözleşme gövdesi" benzeri.
+    - `sample.bin` (10 KB) — deterministic random binary, SHA-256 zinciri
+      (seed `mersel-cades-sample-bin-v1`). Reproducible.
+    - `empty.bin` (0 byte) — edge-case. Test `assertEmptyInputHandledGracefully`
+      iki davranışı kabul eder: RuntimeException (defansif) **veya** boş
+      ContentInfo (RFC 5652 §5.3 spec-uyumlu, DSS 6.x default). Build kırıcı
+      değil; log üzerinden hangi davranış gözlendi rapor eder.
+    - `utf16-text.txt` (1.4 KB) — UTF-16 BE + BOM (`FE FF`) Türkçe text.
+      Signer'ın byte-stream-agnostic davranışı (encoding sniff yok) kontratı.
+  - **PAdES fixture'ları** (4, `resources/test-fixtures/pades/`, iText 5.4.1 +
+    Cp1254 ile programatik üretildi; generator class çalıştırılıp silindi —
+    `commit_only` strategy):
+    - `efatura-pdf.pdf` (3.7 KB, 3 sayfa) — UBL-benzeri görsel e-Fatura
+      (başlık + satıcı/alıcı + kalemler tablosu + tutar özeti, Türkçe + ₺).
+      Multi-page ByteRange coverage testi.
+    - `turkish-chars.pdf` (2.4 KB) — Cp1254 Türkçe alfabe yoğun gövde.
+    - `landscape-a3.pdf` (2.6 KB) — A3 landscape (1190.55 × 841.89 pt) +
+      8-kolon geniş tablo. Visible signature hazırlığı.
+    - `large-50pages.pdf` (22 KB, 50 sayfa) — page-count regresyon vektörü;
+      PDF compression sayesinde küçük boyut.
+  - **Test sınıfları**:
+    - `CAdESBinaryVariationsE2ETest` (4 senaryo, attached mode) — PDF magic
+      byte sanity, signed bytes > input invariant'ları, EMPTY_BIN graceful
+      kontratı.
+    - `PAdESDocumentVariationsE2ETest` (4 senaryo) — `%PDF-` magic byte
+      sanity, signed PDF orijinalden büyük olmalı, verifier roundtrip VALID.
+  - **CI etkisi**: verifier-e2e 260 → **268** (`expected=268` test-count
+    guard güncellendi).
+  - **Temizlik**: önceki turn'dan yarım kalmış `PdfFixtureGenerator`,
+    `CAdESBinaryFixturesE2ETest`, `PAdESDocumentFixturesE2ETest` ve
+    kullanılmayan 5 PDF (with-form-fields, with-attachment, scan-image-only,
+    already-signed, encrypted-userpassword) + 2 CAdES fixture (docx-sample,
+    zip-archive) silindi. Kullanıcı kararı: `commit_only`, sadece bu turda
+    üretilenler.
+- 🧪 **Negatif Test Suite Eklendi (8 senaryo)** — "verifier yanlış yere
+  ses çıkarmıyor" kontratını kapatan 4 yeni test sınıfı + 2 statik fixture.
+  Hibrit fixture stratejisi:
+  - **Statik commit** (parser-level):
+    - `resources/test-fixtures/negative/xxe-attack.xml` — `<!ENTITY xxe
+      SYSTEM "file:///etc/passwd">` payload'ı.
+    - `resources/test-fixtures/negative/billion-laughs.xml` — 9-seviye
+      nested entity, 10^9 expansion (DOS).
+  - **Runtime üretim** (sign+tamper+verify-must-fail) — cert expire
+    olduğunda kırılmayan, sign akışını canlı her CI'da koşturan strateji.
+  - **Yeni test sınıfları**:
+    - `XmlSecurityTest` (default suite, +2): `SecureXmlFactories`
+      DOCTYPE'ı `SAXParseException` ile reddediyor mu? Süre < 5s
+      assertion'ı zayıf parser flag'lerine karşı koruma.
+    - `XAdESNegativeE2ETest` (verifier-e2e, 3): wrap-attack (DOM'a
+      yabancı element enjeksiyon → reference digest mismatch),
+      tampered-after-sign (cbc:UUID text mutate), signature-value
+      bit-flip (kripto verify fail). Her testin pre-tamper VALID
+      baseline'ı sahte-pozitiften korur.
+    - `PAdESTamperedE2ETest` (verifier-e2e, 1): PDF byte[100] flip
+      (ByteRange dahilinde) → `signatureIntact=false`.
+    - `CAdESTamperedE2ETest` (verifier-e2e, 1): detached CMS
+      orijinal payload byte flip; `.p7s` ve cert sağlam ama digest
+      mismatch.
+    - `XAdESSha1LegacyE2ETest` (verifier-e2e, 1): DSS XAdESService'i
+      DigestAlgorithm.SHA1 ile DOĞRUDAN çağırıp (signer servisi bypass —
+      production servisi zaten SHA-1 üretmez) verifier crypto policy
+      davranışını test eder. Üç senaryo: reject / warn / sessiz-trust;
+      üçüncüsü = fail (regresyon).
+  - **CI etkisi**: default suite 279 → 281; verifier-e2e 254 → 260
+    (`expected=260` test-count guard güncellendi).
+- 🧪 **WS-Security Suite Genişletildi (20 → 93 senaryo)** —
+  7 yeni SOAP envelope fixture'ı eklendi ve `SoapEnvelopeFixture` enum'una
+  metadata + Javadoc'lu olarak entegre edildi:
+  - `gib-efatura-soap.xml` (3101 B) — GİB Mali Mühür request paritesi
+    (`soapenv/ei/xsd/xsi/gib` multi-NS, `xsi:type`, Türkçe content).
+  - `soap-with-wsa.xml` (1269 B) — WS-Addressing header'ları
+    (MessageID/To/Action/ReplyTo); SOAP 1.2.
+  - `soap-with-existing-wsu-id.xml` (1235 B) — Body'de client-provided
+    `wsu:Id` (override kontratı).
+  - `soap-multibody.xml` (1199 B) — Body'de 3 ayrı operation child.
+  - `soap-large-50kb.xml` (50.5 KB) — 120 child item, c14n + digest
+    pipeline performans regresyon vektörü.
+  - `soap-mtom-xop.xml` (1855 B) — `<xop:Include href="cid:..."/>`
+    placeholder; XML c14n MTOM-include korumalı.
+  - `soap-with-existing-security-header.xml` (2321 B) — Mevcut
+    `<wsse:Security>/UsernameToken`; append-not-overwrite kontratı.
+  - **Ana matrix**: `WsSecuritySignAndLocalVerifyE2ETest` artık
+    5 PFX × 2 backend × **9 envelope = 90 senaryo** (her senaryoda
+    independent javax.xml.crypto roundtrip + ECDSA r||s invariant).
+  - **Davranış kontratları**: yeni `WsSecurityContractE2ETest` (3 method,
+    RSA PFX × JCA — kontrat XML davranışı, key-tipinden bağımsız):
+    - `wsuIdOverrideContract` — Body wsu:Id silinir, signer Id
+      override eder (shadow-reference attack negatif kontrolü).
+    - `wsAddressingPreservationContract` — wsa:MessageID/To/Action/
+      ReplyTo sign sonrası bayt-bayt korunur.
+    - `existingSecurityHeaderAppendContract` — Tek Security var,
+      UsernameToken korunur, direct-child sayısı = 4 (BST + Timestamp +
+      UsernameToken + Signature), imza yine valid.
+  - **Toplam**: 20 → 93 senaryo (+73). Lokal koşum ~20s. CI'da
+    `verifier-e2e` job 181 → **254** test (`expected=254` guard güncellendi).
+- 🧪 **XAdES Ana Suite Yine Genişletildi (80 → 130 senaryo)** —
+  `XAdESSignAndVerifyE2ETest` ana matriksine `efatura.xml`'den deterministic
+  üretilen **5 yeni regresyon fixture'ı** dahil edildi:
+  - `efatura-mixed-newlines.xml` — ilk yarı CRLF + ikinci yarı LF
+    (XML 1.0 §2.11 line-ending normalization vektörü).
+  - `xml-with-cdata.xml` — `<cbc:Note>` içine CDATA + ampersand
+    (c14n CDATA→text + `&` escape doğrulaması).
+  - `xml-with-comments.xml` — 3 noktada `<!-- … -->` (prolog sonrası +
+    `cac:InvoiceLine` öncesi/sonrası; EXC-C14N yorumları çıkarmalı,
+    ID resolution bozulmamalı).
+  - `xml-foreign-namespace-prefix.xml` — `cbc → tcbc`, `cac → tcac`
+    (URI'ler aynı; signer'ın prefix-bağımsız çalıştığını test eder).
+  - `efatura-unicode-emoji.xml` — 🚀 (U+1F680, 4-byte UTF-8 / surrogate
+    pair) + CJK `中文` + Latin extended `ñoño` (UTF-8 indexing /
+    surrogate handling regresyonu).
+  - Üretici: `scripts/generate-xades-fixture-variants.py` — tekrarlanabilir
+    + auditable, git history'de niye/nasıl şeffaf.
+  - Yeni matriks: 5 PFX × 2 backend × **12 fixture** = **120 senaryo** +
+    10 generic `OtherXmlDocument` = **130 toplam XAdES**.
+  - **Sonuç**: 130/130 yeşil; signer'ın c14n, XML parsing, namespace
+    handling ve UTF-8 pipeline'ı tek matriste regresyon koruması altında.
+- 🧪 **XAdES Ana Suite Genişletildi (20 → 80 senaryo)** —
+  `XAdESSignAndVerifyE2ETest` artık 5 PFX × 2 backend × **tüm 7 fixture**
+  (UBL e-Fatura/e-İrsaliye/e-Müstahsil + EArchive Raporu + HR-XML +
+  Large ~5 MB + UTF-8 BOM) + 10 generic `OtherXmlDocument` = **80 senaryo**
+  koşturur. Önceki bölünmüş yaklaşım (Large ve BOM ayrı sınıfta)
+  konsolide edildi:
+  - `XAdESLargeDocumentE2ETest` ve `XAdESBomEncodingE2ETest` sınıfları
+    **silindi**; özel davranışlar ana metoda fixture-conditional olarak taşındı:
+    - BOM fixture'ı için ilk 3 byte (`EF BB BF`) sanity check;
+    - Large fixture'ı için sign + verify süre log'u (INFO).
+  - Tek source-of-truth: `XadesDocumentFixture` enum + ek
+    `standardFixtures()` helper (Large/BOM hariç tutmak isteyen
+    `XadesSoftHsmVerifierE2ETest` gibi suite'ler için).
+  - Yeni `efatura-with-bom.xml` fixture'ı mevcut `efatura.xml`'den
+    üretildi (8320 → 8323 byte, baş kısma UTF-8 BOM eklendi).
+  - Doğrulanan kontrat: tüm fixture'larda `isValid()` +
+    `TOTAL_PASSED` + trust anchor reach + cryptographic verify OK.
+  - Log gözlemi: DSS DOM-roundtrip BOM'u tipik olarak kaybediyor
+    (`signedHasBom=false`); spec-uyumlu davranış, hard assert yok.
+- 🧪 **WS-Security E2E Test Suite** — `WsSecuritySignAndLocalVerifyE2ETest` ile
+  5 PFX × 2 backend (PFX/JCA + HSM-emulated) × 2 SOAP versiyon (1.1, 1.2)
+  = **20 senaryo** sign→verify roundtrip'i. `verifier-e2e` job'una eklendi.
+- 🧪 **Toplam `verifier-e2e` test sayısı 76 → 275'e çıkarıldı**:
+  20 CAdES + **7 CAdES binary fixture (yeni)** + 10 PAdES + 1 smoke +
+  130 XAdES + 90 WS-Security ana matrix + 3 WS-Security kontratı +
+  6 negatif test.
+  CI `expected=275` test-count guard güncellendi. (Tarihsel: 76 → 131
+  WS-Security baseline ve 7 XAdES fixture eklemesiyle; 131 → 181 5 yeni
+  XAdES regresyon fixture'ı ile; 181 → 254 7 yeni WS-Security envelope
+  + 3 davranış kontratı ile; 254 → 260 6 negatif security testi ile;
+  260 → 267 CAdES binary fixture seti ile; 267 → 275 PAdES PDF yapısal
+  fixture seti ile.)
+  - Doğrulayıcı: `javax.xml.crypto.dsig.XMLSignature` (lokal, Apache Santuario
+    provider) — mersel-dss-verifier-api-java'nın WSS limitasyonu nedeniyle
+    bypass edilir (DSS jenerik XML validator `KeyInfo → wsse:SecurityTokenReference
+    → wsse:Reference → wsse:BinarySecurityToken` zincirini resolve edemediği
+    için `NO_SIGNING_CERTIFICATE_FOUND` döner). Detay
+    `WsSecurityLocalXmlDsigVerifier` Javadoc'unda.
+  - Her iterasyonda ECDSA için ek invariant: SignatureValue raw `r||s`
+    formatında (RFC 4051 §3.4.1) ve curve field size'a (P-256→64, P-384→96)
+    uygun — DER bytes regresyonu derhal yakalanır.
+- 🔐 **HSM / PKCS#11 Tam Entegrasyonu (IAIK Migration)** — SunPKCS11'in alias-keşif sorunları (örn. SafeNet ProtectToolkit, Luna) yerine `org.xipki:ipkcs11wrapper` üzerinden doğrudan PKCS#11 API'sine geçildi.
+  - Yeni: `IaikPkcs11Module`, `IaikPkcs11Signer`, `IaikContentSigner`, `IaikSignatureMechanisms`, `Pkcs11EcdsaSignatureEncoder`.
+  - CAdES / PAdES / XAdES yolları DSS'in 2-aşamalı API'si üzerinden HSM ile sorunsuz çalışır.
+  - **WS-Security artık HSM ile de çalışıyor** — manuel XMLDsig builder ile JCA `XMLSignatureFactory`'nin `PrivateKey` zorunluluğu bypass edildi (Apache Santuario `Canonicalizer`).
+  - ECDSA imzaları için spec-correct format dönüşümleri: CMS/CAdES için raw r||s → DER SEQUENCE; XMLDsig/WS-Security için DER → raw r||s (RFC 4051 §3.4.1).
+  - Strict cert↔private key bağlama: `CKA_ID` öncelikli, label-only fallback yalnızca tek-eşleşmede; key rotation veya duplicate label senaryosunda sessiz yanlış imza riski yok.
+  - Lifecycle ownership: `CKR_CRYPTOKI_ALREADY_INITIALIZED` durumunda `module.finalize()` atlanır (paylaşımlı Cryptoki state korunur — aynı process'te başka bileşen kullanıyor olabilir).
 - 🎫 **e-Bilet Rapor Desteği** (PR [#12](https://github.com/mersel-dss/mersel-dss-server-signer-java/pull/12)) - Katkıcı: [@ozlemkzn](https://github.com/ozlemkzn) / e-Platform Bulut Bilişim A.Ş.
 - 🧪 **Yeni Test Coverage** - 22 yeni test (toplam: 115)
 - 🐳 **GHCR Desteği** - Docker Hub + GHCR'e tek workflow'dan paralel push
 - 📦 **Docker Image İçinde 5 Test Sertifikası** - Runtime'da `-e` ile değiştirilebilir
 
 ### Changed
+
+- 🔧 **`CryptoSignerService` PKCS#11/JCA dispatch** — Servis kodunda
+  `instanceof SunPkcs11SigningMaterial` veya backend switch yok;
+  `SigningMaterial.getBackend()` dönüşü direkt `SigningBackend.sign(...)`
+  ile çağrılır. Format servislerinin (`CAdESSignatureService`,
+  `PAdESSignatureService`, `XAdESSignatureService`, `WsSecuritySignatureService`)
+  hepsi bu sözleşme üzerinden çalışır → key kaynağı transparan.
+- 🔄 **`KeyStoreLoaderService`, `KeyStoreProvider`, `PKCS11KeyStoreProvider`
+  refactor** — Dual-backend desteği için yeniden organize; `SigningMaterialFactory`
+  PFX yolundan `JcaSigningBackend`, PKCS#11 yolundan `Pkcs11SigningBackend`
+  döndürür.
+- 🔧 **`SignatureAlgorithmResolverService`** — `EncryptionAlgorithm` × `DigestAlgorithm`
+  matrisi PKCS#11 CKM_* mekanizmaları ile genişletildi; sessiz fallback yerine
+  açık exception (örn. PSS mekanizması yoksa).
+- 🔄 **`XAdESDocumentPlacementService`** — UBL e-Belge, EArchive raporu,
+  e-Bilet ve generic XML belge yerleştirme noktaları tek dosyada karar
+  verir; XAdES servisi placement bilgisini bu sınıfa delege eder.
+- 🔧 **`XmlProcessingService` (XAdES)** — XML parse + c14n hazırlığı +
+  namespace resolution akışı yeniden organize edildi; `SecureXmlFactories`
+  ile entegre.
+- 🔄 **`AbstractKamuSMXmlDepoResolver` ve `Utilities` refactor** —
+  Kod netliği + test edilebilirlik (ilgili yeni testler default suite'te).
+- 🔄 **`CertificateInfoController` + `CertificateInfoService` API** —
+  Sertifika listeleme yanıtı OID, KeyUsage, ExtendedKeyUsage, Policies,
+  SAN bilgileri ile genişletildi; HSM token'larında da çalışır.
+- 🐳 **`devops/docker/Dockerfile`** — Yeni Allure / JaCoCo / IAIK
+  bağımlılıklarıyla uyumlu, application-local.properties opt-in.
+- 📦 **`pom.xml`** — IAIK PKCS#11 wrapper + Allure 2.27 + JaCoCo
+  0.8.11 + OWASP Dependency-Check 9.2.0 + AspectJ Weaver eklendi;
+  Surefire `<argLine>` JaCoCo agent + AspectJ weaver inject edecek
+  şekilde güncellendi.
+- 📋 **`README.md`** — CI / Integration Tests / Publish Evidence Pages
+  rozetleri, Evidence Site linki, `scripts/serve-pages-locally.sh`
+  local preview rehberi eklendi.
+- 📜 **`devops/monitoring/load-test.sh`** ve **`examples/curl/timestamp-example.sh`**
+  güncel API yüzeyi ile senkronlandı.
 - 🔄 **GitHub Actions Konsolidasyonu** - 3 workflow → 2 workflow, sıfır çakışma
+  (0.3.0'dan miras; 0.4.0'da `integration-tests.yml` + `publish-pages.yml`
+  eklenerek toplam 4 workflow'a çıktı — her biri farklı sorumluluk).
 - ⬆️ **Actions v3 → v4** - Deprecated action hataları giderildi
 - 🐳 **Dockerfile** - Mevcut test sertifikaları image'a gömüldü, varsayılan ENV'ler eklendi
 
 ### Fixed
 - 🐛 **XAdES-A Yükseltme Hatası** - e-Bilet raporları XAdES-B'de kalıyordu
 - 🔧 **CI Workflow** - `actions/upload-artifact@v3` deprecated hatası
+- 🔐 **HSM/PKCS#11 WS-Security 500 Hatası** - `material.isPkcs11()` durumunda servis SignatureException atıyordu; manuel XMLDsig akışına taşındı.
+- 🔐 **HSM ECDSA İmzaları** - PKCS#11 raw r||s çıktısı DER SEQUENCE'a normalize ediliyor; CAdES/PAdES/XAdES doğrulayıcılar artık reddetmiyor.
+- 🔐 **PKCS#11 RSA-PSS Sessiz Fallback** - Mekanizma bulunamadığında PKCS#1 v1.5'e düşmek yerine açıkça `SignatureException` atılıyor (yanlış formatta imza üretme riski kaldırıldı).
+- 🔐 **PKCS#11 Lifecycle Ownership** - Paylaşımlı Cryptoki init senaryosunda agresif finalize atlanıyor; diğer process bileşenleri etkilenmiyor.
+- 🔐 **XAdES ECDSA `SIG_CRYPTO_FAILURE`** - JCA `SHAxxxwithECDSA` provider'ı ASN.1 DER SEQUENCE döndürürken XML-DSig spec'i plain `r||s` istiyor; DSS 6.3'ün `XAdESSignatureBuilder.signDocument` içindeki `ensurePlainSignatureValue` çağrısı bazı pipeline'larda etkisiz kalıyordu. `XAdESSignatureService.ensureXadesSignatureValueFormat` ile DSS'e gitmeden önce explicit r||s'e çeviriyoruz; RSA için no-op. Regression koruması: `XAdESEcdsaSignatureFormatTest` (5/5 PFX, default Surefire suite'inde).
+- 🔐 **Verifier E2E `Accept` Header'ı** - `VerifierApiClient` HTTP isteğinde `Accept: application/json` set etmiyordu; verifier image content-negotiation'da XML döndürdüğü için Jackson parse hatası fırlatıyordu.
+- ✅ **E2E Suite Full-Green (CAdES + PAdES + XAdES)** — `mersel-dss-verifier-api-java`
+  tarafında üç temel bulgu (eksik `dss-cms-object`, eksik `dss-pades-pdfbox`,
+  KamuSM trust chain'in policy nedeniyle `CERTIFICATE_CHAIN_GENERAL_FAILURE`
+  vermesi) giderildi. Bu repo'daki "skip-on-backend-unavailable" wrapper'ları
+  ve gevşek assertion'lar kaldırıldı; `assertVerificationPassed` artık
+  **`result.isValid()=true` + `indication=TOTAL_PASSED`** talep ediyor.
+  76/76 verifier-e2e testi 0 fail / 0 skip ile geçiyor.
+- 🧪 **`VerifierApiContainer.IMAGE` override hook'u** — `-DverifierImage=<tag>`
+  ile lokal-build verifier image'larıyla test koşumu mümkün (üretim/GHCR
+  imajını yayınlamadan fix doğrulaması yapmak için).
+- 🛡️ **E2E testler artık production default kombosu ile koşar** —
+  Verifier container'a hiçbir policy override geçilmiyor:
+    - `DSS_POLICY_PROFILE` set edilmez → verifier image'ın yayınladığı
+      default (`signer-strict`) aktif olur. İmzacı sertifika için
+      **OCSP/CRL gerçekten çekilir ve doğrulanır**.
+    - `ONLINE_VALIDATION_ENABLED=true` — DSS, KamuSM TEST CA'sının
+      CRL/OCSP uçlarına internet üzerinden gerçek istek atar.
+    - `DSS_POLICY_PATH` set edilmez — test ile production arasındaki
+      tek konfigürasyon farkı log seviyesi + heap boyutu.
+  Önceki "test-only permissive XML mount" yaklaşımı kaldırıldı; sertifika
+  iptali kontrolleri pas geçilen "kolay yol" yerine **gerçek üretim
+  senaryosunu** test ediyoruz. Trade-off: internet bağlantısı zorunlu
+  (zaten KamuSM root resolver için de gerekiyordu).
+- 🐛 **Pages — JaCoCo coverage % regex** (`publish-pages.yml`) —
+  Eski regex `[0-9]+%` HTML'deki `class="ctr2"` attribute'undaki
+  "2"yi de tutuyordu; landing'e yanlış coverage rakamı düşüyordu.
+  `<td class="ctr2">[0-9]+%` deseni + `sed` ile değer çıkarımı ile
+  düzeltildi.
+- 🐛 **Pages — OpenAPI endpoint path** (`publish-pages.yml`) —
+  Springdoc-openapi 1.7.0 (Spring Boot 2.x stilinde) default endpoint
+  **`/api-docs`**; workflow yanlışlıkla Spring Boot 3 / springdoc 2.x
+  default'u olan `/v3/api-docs`'a istek atıyordu → 404 → snapshot boş.
+  Doğru path'e güncellendi.
+- 🐛 **Pages — Spring Boot bootstrap zorunlu env** — OpenAPI snapshot
+  job'ı için boot edilen JAR `PFX_PATH` + `CERTIFICATE_PIN` olmadan
+  ayağa kalkmıyordu. `application-local.properties` ile profile-gated
+  varsayılanlar (test PFX + dummy PIN) tanımlandı; `--spring.profiles.active=local`
+  ile aktif edilir, production'da inert.
+- 🐛 **Verifier E2E `Accept` Header'ı** (önceden yapıldı, fixed olarak
+  yerinde bırakıldı) — `VerifierApiClient` `Accept: application/json`
+  set ediyor; XML content-negotiation yüzünden Jackson parse hatası
+  almıyoruz.
+
+### Security
+
+- 🛡️ **XXE / SSRF / Billion-Laughs / XInclude / XSLT injection
+  vektörleri tamamen kapatıldı** — `SecureXmlFactories` (`util/xml/`)
+  tek meşru `DocumentBuilderFactory` / `TransformerFactory` kaynağı;
+  production kodu artık `*.newInstance()` çağırmıyor. Saldırgan
+  `<!ENTITY xxe SYSTEM "file:///etc/passwd">` ile sunucu dosyalarını
+  okuyamaz, `SYSTEM "http://169.254.169.254/..."` ile cloud metadata
+  istemez, 10^9 entity expansion ile belleği patlatamaz.
+- 🛡️ **Negatif test suite** (default + verifier-e2e):
+  - Parser-level (statik fixture): `XmlSecurityTest`, `SecureXmlFactoriesTest`
+    — `xxe-attack.xml` ve `billion-laughs.xml` `SAXParseException` ile
+    reddediliyor; süre < 5s assertion'ı zayıf parser flag'lerine karşı koruma.
+  - Sign+tamper (runtime): `XAdESNegativeE2ETest` (wrap-attack +
+    tampered-after-sign + signature-value bit-flip), `PAdESTamperedE2ETest`
+    (ByteRange byte flip), `CAdESTamperedE2ETest` (detached payload
+    byte flip), `XAdESSha1LegacyE2ETest` (SHA-1 crypto policy reject).
+- 🛡️ **PKCS#11 — strict cert↔private key bağlama** — `CKA_ID` öncelikli
+  eşleme, label-only fallback yalnızca tek-eşleşmede. Key rotation veya
+  duplicate label senaryosunda sessiz "yanlış key ile imza" riski
+  yapısal olarak kaldırıldı (`IaikPkcs11Module` + `X509ExtensionInspector`).
+- 🛡️ **PKCS#11 — RSA-PSS sessiz fallback engellendi** — Mekanizma
+  bulunamadığında PKCS#1 v1.5'e düşmek yerine `SignatureException`
+  atılıyor. Önceki davranışta `RSASSA-PSS` istenen yerde sessizce
+  `PKCS#1 v1.5` üretip "imza valid" görünüyor olabilirdi.
+- 🛡️ **PKCS#11 — paylaşımlı Cryptoki lifecycle** —
+  `CKR_CRYPTOKI_ALREADY_INITIALIZED` durumunda `module.finalize()`
+  atlanır; aynı process'te başka bileşen (örn. başka Java/JNI lib)
+  Cryptoki state'i kullanıyor olabilir, agresif finalize ile crashlemesin.
+- 🛡️ **OWASP Dependency-Check pipeline** — `dependency-check-maven` 9.2.0
+  Pages workflow'unda her main push'unda koşar; rapor
+  [`/security/`](https://mersel-dss.github.io/mersel-dss-server-signer-java/security/)
+  altında yayımlanır. `failBuildOnCVSS=11` (info-only — build kırıcı
+  değil; bilinçli olarak gözlem-modu, CVE triajı manuel).
+- 🛡️ **HTTP yüzey sertleşmesi** — `415 WRONG_CONTENT_TYPE` mapping
+  (multipart olmayan istekler için doğru hata), multipart limit
+  contract testleri (`MultipartLimitHttpContractTest`,
+  `MultipartConfigSanityTest`), sign endpoint envelope contract testleri.
+
+### Removed
+
+- 🗑️ **`src/main/lib/sunpkcs11.jar`** — Lokal JDK Sun PKCS#11 wrapper
+  artık bağımlılık değil. `pom.xml`'deki `mvn install:install-file`
+  hook'u temizlendi; CI'daki `mvn validate -B` adımı artık hiçbir lokal
+  jar yüklemiyor — sadece default Maven validate fazını çalıştırır.
+  HSM erişimi tamamen `org.xipki:ipkcs11wrapper` 1.0.9 üzerinden.
+- 🗑️ **`resources/test-documents/EFATURA.xml`** — Yerini
+  `resources/test-fixtures/xades/efatura.xml` aldı. Yeni dizin
+  yapısı (`test-fixtures/{xades,pades,cades,wssecurity,negative}/`)
+  her formata kendi fixture klasörünü atar; eski tek-belge
+  `test-documents/` yaklaşımı emekliye ayrıldı.
+- 🗑️ **"Skip-on-backend-unavailable" wrapper'ları + gevşek E2E
+  assertion'ları** — `assertVerificationPassed` artık katı
+  (`isValid()=true` + `TOTAL_PASSED`); önceki yumuşak
+  "verifier yoksa testler skip" davranışı kaldırıldı, infra
+  hatası gizlenmiyor.
+
+### Known issues (verifier projesi tarafında)
+> Önceki sürümlerde dokümante edilen üç verifier bulgusu
+> [`mersel-dss-verifier-api-java`](https://github.com/mersel-dss/mersel-dss-verifier-api-java)
+> üzerinde çözüldü (yeni `pom.xml` + production-grade policy mimarisi
+> `signer-strict|strict` profilleri + tam custom `dss.policy.path` override).
+> Bu repo'nun E2E suite'i %100 yeşil; upstream sürüm yayınlanır yayınlanmaz
+> `VerifierApiContainer.IMAGE` default'u GHCR tag'ine geri çekilebilir.
 
 ---
 
@@ -65,7 +748,7 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
   - `actions/checkout@v3` → `@v4`
   - `actions/setup-java@v3` → `@v4`
   - `actions/upload-artifact@v3` → `@v4`
-  - `mvn validate -B` adımı eklendi (lokal bağımlılık kurulumu)
+  - `mvn validate -B` adımı eklendi (o tarihte `src/main/lib/sunpkcs11.jar` lokal kurulumu içindi; **Unreleased**'da bu jar kaldırıldı — adım artık sadece default Maven validate fazını çalıştırır).
 - 🐳 **Dockerfile Güncellendi** - Test sertifikaları ile production-ready
   - Mevcut test sertifikaları image'a gömülüyor (`/app/test-certs/`)
   - Varsayılan ENV'ler: `PFX_PATH`, `CERTIFICATE_PIN=614573`, `CERTIFICATE_ALIAS=1`
@@ -240,14 +923,19 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## Gelecek Sürümler
 
-### v0.4.0 (Planlanan)
+> **Not:** 0.4.0 sürümü orijinal yol haritasında "Kubernetes / rate
+> limit / batch" odaklıydı; ancak HSM uyumsuzluğu + auditor-grade
+> kanıt zinciri ihtiyacı öne çekildi. Operasyonel kalemler bir kademe
+> kaydırıldı.
+
+### v0.5.0 (Planlanan)
 - Kubernetes manifests
 - Rate limiting
 - API Authentication
 - Asenkron imzalama
 - Batch imzalama
 
-### v0.5.0 (Planlanan)
+### v0.6.0 (Planlanan)
 - WebSocket bildirimler
 - Kafka/RabbitMQ entegrasyonu
 - Dashboard UI

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  XXE (XML eXternal Entity) saldırı fixture'ı.
+
+  Bu dosya bir SALDIRI vektörüdür; production kodunda PARSE EDİLMEMELİ.
+  Sadece SecureXmlFactories'in DOCTYPE/external entity'lere kapalı
+  olduğunu test etmek için kullanılır.
+
+  Saldırı mantığı: <!ENTITY xxe SYSTEM "file:///etc/passwd"> ile dış
+  dosya okuma denemesi. Yanlış konfigüre edilmiş bir XML parser
+  &xxe; referansını sunucudaki /etc/passwd içeriğiyle resolve eder
+  ve test:Data alanına yerleştirir. Beklenen güvenli davranış:
+  SecureXmlFactories parser'ı SAXParseException fırlatır
+  ("DOCTYPE is disallowed when the feature
+  http://apache.org/xml/features/disallow-doctype-decl set to true").
+
+  Referans: OWASP XXE Prevention Cheat Sheet.
+-->
+<!DOCTYPE foo [
+  <!ENTITY xxe SYSTEM "file:///etc/passwd">
+]>
+<foo>
+  <test:Data xmlns:test="http://test.example.com">&xxe;</test:Data>
+</foo>

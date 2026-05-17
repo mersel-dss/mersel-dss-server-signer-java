@@ -2,6 +2,7 @@ package io.mersel.dss.signer.api.services;
 
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
+import io.mersel.dss.signer.api.util.xml.SecureXmlFactories;
 import org.apache.commons.io.IOUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
@@ -48,8 +49,10 @@ public abstract class AbstractKamuSMXmlDepoResolver implements TrustedRootCertif
      * XML içeriğinden sertifikaları parse eder
      */
     protected List<X509Certificate> parseCertificates(String xmlBody) throws Exception {
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        dbf.setNamespaceAware(false);
+        // KamuSM legacy XML formatı namespace-aware değil; SecureXmlFactories
+        // namespaceAware=false varyantı ile çağrılıyor, XXE/DTD/entity vektörleri
+        // yine kapalı (DOCTYPE reddedilir).
+        DocumentBuilderFactory dbf = SecureXmlFactories.newDocumentBuilderFactory(false);
         DocumentBuilder builder = dbf.newDocumentBuilder();
         Document document = builder.parse(new ByteArrayInputStream(xmlBody.getBytes()));
 

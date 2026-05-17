@@ -5,12 +5,14 @@ import io.mersel.dss.signer.api.services.CertificateInfoService;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PfxKeyStoreProvider;
+import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -87,26 +89,43 @@ public class SignatureApplication {
             }
             
             KeyStoreProvider provider;
-            
-            if (pkcs11Library != null && !pkcs11Library.isEmpty()) {
-                long slot = NumberUtils.isDigits(pkcs11SlotStr) ? Long.parseLong(pkcs11SlotStr):-1L;
-                long slotIndex = NumberUtils.isDigits(pkcs11SlotListIndexStr) ? Long.parseLong(pkcs11SlotListIndexStr):-1L;
+            IaikPkcs11Module iaikModule = null;
 
-                System.out.println("📦 Keystore Type: PKCS#11");
+            // StringUtils.hasText: null / "" / "   " (whitespace) hepsini boş
+            // sayar — Spring config tarafındaki @ConditionalOnExpression ile
+            // tutarlı. Aksi halde PKCS11_LIBRARY="   " gibi yanlış env var
+            // çağrısı CLI'da PKCS#11 yoluna sapar ve IaikPkcs11Module ctor
+            // anlamsız bir hata atar.
+            if (StringUtils.hasText(pkcs11Library)) {
+                Long slot = NumberUtils.isDigits(pkcs11SlotStr) ? Long.parseLong(pkcs11SlotStr) : null;
+                Long slotIndex = NumberUtils.isDigits(pkcs11SlotListIndexStr) ? Long.parseLong(pkcs11SlotListIndexStr) : null;
+                slot = slot != null && slot >= 0 ? slot : null;
+                slotIndex = slotIndex != null && slotIndex >= 0 ? slotIndex : null;
+
+                System.out.println("📦 Keystore Type: PKCS#11 (IAIK)");
                 System.out.println("📂 Library: " + pkcs11Library);
-                System.out.println("🎰 Slot: " + slot);
-                System.out.println("🎰 Slot List Index: " + slotIndex);
+                System.out.println("🎰 Slot: " + (slot != null ? slot : "<unset>"));
+                System.out.println("🎰 Slot List Index: " + (slotIndex != null ? slotIndex : "<unset>"));
                 System.out.println();
-                
-                provider = new PKCS11KeyStoreProvider(pkcs11Library, slot,slotIndex);
-                
-            } else if (pfxPath != null && !pfxPath.isEmpty()) {
+
+                // PKCS#11 yolunda IAIK Module ile listeliyoruz; SunPKCS11
+                // alias-mapping katmanından bağımsız. Module manuel olarak
+                // initialize edilip listing sonunda kapatılır.
+                iaikModule = new IaikPkcs11Module(pkcs11Library, slot, slotIndex, pin.toCharArray());
+                iaikModule.afterPropertiesSet();
+                // KeyStoreProvider sadece getType()/info için referans olarak duruyor.
+                provider = new PKCS11KeyStoreProvider(
+                    pkcs11Library,
+                    slot != null ? slot : -1L,
+                    slotIndex != null ? slotIndex : -1L);
+
+            } else if (StringUtils.hasText(pfxPath)) {
                 System.out.println("📦 Keystore Type: PFX/PKCS12");
                 System.out.println("📂 Path: " + pfxPath);
                 System.out.println();
-                
+
                 provider = new PfxKeyStoreProvider(pfxPath);
-                
+
             } else {
                 System.err.println("❌ Ne PKCS11_LIBRARY ne de PFX_PATH tanımlanmamış!");
                 System.err.println("\nPKCS#11 için:");
@@ -119,13 +138,16 @@ public class SignatureApplication {
                 System.exit(1);
                 return;
             }
-            
-            // Sertifikaları listele
-            CertificateInfoService service = new CertificateInfoService();
-            List<CertificateInfoDto> certificates = service.listCertificates(provider, pin.toCharArray());
-            
-            // Konsola yazdır
-            service.printCertificates(certificates);
+
+            try {
+                CertificateInfoService service = new CertificateInfoService(iaikModule);
+                List<CertificateInfoDto> certificates = service.listCertificates(provider, pin.toCharArray());
+                service.printCertificates(certificates);
+            } finally {
+                if (iaikModule != null) {
+                    iaikModule.destroy();
+                }
+            }
             
         } catch (Exception e) {
             System.err.println("\n❌ Hata: " + e.getMessage());

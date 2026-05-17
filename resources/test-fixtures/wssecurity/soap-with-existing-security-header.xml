@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Header'da mevcut <wsse:Security> + UsernameToken bulunan SOAP envelope.
+
+  WsSecuritySignatureService kontratı (kod incelemesi):
+    - createSecurityHeader: mevcut <wsse:Security> bulunursa onu
+      REUSE eder, yeni element yaratmaz.
+    - addTimestamp: securityElement.insertBefore(timestamp, firstChild)
+    - addBinarySecurityToken: securityElement.insertBefore(bst, firstChild)
+    - signDocument: securityElement.appendChild(signatureElem)
+
+  Beklenen sign sonrası Security child sırası (toplam 4 element):
+    [0] wsse:BinarySecurityToken   ← signer eklendi (en başa)
+    [1] wsu:Timestamp              ← signer eklendi (BST'den önce eklenmişti
+                                     ama BST sonradan firstChild oldu)
+    [2] wsse:UsernameToken         ← fixture'dan miras
+    [3] ds:Signature               ← signer eklendi (en sona)
+
+  Test bu sıralamayı assert etmek yerine sadece "append-not-overwrite"
+  kontratını doğrular: mevcut UsernameToken sign sonrası HÂLÂ var
+  ve username textual content değişmemiş. Strict ordering, küçük
+  servis refactor'larında kırılmasın diye gevşek bırakılmıştır.
+-->
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+                  xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
+                  xmlns:test="http://test.example.com">
+   <soapenv:Header>
+      <wsse:Security soapenv:mustUnderstand="1">
+         <wsse:UsernameToken wsu:Id="ExistingUsernameToken">
+            <wsse:Username>preexisting-test-user</wsse:Username>
+            <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">preexisting-secret</wsse:Password>
+         </wsse:UsernameToken>
+      </wsse:Security>
+   </soapenv:Header>
+   <soapenv:Body>
+      <test:TestRequest>
+         <test:RequestId>EXISTING-SECURITY-HEADER-TEST</test:RequestId>
+         <test:Data>
+            <test:Message>Mevcut Security header'a Signature append edilmeli, override değil</test:Message>
+         </test:Data>
+      </test:TestRequest>
+   </soapenv:Body>
+</soapenv:Envelope>

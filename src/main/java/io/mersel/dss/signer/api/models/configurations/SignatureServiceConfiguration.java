@@ -36,7 +36,7 @@ public class SignatureServiceConfiguration {
     @Value("${CA_CERTIFICATE_PATH:/}")
     private String caCertificatePath;
 
-    @Value("${TS_SERVER_HOST:http://nes.com.tr}")
+    @Value("${TS_SERVER_HOST:http://zd.kamusm.gov.tr}")
     private String timeStampServerHost;
 
     @Value("${TS_DIGEST_ALGORITHM:SHA-256}")

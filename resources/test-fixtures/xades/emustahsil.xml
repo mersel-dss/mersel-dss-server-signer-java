@@ -1,0 +1,223 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<CreditNote xmlns="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2"
+    xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+    xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"
+    xmlns:ccts="urn:un:unece:uncefact:documentation:2"
+    xmlns:ds="http://www.w3.org/2000/09/xmldsig#"
+    xmlns:ext="urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+    xmlns:qdt="urn:oasis:names:specification:ubl:schema:xsd:QualifiedDatatypes-2"
+    xmlns:ubltr="urn:oasis:names:specification:ubl:schema:xsd:TurkishCustomizationExtensionComponents"
+    xmlns:udt="urn:un:unece:uncefact:data:specification:UnqualifiedDataTypesSchemaModule:2"
+    xmlns:xades="http://uri.etsi.org/01903/v1.3.2#"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:oasis:names:specification:ubl:schema:xsd:CreditNote-2 UBL-CreditNote-2.1.xsd">
+    <ext:UBLExtensions>
+        <ext:UBLExtension>
+            <ext:ExtensionContent />
+        </ext:UBLExtension>
+    </ext:UBLExtensions>
+    <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
+    <cbc:CustomizationID>TR1.2</cbc:CustomizationID>
+    <cbc:ProfileID>EARSIVBELGE</cbc:ProfileID>
+    <cbc:ID>MRS2026000000001</cbc:ID>
+    <cbc:CopyIndicator>false</cbc:CopyIndicator>
+    <cbc:UUID>00000000-0000-0000-0000-000000000000</cbc:UUID>
+    <cbc:IssueDate>2026-05-14</cbc:IssueDate>
+    <cbc:IssueTime>10:35:12</cbc:IssueTime>
+    <cbc:CreditNoteTypeCode>MUSTAHSILMAKBUZ</cbc:CreditNoteTypeCode>
+    <cbc:Note>İrsaliye yerine geçer</cbc:Note>
+    <cbc:DocumentCurrencyCode>TRY</cbc:DocumentCurrencyCode>
+    <cbc:LineCountNumeric>1</cbc:LineCountNumeric>
+    <cac:AdditionalDocumentReference>
+        <cbc:ID>34XXX000</cbc:ID>
+        <cbc:IssueDate>2026-05-14</cbc:IssueDate>
+        <cbc:DocumentTypeCode>HKS_PLAKA</cbc:DocumentTypeCode>
+        <cbc:DocumentType>Plaka</cbc:DocumentType>
+    </cac:AdditionalDocumentReference>
+    <cac:AdditionalDocumentReference>
+        <cbc:ID>TR000000000000000000000000</cbc:ID>
+        <cbc:IssueDate>2026-05-14</cbc:IssueDate>
+        <cbc:DocumentTypeCode>ATL_BANKA_BILGISI</cbc:DocumentTypeCode>
+        <cbc:DocumentType>ANONİM BANKA A.Ş.</cbc:DocumentType>
+    </cac:AdditionalDocumentReference>
+    <cac:Signature>
+        <cbc:ID schemeID="VKN_TCKN">9999999999</cbc:ID>
+        <cac:SignatoryParty>
+            <cbc:WebsiteURI>https://mersel.io</cbc:WebsiteURI>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">9999999999</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>MERSEL YAZILIM TEKNOLOJİLERİ A.Ş.</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:StreetName>ANONİM SOKAK NO: 1</cbc:StreetName>
+                <cbc:CitySubdivisionName>Merkez</cbc:CitySubdivisionName>
+                <cbc:CityName>İstanbul</cbc:CityName>
+                <cbc:PostalZone>34000</cbc:PostalZone>
+                <cac:Country>
+                    <cbc:IdentificationCode>TR</cbc:IdentificationCode>
+                    <cbc:Name>Türkiye</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cac:TaxScheme>
+                    <cbc:Name>ANONİM V.D.</cbc:Name>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:Contact>
+                <cbc:Telephone>0212 000 00 00</cbc:Telephone>
+                <cbc:Telefax>0212 000 00 01</cbc:Telefax>
+                <cbc:ElectronicMail>info@mersel.io</cbc:ElectronicMail>
+            </cac:Contact>
+        </cac:SignatoryParty>
+        <cac:DigitalSignatureAttachment>
+            <cac:ExternalReference>
+                <cbc:URI>#Signature_MRS2026000000001</cbc:URI>
+            </cac:ExternalReference>
+        </cac:DigitalSignatureAttachment>
+    </cac:Signature>
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cbc:WebsiteURI/>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="VKN">9999999999</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="TICARETSICILNO">00000-00000</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="MERSISNO">0999999999900001</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PartyName>
+                <cbc:Name>ANONİM SATICI</cbc:Name>
+            </cac:PartyName>
+            <cac:PostalAddress>
+                <cbc:ID/>
+                <cbc:StreetName>ANONİM SOKAK</cbc:StreetName>
+                <cbc:BuildingNumber/>
+                <cbc:CitySubdivisionName>ANONİM</cbc:CitySubdivisionName>
+                <cbc:CityName>ANONİM</cbc:CityName>
+                <cbc:PostalZone/>
+                <cbc:District>ANONİM</cbc:District>
+                <cac:Country>
+                    <cbc:Name>TÜRKİYE</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:PartyTaxScheme>
+                <cac:TaxScheme>
+                    <cbc:Name/>
+                </cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:Contact>
+                <cbc:Telephone>5000000000</cbc:Telephone>
+                <cbc:Telefax/>
+                <cbc:ElectronicMail/>
+            </cac:Contact>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cbc:WebsiteURI/>
+            <cac:PartyIdentification>
+                <cbc:ID schemeID="TCKN">11111111111</cbc:ID>
+            </cac:PartyIdentification>
+            <cac:PostalAddress>
+                <cbc:ID/>
+                <cbc:StreetName>ANONİM ADRES</cbc:StreetName>
+                <cbc:BuildingNumber/>
+                <cbc:CitySubdivisionName>ANONİM</cbc:CitySubdivisionName>
+                <cbc:CityName>ANONİM</cbc:CityName>
+                <cbc:PostalZone>ANONİM</cbc:PostalZone>
+                <cbc:District>ANONİM</cbc:District>
+                <cac:Country>
+                    <cbc:Name>Türkiye</cbc:Name>
+                </cac:Country>
+            </cac:PostalAddress>
+            <cac:Person>
+                <cbc:FirstName>ANONİM</cbc:FirstName>
+                <cbc:FamilyName>ALICI</cbc:FamilyName>
+            </cac:Person>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+    <cac:Delivery>
+        <cbc:ActualDeliveryDate>2026-05-14</cbc:ActualDeliveryDate>
+    </cac:Delivery>
+    <cac:TaxTotal>
+        <cbc:TaxAmount currencyID="TRY">12800.00</cbc:TaxAmount>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="TRY">640000.00</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="TRY">12800.00</cbc:TaxAmount>
+            <cbc:CalculationSequenceNumeric>1</cbc:CalculationSequenceNumeric>
+            <cbc:Percent>2</cbc:Percent>
+            <cac:TaxCategory>
+                <cac:TaxScheme>
+                    <cbc:Name>GV. Stopajı</cbc:Name>
+                    <cbc:TaxTypeCode>0003</cbc:TaxTypeCode>
+                </cac:TaxScheme>
+            </cac:TaxCategory>
+        </cac:TaxSubtotal>
+        <cac:TaxSubtotal>
+            <cbc:TaxableAmount currencyID="TRY">640000.00</cbc:TaxableAmount>
+            <cbc:TaxAmount currencyID="TRY">0.00</cbc:TaxAmount>
+            <cbc:CalculationSequenceNumeric>2</cbc:CalculationSequenceNumeric>
+            <cbc:Percent>0</cbc:Percent>
+            <cac:TaxCategory>
+                <cac:TaxScheme>
+                    <cbc:Name>Bağkur</cbc:Name>
+                    <cbc:TaxTypeCode>SGK_PRIM</cbc:TaxTypeCode>
+                </cac:TaxScheme>
+            </cac:TaxCategory>
+        </cac:TaxSubtotal>
+    </cac:TaxTotal>
+    <cac:LegalMonetaryTotal>
+        <cbc:LineExtensionAmount currencyID="TRY">640000.000000</cbc:LineExtensionAmount>
+        <cbc:TaxExclusiveAmount currencyID="TRY">627200.00000</cbc:TaxExclusiveAmount>
+        <cbc:TaxInclusiveAmount currencyID="TRY">640000.00000</cbc:TaxInclusiveAmount>
+        <cbc:PayableAmount currencyID="TRY">627200.00000</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+    <cac:CreditNoteLine>
+        <cbc:ID>1</cbc:ID>
+        <cbc:CreditedQuantity unitCode="C62">2000</cbc:CreditedQuantity>
+        <cbc:LineExtensionAmount currencyID="TRY">640000.00000000</cbc:LineExtensionAmount>
+        <cac:TaxTotal>
+            <cbc:TaxAmount currencyID="TRY">12800.00</cbc:TaxAmount>
+            <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="TRY">640000.00000000</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="TRY">12800.00</cbc:TaxAmount>
+                <cbc:CalculationSequenceNumeric>1</cbc:CalculationSequenceNumeric>
+                <cbc:Percent>2</cbc:Percent>
+                <cac:TaxCategory>
+                    <cac:TaxScheme>
+                        <cbc:Name>GV. Stopajı</cbc:Name>
+                        <cbc:TaxTypeCode>0003</cbc:TaxTypeCode>
+                    </cac:TaxScheme>
+                </cac:TaxCategory>
+            </cac:TaxSubtotal>
+            <cac:TaxSubtotal>
+                <cbc:TaxableAmount currencyID="TRY">640000.00000000</cbc:TaxableAmount>
+                <cbc:TaxAmount currencyID="TRY">0.00</cbc:TaxAmount>
+                <cbc:CalculationSequenceNumeric>1</cbc:CalculationSequenceNumeric>
+                <cbc:Percent>0</cbc:Percent>
+                <cac:TaxCategory>
+                    <cac:TaxScheme>
+                        <cbc:Name>Bağkur</cbc:Name>
+                        <cbc:TaxTypeCode>SGK_PRIM</cbc:TaxTypeCode>
+                    </cac:TaxScheme>
+                </cac:TaxCategory>
+            </cac:TaxSubtotal>
+        </cac:TaxTotal>
+        <cac:Item>
+            <cbc:Name>MAYDANOZ</cbc:Name>
+            <cac:AdditionalItemIdentification>
+                <cbc:ID schemeID="ATL_SATIR_TUTARI">640000.00</cbc:ID>
+            </cac:AdditionalItemIdentification>
+            <cac:AdditionalItemIdentification>
+                <cbc:ID schemeID="KUNYENO">0000000000000000000</cbc:ID>
+            </cac:AdditionalItemIdentification>
+        </cac:Item>
+        <cac:Price>
+            <cbc:PriceAmount currencyID="TRY">320.00000000</cbc:PriceAmount>
+        </cac:Price>
+    </cac:CreditNoteLine>
+</CreditNote>

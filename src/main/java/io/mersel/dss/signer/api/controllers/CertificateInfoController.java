@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -42,6 +41,15 @@ public class CertificateInfoController {
     private SignatureServiceConfiguration config;
 
     /**
+     * Singleton {@link KeyStoreProvider} bean'i — HSM yolunda da PFX yolunda
+     * da {@link io.mersel.dss.signer.api.config.SignatureConfiguration}
+     * tarafından sağlanır. Burada her istekte yeni provider üretmiyoruz;
+     * yapılandırma yaşam döngüsü Spring container'a teslim edilir.
+     */
+    @Autowired
+    private KeyStoreProvider keyStoreProvider;
+
+    /**
      * Yapılandırılmış keystore'dan tüm sertifikaları listeler.
      * 
      * GET /api/certificates/list
@@ -63,29 +71,26 @@ public class CertificateInfoController {
     public ResponseEntity<?> listCertificates() {
         try {
             LOGGER.info("Sertifika listesi istendi");
-            
-            // Keystore provider'ı belirle
-            KeyStoreProvider provider = createKeyStoreProvider();
+
             char[] pin = config.getCertificatePin().toCharArray();
-            
-            // Sertifikaları listele
-            List<CertificateInfoDto> certificates = certificateInfoService.listCertificates(provider, pin);
-            
+            List<CertificateInfoDto> certificates =
+                certificateInfoService.listCertificates(keyStoreProvider, pin);
+
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
-            response.put("keystoreType", provider.getType());
+            response.put("keystoreType", keyStoreProvider.getType());
             response.put("certificateCount", certificates.size());
             response.put("certificates", certificates);
-            
+
             return ResponseEntity.ok(response);
-            
+
         } catch (Exception e) {
             LOGGER.error("Sertifika listesi alınamadı", e);
-            
+
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
             errorResponse.put("error", e.getMessage());
-            
+
             return ResponseEntity.status(500).body(errorResponse);
         }
     }
@@ -105,48 +110,27 @@ public class CertificateInfoController {
     )
     public ResponseEntity<Map<String, Object>> getKeystoreInfo() {
         Map<String, Object> info = new HashMap<>();
-        
+
         try {
-            KeyStoreProvider provider = createKeyStoreProvider();
             info.put("success", true);
-            info.put("keystoreType", provider.getType());
-            
-            if (provider instanceof PKCS11KeyStoreProvider) {
+            info.put("keystoreType", keyStoreProvider.getType());
+
+            if (keyStoreProvider instanceof PKCS11KeyStoreProvider) {
                 info.put("library", config.getPkcs11LibraryPath());
                 info.put("slot", config.getPkcs11Slot());
-            } else if (provider instanceof PfxKeyStoreProvider) {
+            } else if (keyStoreProvider instanceof PfxKeyStoreProvider) {
                 info.put("pfxPath", config.getPfxPath());
             }
-            
+
             info.put("certificateAlias", config.getCertificateAlias());
             info.put("certificateSerialNumber", config.getCertificateSerialNumber());
-            
+
         } catch (Exception e) {
             info.put("success", false);
             info.put("error", e.getMessage());
         }
-        
-        return ResponseEntity.ok(info);
-    }
 
-    /**
-     * Yapılandırmaya göre uygun KeyStoreProvider oluşturur.
-     */
-    private KeyStoreProvider createKeyStoreProvider() {
-        if (StringUtils.hasText(config.getPkcs11LibraryPath())) {
-            return new PKCS11KeyStoreProvider(
-                config.getPkcs11LibraryPath(),
-                config.getPkcs11Slot(),
-                config.getPkcs11SlotIndex()
-            );
-        } else if (StringUtils.hasText(config.getPfxPath())) {
-            return new PfxKeyStoreProvider(config.getPfxPath());
-        } else {
-            throw new IllegalStateException(
-                "Ne PKCS11_LIBRARY ne de PFX_PATH yapılandırılmamış. " +
-                "Keystore bilgisi bulunamadı."
-            );
-        }
+        return ResponseEntity.ok(info);
     }
 }
 

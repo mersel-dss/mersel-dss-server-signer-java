@@ -1,0 +1,441 @@
+name: Publish Evidence Pages
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  "Evidence Site" — mersel-dss.github.io/mersel-dss-server-signer-java/
+# ─────────────────────────────────────────────────────────────────────────────
+#  Her main push'unda otomatik yayınlanan kanıt-temelli test merkezi.
+#
+#  İçerik (GitHub Pages root path):
+#    /              → custom landing (badges + cards + run metadata)
+#    /test-report/  → Allure Report (Suites/Behaviors/Categories/Trend)
+#                     Her test case attachment'ında imzalı dosya + verify.json
+#    /coverage/     → JaCoCo HTML (line/branch/method)
+#    /openapi/      → Scalar API Reference (canlı Spring Boot'tan çekilmiş
+#                     openapi.json + CDN-loaded @scalar/api-reference)
+#    /security/     → OWASP Dependency-Check raporu
+#
+#  Mimari prensipler:
+#    1) Bu workflow E2E ile birlikte BAŞARILI olsa da test fail OLSA da Pages
+#       publish edilir — fail kanıtı da değerlidir. Yalnızca infrastructure
+#       hatası (checkout/JDK/Maven kurulumu) durumunda deploy skip olur.
+#       Bunu Maven adımına `continue-on-error: true` ile sağlıyoruz; kritik
+#       artifact'lar yine üretilir (allure-results her test koşumunda yazılır,
+#       jacoco verify phase'inden bağımsız, openapi spec stateless).
+#    2) Allure history (trend grafiği için) actions/cache@v4 ile previous
+#       build'in `history/` klasörü restore edilip yeni report'a inject edilir.
+#    3) Verifier image GHCR'dan çekilir; çekilemezse E2E test'ler skip eder
+#       ama Pages yine publish edilir (boş test-report değil — service-layer
+#       unit testler default suite'te yine koşar).
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      skip_e2e:
+        description: 'Skip verifier-e2e suite (only unit tests)'
+        required: false
+        default: 'false'
+        type: choice
+        options: [ 'false', 'true' ]
+
+# Pages deploy için zorunlu permissions seti.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages eş zamanlı deploy'u GitHub tarafından sırayla işlenir; ama yarım
+# kalan bir deploy run'ı iptal etmek istemiyoruz — cancel-in-progress: false.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # BUILD: testler + raporlar + landing assembly → pages-output/
+  # ═════════════════════════════════════════════════════════════════════════
+  build:
+    name: Build Evidence Artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          java-version: '8'
+          distribution: 'temurin'
+          cache: maven
+
+      # ───────────────────────────────────────────────────────────────────
+      # NVD veri tabanı cache — OWASP Dependency-Check ilk koşumunda ~5 dk
+      # download yapar. ~/.m2/repository altında tutulan data klasörünü
+      # cache key'i ile restore ediyoruz; ay başı invalidate etmek için
+      # key'e ay-numarası ekliyoruz (NVD feed'i sürekli güncel kalır).
+      # ───────────────────────────────────────────────────────────────────
+      - name: Cache OWASP NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ steps.date.outputs.year_month }}
+          restore-keys: |
+            nvd-${{ runner.os }}-
+
+      - name: Capture date for cache keys
+        id: date
+        run: |
+          echo "year_month=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
+          echo "iso=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      # ───────────────────────────────────────────────────────────────────
+      # Allure history cache — trend grafiği için. allure:report goal'u
+      # results/ içindeki history/ klasörünü görürse trend chart üretir.
+      # Cache key sabit ('allure-history') — her run sonunda overwrite.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Restore Allure history (trend)
+        id: restore_allure_history
+        uses: actions/cache/restore@v4
+        with:
+          path: .allure-history
+          key: allure-history-${{ github.repository_id }}-v1
+
+      - name: Inject Allure history into results
+        run: |
+          set -euo pipefail
+          mkdir -p target/allure-results
+          if [ -d .allure-history ]; then
+            cp -r .allure-history target/allure-results/history
+            echo "✅ Previous Allure history restored ($(ls .allure-history | wc -l) files)"
+          else
+            echo "ℹ️  No previous Allure history found — trend chart will start from this build"
+          fi
+
+      - name: Verify Docker daemon (Testcontainers prereq)
+        run: |
+          set -euo pipefail
+          docker info > /dev/null
+          docker version --format 'docker {{.Client.Version}} / engine {{.Server.Version}}'
+
+      # ───────────────────────────────────────────────────────────────────
+      # Test koşumu — verify phase'i tetikler:
+      #   1) JaCoCo prepare-agent (Surefire argLine'a -javaagent inject)
+      #   2) Surefire (testler + allure-results dump)
+      #   3) JaCoCo report (target/site/jacoco)
+      #
+      # continue-on-error: test fail olsa bile sonraki adımlar çalışsın
+      # (Pages publish'in "fail kanıtı da değerli" prensibi).
+      # ───────────────────────────────────────────────────────────────────
+      - name: Run full test suite (unit + verifier-e2e)
+        id: tests
+        continue-on-error: true
+        env:
+          VERIFIER_IMAGE: ghcr.io/mersel-dss/mersel-dss-verifier-api-java:main
+          SKIP_E2E: ${{ github.event.inputs.skip_e2e || 'false' }}
+        run: |
+          set -uo pipefail
+          if [ "$SKIP_E2E" = "true" ]; then
+            echo "→ workflow_dispatch input skip_e2e=true → only unit tests"
+            mvn verify -B -DskipITs=false
+          else
+            echo "→ Full suite: unit + verifier-e2e (image: $VERIFIER_IMAGE)"
+            mvn verify -B \
+              -Dgroups= \
+              -DexcludedGroups=pkcs11-integration \
+              -DverifierImage="$VERIFIER_IMAGE"
+          fi
+
+      # ───────────────────────────────────────────────────────────────────
+      # Allure report — allure-results/ → static HTML. History inject
+      # edilmiş halde trend chart ile.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Generate Allure report
+        run: |
+          set -euo pipefail
+          mvn allure:report -B
+          ls -la target/site/allure-maven-plugin/ | head -5
+
+      # ───────────────────────────────────────────────────────────────────
+      # Allure history klasörünü cache'e save için ayır. report goal'u
+      # ürettiği rapordaki history/ klasörü sonraki run için baseline.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Extract Allure history for next run
+        run: |
+          set -euo pipefail
+          rm -rf .allure-history
+          if [ -d target/site/allure-maven-plugin/history ]; then
+            cp -r target/site/allure-maven-plugin/history .allure-history
+            echo "✅ Allure history saved for next build"
+          fi
+
+      - name: Save Allure history cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .allure-history
+          key: allure-history-${{ github.repository_id }}-v1
+
+      # ───────────────────────────────────────────────────────────────────
+      # OWASP Dependency-Check — NVD scan. failBuildOnCVSS=11 (pom config)
+      # sayesinde asla fail etmez; rapor info-only.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Run OWASP Dependency-Check
+        continue-on-error: true
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          set -uo pipefail
+          mvn dependency-check:check -B || true
+          ls -la target/dependency-check-report.* 2>/dev/null || echo "ℹ️  No dependency-check report (download failed?)"
+
+      # ───────────────────────────────────────────────────────────────────
+      # OpenAPI snapshot — Spring Boot uygulamasını başlat, /v3/api-docs
+      # çek, Scalar API Reference template'i ile CDN-loaded standalone
+      # HTML olarak openapi/ klasörünü hazırla. (Eski Swagger UI 5.x
+      # bundle ~3 MB / 19 dosya idi; Scalar tek HTML + openapi.json.)
+      # ───────────────────────────────────────────────────────────────────
+      - name: Build runnable jar (for OpenAPI extraction)
+        continue-on-error: true
+        run: mvn package -B -DskipTests
+
+      - name: Extract OpenAPI spec from live Spring Boot
+        id: openapi
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          JAR=$(ls target/*.jar 2>/dev/null | grep -v sources | grep -v javadoc | head -1)
+          if [ -z "$JAR" ]; then
+            echo "::warning::Runnable jar bulunamadı; OpenAPI snapshot atlandı"
+            exit 0
+          fi
+          echo "→ Booting: $JAR"
+          # 'local' Spring profile aktivasyonu → application-local.properties
+          # yüklenir: test PFX (resources/test-certs/) + dummy PIN + offline
+          # chain/TSP. Aynı profile yerel `mvn spring-boot:run` ve
+          # scripts/serve-pages-locally.sh tarafından da kullanılır.
+          # Production deployment'lara sızmaz — profile aktif edilmediğinde
+          # property'ler yüklenmez.
+          PFX_FOR_BOOT="resources/test-certs/testkurum01_rsa2048@test.com.tr_614573.pfx"
+          if [ ! -f "$PFX_FOR_BOOT" ]; then
+            echo "::warning::Test PFX yok ($PFX_FOR_BOOT); OpenAPI snapshot atlanıyor"
+            exit 0
+          fi
+          nohup java -jar "$JAR" \
+            --server.port=8088 \
+            --spring.main.banner-mode=off \
+            --spring.profiles.active=local \
+            > /tmp/boot.log 2>&1 &
+          BOOT_PID=$!
+          echo "boot_pid=$BOOT_PID" >> "$GITHUB_OUTPUT"
+
+          # Health-check polling — 60s max. NOT: springdoc-openapi 1.7.0
+          # (Spring Boot 2.x stilinde) default endpoint /api-docs —
+          # Spring Boot 3 / springdoc 2.x'teki /v3/api-docs DEĞİL.
+          ok=0
+          for i in $(seq 1 30); do
+            sleep 2
+            if curl -sf http://localhost:8088/api-docs -o /tmp/openapi.json; then
+              ok=1
+              echo "✅ OpenAPI spec çekildi (try $i)"
+              break
+            fi
+          done
+
+          # Kill background process before continuing
+          kill $BOOT_PID 2>/dev/null || true
+          sleep 2
+
+          if [ $ok -eq 0 ]; then
+            echo "::warning::OpenAPI endpoint ${i}x deneme sonrası yanıt vermedi"
+            echo "--- boot.log son 50 satır ---"
+            tail -50 /tmp/boot.log
+            exit 0
+          fi
+          echo "spec_ok=true" >> "$GITHUB_OUTPUT"
+          wc -c /tmp/openapi.json
+
+      - name: Assemble Scalar API Reference
+        if: steps.openapi.outputs.spec_ok == 'true'
+        run: |
+          set -euo pipefail
+          rm -rf openapi-snapshot
+          mkdir -p openapi-snapshot
+          cp /tmp/openapi.json openapi-snapshot/openapi.json
+          # Scalar standalone HTML — CDN'den @scalar/api-reference script'i
+          # <script id="api-reference" data-url="./openapi.json"> tag'ini
+          # bulup spec'i modern UI ile render eder. Tema "deepSpace"
+          # (koyu); diğer seçenekler: default, alternate, moon, purple,
+          # solarized, bluePlanet, saturn, kepler, mars, none.
+          cat > openapi-snapshot/index.html <<'SCALAR_EOF'
+          <!doctype html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8" />
+              <title>Mersel DSS Signer API — Reference</title>
+              <meta name="viewport" content="width=device-width, initial-scale=1" />
+              <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%90%3C/text%3E%3C/svg%3E" />
+            </head>
+            <body>
+              <script
+                id="api-reference"
+                data-url="./openapi.json"
+                data-configuration='{"theme":"deepSpace","layout":"modern","hideDownloadButton":false,"metaData":{"title":"Mersel DSS Signer API","description":"XAdES / CAdES / PAdES / WS-Security digital signature API"}}'></script>
+              <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+            </body>
+          </html>
+          SCALAR_EOF
+          ls -la openapi-snapshot/
+          echo "→ openapi.json: $(wc -c < openapi-snapshot/openapi.json) byte"
+
+      # ───────────────────────────────────────────────────────────────────
+      # Test count + coverage % değerlerini hesapla (landing'e inject için).
+      # ───────────────────────────────────────────────────────────────────
+      - name: Compute test metrics
+        id: metrics
+        run: |
+          set -uo pipefail
+          # Surefire XML'lerinden total/passed/failed çek
+          total=0; passed=0; failed=0
+          if compgen -G "target/surefire-reports/TEST-*.xml" > /dev/null; then
+            for f in target/surefire-reports/TEST-*.xml; do
+              t=$(grep -oE 'tests="[0-9]+"' "$f" | head -1 | grep -oE '[0-9]+' || echo 0)
+              er=$(grep -oE 'errors="[0-9]+"' "$f" | head -1 | grep -oE '[0-9]+' || echo 0)
+              fa=$(grep -oE 'failures="[0-9]+"' "$f" | head -1 | grep -oE '[0-9]+' || echo 0)
+              sk=$(grep -oE 'skipped="[0-9]+"' "$f" | head -1 | grep -oE '[0-9]+' || echo 0)
+              total=$((total + t))
+              failed=$((failed + er + fa))
+              passed=$((passed + t - er - fa - sk))
+            done
+          fi
+          echo "test_total=$total" >> "$GITHUB_OUTPUT"
+          echo "test_passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "test_failed=$failed" >> "$GITHUB_OUTPUT"
+          echo "→ Tests: $passed passed / $failed failed / $total total"
+
+          # JaCoCo HTML'sinden line + branch coverage %
+          # NOT: '[0-9]+' direkt kullanılırsa class="ctr2"deki "2"yi de
+          # yakalar. '>' delimiter'ı ile rakamı tag içine kilitle, sed
+          # ile yalnızca yüzde değerini çıkar.
+          line_pct=0
+          branch_pct=0
+          if [ -f target/site/jacoco/index.html ]; then
+            line_pct=$(grep -oE '<td class="ctr2">[0-9]+%' target/site/jacoco/index.html \
+                      | sed -E 's/.*>([0-9]+)%/\1/' | head -1 || echo 0)
+            branch_pct=$(grep -oE '<td class="ctr2">[0-9]+%' target/site/jacoco/index.html \
+                        | sed -E 's/.*>([0-9]+)%/\1/' | sed -n '2p' || echo 0)
+            [ -z "$line_pct" ] && line_pct=0
+            [ -z "$branch_pct" ] && branch_pct=0
+          fi
+          echo "coverage_pct=$line_pct" >> "$GITHUB_OUTPUT"
+          echo "branch_coverage_pct=$branch_pct" >> "$GITHUB_OUTPUT"
+          echo "→ Coverage: $line_pct% line / $branch_pct% branch"
+
+      # ───────────────────────────────────────────────────────────────────
+      # pages-output/ assembly — tüm raporları tek bir klasör altına topla.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Assemble pages-output
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          COMMIT_SHORT: ${{ github.sha }}
+          COMMIT_URL: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+          GENERATED_AT: ${{ steps.date.outputs.iso }}
+          TEST_TOTAL: ${{ steps.metrics.outputs.test_total }}
+          TEST_PASSED: ${{ steps.metrics.outputs.test_passed }}
+          TEST_FAILED: ${{ steps.metrics.outputs.test_failed }}
+          COVERAGE_PCT: ${{ steps.metrics.outputs.coverage_pct }}
+          BRANCH_COVERAGE_PCT: ${{ steps.metrics.outputs.branch_coverage_pct }}
+          REPO_SLUG: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          rm -rf pages-output
+          mkdir -p pages-output/{test-report,coverage,openapi,security}
+
+          # Allure
+          if [ -d target/site/allure-maven-plugin ]; then
+            cp -r target/site/allure-maven-plugin/. pages-output/test-report/
+          else
+            echo "<h1>Test report unavailable</h1><p>Allure report could not be generated.</p>" \
+              > pages-output/test-report/index.html
+          fi
+
+          # JaCoCo
+          if [ -d target/site/jacoco ]; then
+            cp -r target/site/jacoco/. pages-output/coverage/
+          else
+            echo "<h1>Coverage unavailable</h1><p>JaCoCo report could not be generated.</p>" \
+              > pages-output/coverage/index.html
+          fi
+
+          # OpenAPI / Scalar API Reference
+          if [ -d openapi-snapshot ]; then
+            cp -r openapi-snapshot/. pages-output/openapi/
+          else
+            echo "<h1>OpenAPI snapshot unavailable</h1><p>Could not boot Spring app to extract /v3/api-docs.</p>" \
+              > pages-output/openapi/index.html
+          fi
+
+          # OWASP Dependency-Check
+          if [ -f target/dependency-check-report.html ]; then
+            cp target/dependency-check-report.html pages-output/security/index.html
+            if [ -f target/dependency-check-report.json ]; then
+              cp target/dependency-check-report.json pages-output/security/report.json
+            fi
+          else
+            echo "<h1>Security report unavailable</h1><p>OWASP Dependency-Check report could not be generated.</p>" \
+              > pages-output/security/index.html
+          fi
+
+          # Landing — envsubst ile run metadata inject
+          # NOT: shell expansion'ı engellemek için landing'deki tüm $
+          # placeholder'ları ${VAR} formatında yazılmış olmalı.
+          envsubst < docs/landing/index.html > pages-output/index.html
+
+          # 404 → root'a redirect
+          cat > pages-output/404.html <<'EOF'
+          <!doctype html>
+          <meta charset=utf-8>
+          <meta http-equiv="refresh" content="0; url=./">
+          <title>Not found — Mersel DSS Evidence</title>
+          <p>Aradığınız sayfa burada değil; <a href="./">ana sayfa</a>ya yönlendiriliyorsunuz.</p>
+          EOF
+
+          echo "===== pages-output structure ====="
+          find pages-output -maxdepth 2 -type d | sort
+
+      - name: Upload Surefire reports (artifact, retention)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          retention-days: 14
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages-output
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # DEPLOY: pages-output → GitHub Pages
+  # ═════════════════════════════════════════════════════════════════════════
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -25,7 +25,6 @@ import eu.europa.esig.dss.xades.XAdESSignatureParameters;
 import eu.europa.esig.dss.xades.reference.DSSReference;
 import eu.europa.esig.dss.xades.signature.XAdESLevelC;
 import eu.europa.esig.dss.xades.signature.XAdESService;
-import eu.europa.esig.dss.xades.signature.XAdESSignatureBuilder;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
@@ -180,20 +179,28 @@ public class XAdESSignatureService {
                 }
             }
 
-            // İmza oluşturucuyu hazırla
-            XAdESSignatureBuilder signatureBuilder = XAdESSignatureBuilder.getSignatureBuilder(
-                    parameters, dssDocument, certificateVerifier);
-            parameters.getContext().setBuilder(signatureBuilder);
-
-            ToBeSigned dataToSign = new ToBeSigned(signatureBuilder.build());
+            ToBeSigned dataToSign = xadesService.getDataToSign(dssDocument, parameters);
 
             // Veriyi imzala
             SignatureValue signatureValue = cryptoSigner.sign(
                     dataToSign,
-                    material.getPrivateKey(),
+                    material,
                     parameters.getDigestAlgorithm());
 
-            // SignatureValue'yu yakala (response için)
+            // XML-DSig (XAdES) spec'i ECDSA SignatureValue'nun r||s (plain) formatında
+            // olmasını şart koşar; DSS XAdESSignatureBuilder.signDocument() içinde
+            // ensurePlainSignatureValue() çağrısı bulunmasına rağmen 6.3 sürümünde
+            // bazı senaryolarda DER bytes XML'e olduğu gibi yazılıyor ve sonuçta
+            // verifier SIG_CRYPTO_FAILURE üretiyor. Burada DSS'e vermeden önce
+            // explicit convert ederek tüm akışlar için garanti altına alıyoruz.
+            // RSA için ensurePlainSignatureValue no-op, bu yüzden zararsız.
+            signatureValue = ensureXadesSignatureValueFormat(parameters, signatureValue);
+
+            // ÖNEMLİ: capturedSignatureValue'yu DÖNÜŞÜM SONRASI değerle set et.
+            // Aksi halde response'taki "x-signature-value" header'ı (ve
+            // SignResponse.signatureValue) XML içindeki gerçek <ds:SignatureValue>
+            // ile uyuşmaz — ECDSA için header DER, XML plain r||s döner. Tüketici
+            // tarafın header'ı XML ile diff'lediği akışlar sessizce kırılır.
             capturedSignatureValue = signatureValue;
 
             // İmzalı belgeyi oluştur
@@ -276,6 +283,41 @@ public class XAdESSignatureService {
 
         LOGGER.debug("Doğrulayıcıya {} adet sertifika eklendi",
                 material.getCertificateTokens().size());
+    }
+
+    /**
+     * XAdES SignatureValue formatını (r||s plain) garantiler. ECDSA için DSS'in
+     * {@link eu.europa.esig.dss.spi.DSSASN1Utils#ensurePlainSignatureValue} yardımcısını
+     * çağırır; RSA için no-op.
+     *
+     * <h3>Neden burada?</h3>
+     * DSS XAdES Builder iç akışında zaten aynı convert çağrısı vardır; ancak
+     * 6.3'te bazı entegrasyon senaryolarında (özellikle 2-aşamalı dış imza akışı
+     * ve sonradan DOM manipülasyonu birleştirildiğinde) bu çağrı no-op haline
+     * gelebiliyor ve DER bytes XML'e yansıyıp imza verify'ı SIG_CRYPTO_FAILURE
+     * dönüyor. Burada explicit garantilemek hem ürünü DSS sürümü davranış
+     * varyasyonlarından izole eder hem de XML-DSig spec uyumunu net bir
+     * sözleşmeye bağlar.
+     */
+    private static SignatureValue ensureXadesSignatureValueFormat(
+            XAdESSignatureParameters parameters, SignatureValue signatureValue) {
+        eu.europa.esig.dss.enumerations.EncryptionAlgorithm enc =
+                parameters.getEncryptionAlgorithm();
+        if (enc != eu.europa.esig.dss.enumerations.EncryptionAlgorithm.ECDSA
+                && enc != eu.europa.esig.dss.enumerations.EncryptionAlgorithm.PLAIN_ECDSA) {
+            return signatureValue;
+        }
+        byte[] raw = signatureValue.getValue();
+        if (!eu.europa.esig.dss.spi.DSSASN1Utils.isAsn1EncodedSignatureValue(raw)) {
+            return signatureValue;
+        }
+        byte[] plain = eu.europa.esig.dss.spi.DSSASN1Utils.ensurePlainSignatureValue(enc, raw);
+        if (plain == raw || java.util.Arrays.equals(plain, raw)) {
+            return signatureValue;
+        }
+        LOGGER.debug("XAdES ECDSA SignatureValue {} byte DER → {} byte plain (r||s) çevrildi",
+                raw.length, plain.length);
+        return new SignatureValue(signatureValue.getAlgorithm(), plain);
     }
 
     /**
