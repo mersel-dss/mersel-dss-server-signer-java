@@ -20,7 +20,7 @@ GitHub Issues'a 1:1 dönüştürülebilir.
 | C) CAdES Binary varyasyonları | ✅ pratik kapsam tamam | 4 fixture × 2 mode = 8 senaryo; large/docx/zip ⏸ |
 | D) WS-Security SOAP varyasyonları | ✅ tamamlandı | 90 ana + 3 kontrat + 3 hash-param + 3 envelope-parity + 1 concurrent |
 | F) Negatif security testleri | ✅ tamamlandı | 2 parser + 6 sign+tamper |
-| 🔴 Sertifika lifecycle negatifleri | ✅ aktif (turn-12) | `CertificateLifecycleNegativeE2ETest`: 6 PFX × 4 format = **24/24 PASS, 0 SKIP** (XAdES + CAdES + PAdES + WSS hepsi). Lokal `mersel-dss-verifier-api:local` image ile doğrulandı; GHCR `:main` image stale ([verifier#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)) — rebuild tamamlanınca default CI'da da 24/24 PASS olur. |
+| 🔴 Sertifika lifecycle negatifleri | ✅ aktif (turn-12) | `CertificateLifecycleNegativeE2ETest`: 6 PFX × 4 format = **24/24 PASS, 0 SKIP** (XAdES + CAdES + PAdES + WSS hepsi). GHCR `:main` fresh image rebuild sonrası ([verifier#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)) flag gerekmeden 24/24 PASS doğrulandı. |
 | G) HTTP/API kontratı | ✅ tamamlandı | G-1..G-6 hepsi kapalı (production kodu +1 mapping) |
 | H) HSM / PKCS#11 kontratı | ✅ tamamlandı | H-1 + H-2 + H-3 |
 | 📤 Signed-artifact export | ✅ aktif | `target/signed-artifacts/` — `SignedArtifactExporter` (turn-9) — 3rd-party verify için ~290 binary/koşu |
@@ -678,19 +678,18 @@ download'lanabilir; üst kısımda 3 mevzuat/fixture linki tek-tık erişim.
 > | SUSPENDED × XAdES | `TRY_LATER` | ✅ |
 > | REVOKED   × WSS   | `NO_SIGNING_CERTIFICATE_FOUND` | ⚠ (WSS BST yolu DSS XAdES validator'la cert reach edemiyor; rejection yine de doğru) |
 >
-> ### Default CI ortamı (GHCR `:main`) — geçici skip
+> ### GHCR `:main` image rebuild — ✅ fix sertifikalandı
 >
-> `-DverifierImage` flag'i kullanılmazsa `CertificateLifecycleNegativeE2ETest`
-> CAdES + PAdES senaryolarında **12 SKIP** verir. Sebep:
-> `ghcr.io/mersel-dss/mersel-dss-verifier-api-java:main` image fat-jar
-> içinde `dss-cms-object` + `dss-pades-pdfbox` JAR'ları VAR ama runtime'da
-> `ServiceLoader` provider'ı görmüyor (Spring Boot fat-jar packaging stale
-> cache). Lokal `mvn clean package` ile build edilen image'da sorun çıkmıyor.
+> Önceki koşumda `-DverifierImage` flag olmadan CAdES + PAdES senaryolarında
+> 12 SKIP vardı (`No implementation found for ICMSUtils/IPdfObjFactory`).
+> Sebep: GHCR `:main` image fat-jar içinde JAR'lar VAR ama Spring Boot
+> runtime'da `ServiceLoader` provider'ları görmüyordu — packaging stale cache.
 >
-> Upstream issue: [mersel-dss/mersel-dss-verifier-api-java#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)
-> — `workflow_dispatch` ile rebuild tetiklendi (turn-12). Rebuild tamamlanıp
-> GHCR'a yeni image push edilince **flag olmadan da 24/24 PASS** olur.
-> Skip-tolerant test design'ı bu image transition'ı sırasında CI'yi kırmaz.
+> [mersel-dss/mersel-dss-verifier-api-java#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)
+> ile `workflow_dispatch` rebuild tetiklendi (1m 1s, success).
+> Fresh image pull edildikten sonra **flag gerekmeden** 24/24 PASS doğrulandı.
+> Skip-tolerant test design'ı (`Assumptions.assumeTrue(false)`) korundu —
+> gelecek benzer image transition'larında CI kırılmaz.
 
 ---
 
