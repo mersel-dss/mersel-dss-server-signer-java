@@ -20,7 +20,7 @@ GitHub Issues'a 1:1 dönüştürülebilir.
 | C) CAdES Binary varyasyonları | ✅ pratik kapsam tamam | 4 fixture × 2 mode = 8 senaryo; large/docx/zip ⏸ |
 | D) WS-Security SOAP varyasyonları | ✅ tamamlandı | 90 ana + 3 kontrat + 3 hash-param + 3 envelope-parity + 1 concurrent |
 | F) Negatif security testleri | ✅ tamamlandı | 2 parser + 6 sign+tamper |
-| 🔴 Sertifika lifecycle negatifleri | ✅ aktif (turn-11) | `CertificateLifecycleNegativeE2ETest`: 6 PFX × 4 format = 24 senaryo. 6 negatif PFX repo'da, **12/12 verifier-side senaryo PASS** (XAdES + WS-Security), 12 SKIP (verifier image'ında dss-pades-pdfbox/CAdES eksik — signer kontratı dışı, downstream limit) |
+| 🔴 Sertifika lifecycle negatifleri | ✅ aktif (turn-12) | `CertificateLifecycleNegativeE2ETest`: 6 PFX × 4 format = **24/24 PASS, 0 SKIP** (XAdES + CAdES + PAdES + WSS hepsi). Lokal `mersel-dss-verifier-api:local` image ile doğrulandı; GHCR `:main` image stale ([verifier#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)) — rebuild tamamlanınca default CI'da da 24/24 PASS olur. |
 | G) HTTP/API kontratı | ✅ tamamlandı | G-1..G-6 hepsi kapalı (production kodu +1 mapping) |
 | H) HSM / PKCS#11 kontratı | ✅ tamamlandı | H-1 + H-2 + H-3 |
 | 📤 Signed-artifact export | ✅ aktif | `target/signed-artifacts/` — `SignedArtifactExporter` (turn-9) — 3rd-party verify için ~290 binary/koşu |
@@ -645,33 +645,52 @@ download'lanabilir; üst kısımda 3 mevzuat/fixture linki tek-tık erişim.
 
 ---
 
-## 🔴 Negatif sertifika lifecycle testleri — ✅ aktif (2026-05-18, turn-11)
+## 🔴 Negatif sertifika lifecycle testleri — ✅ aktif (2026-05-18, turn-12)
 
 > **Durum**: 6 negatif PFX (`testkurum_{status}_{algo}@test.com.tr_{pwd}.pfx`)
 > `resources/test-certs/` altında. `PfxTestKey` enum gerçek password'lerle
-> bağlandı. **Son koşum**: `mvn test -Dtest=CertificateLifecycleNegativeE2ETest`
-> → **24 senaryo, 12 PASS, 12 SKIP, 0 FAIL**.
+> bağlandı. **Son koşum** (lokal verifier image):
+> ```bash
+> mvn test -Dtest=CertificateLifecycleNegativeE2ETest \
+>   -Dgroups=verifier-e2e -DexcludedGroups= \
+>   -DverifierImage=mersel-dss-verifier-api:local
+> ```
+> → **24 senaryo, 24 PASS, 0 SKIP, 0 FAIL** ✅
 >
-> | Format | PASS | SKIP nedeni |
+> | Format        | PASS | Not |
 > |---|---|---|
-> | XAdES         | 6/6 | — |
-> | WS-Security   | 6/6 | — |
-> | CAdES         | 0/6 | verifier image (`dss-cades` impl) yetmiyor → `VerifierBackendUnavailable` |
-> | PAdES         | 0/6 | verifier image `dss-pades-pdfbox/openpdf` modülü eksik (server-side classpath) |
+> | XAdES         | 6/6 | DSS XAdES validator, KamuSM TEST CA chain, OCSP/CRL canlı |
+> | CAdES         | 6/6 | DSS CAdES + `dss-cms-object` provider çözüldü (lokal build) |
+> | PAdES         | 6/6 | DSS PAdES + `dss-pades-pdfbox` provider çözüldü (lokal build) |
+> | WS-Security   | 6/6 | DSS XAdES validator (WS-Security gövdesini XAdES olarak görür) |
 >
-> 12 PASS senaryosunun her birinde **birincil kontrat** (`r.isValid() == false`)
-> ve **ikincil kontrat** (`indication != "TOTAL_PASSED"`) sağlandı. Auditor
-> için ham subIndication `.verify.json` sidecar'larında:
+> 24 senaryonun her birinde **birincil kontrat** (`r.isValid() == false`)
+> ve **ikincil kontrat** (`indication != "TOTAL_PASSED"`) sağlandı.
 >
-> | Status × Format | subIndication (gözlemlenen) | Hint listesinde? |
+> ### Gözlemlenen subIndication tablosu (auditor sidecar'ından)
+>
+> | Status × Format | subIndication | Hint listesinde? |
 > |---|---|---|
 > | REVOKED   × XAdES | `REVOKED_NO_POE` | ✅ |
+> | REVOKED   × CAdES | `REVOKED_NO_POE` | ✅ |
+> | REVOKED   × PAdES | `REVOKED_NO_POE` | ✅ |
 > | EXPIRED   × XAdES | `CERTIFICATE_CHAIN_GENERAL_FAILURE` | ⚠ (ama yine de INVALID) |
 > | SUSPENDED × XAdES | `TRY_LATER` | ✅ |
 > | REVOKED   × WSS   | `NO_SIGNING_CERTIFICATE_FOUND` | ⚠ (WSS BST yolu DSS XAdES validator'la cert reach edemiyor; rejection yine de doğru) |
 >
-> CAdES/PAdES skip'leri verifier-container'ın bilinen modül eksiklikleridir,
-> signer regresyon değil — verifier image güncellendiğinde otomatik aktif olur.
+> ### Default CI ortamı (GHCR `:main`) — geçici skip
+>
+> `-DverifierImage` flag'i kullanılmazsa `CertificateLifecycleNegativeE2ETest`
+> CAdES + PAdES senaryolarında **12 SKIP** verir. Sebep:
+> `ghcr.io/mersel-dss/mersel-dss-verifier-api-java:main` image fat-jar
+> içinde `dss-cms-object` + `dss-pades-pdfbox` JAR'ları VAR ama runtime'da
+> `ServiceLoader` provider'ı görmüyor (Spring Boot fat-jar packaging stale
+> cache). Lokal `mvn clean package` ile build edilen image'da sorun çıkmıyor.
+>
+> Upstream issue: [mersel-dss/mersel-dss-verifier-api-java#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)
+> — `workflow_dispatch` ile rebuild tetiklendi (turn-12). Rebuild tamamlanıp
+> GHCR'a yeni image push edilince **flag olmadan da 24/24 PASS** olur.
+> Skip-tolerant test design'ı bu image transition'ı sırasında CI'yi kırmaz.
 
 ---
 

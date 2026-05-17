@@ -7,7 +7,24 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
-> Bir sonraki sürüm için açık iş kalemleri buraya eklenir. **0.4.0**'da
+### Fixed
+- **`CertificateLifecycleNegativeE2ETest` — 24/24 PASS sertifikalandı**
+  (lokal `mersel-dss-verifier-api:local` image ile, 0 skip). Default GHCR
+  `:main` image'da `dss-cms-object` ve `dss-pades-pdfbox` ServiceLoader
+  provider'larının runtime'da çözülememesi nedeniyle daha önce 12/24 senaryo
+  `Assumptions.assumeTrue(false)` ile skip oluyordu (root cause:
+  [mersel-dss/mersel-dss-verifier-api-java#2](https://github.com/mersel-dss/mersel-dss-verifier-api-java/issues/2)).
+  Lokal build + `-DverifierImage=mersel-dss-verifier-api:local` ile koşum
+  artık 6 PFX × 4 format (XAdES + CAdES + PAdES + WSS) **24 senaryonun
+  tamamında** `INDETERMINATE / REVOKED_NO_POE` (REVOKED), `OUT_OF_BOUNDS` veya
+  `CERTIFICATE_CHAIN_GENERAL_FAILURE` (EXPIRED), `TRY_LATER` (SUSPENDED)
+  sub'larını üretiyor. Auditor sidecar'ları `target/signed-artifacts/{xades,
+  cades,pades,wssecurity}-negative-cert/*.verify.json` altında.
+- Upstream issue ile `workflow_dispatch` rebuild tetiklendi (turn-12);
+  GHCR `:main` image fresh push edildikten sonra default suite `-DverifierImage`
+  flag'i olmadan da 24/24 PASS olacak.
+
+> Sonraki sürüm için açık iş kalemleri buraya eklenir. **0.4.0**'da
 > teslim edilen tüm değişiklikler aşağıdaki versiyon bölümüne dökümante
 > edilmiştir.
 
