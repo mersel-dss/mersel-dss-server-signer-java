@@ -117,7 +117,8 @@ public class SignatureConfiguration {
             config.getPkcs11LibraryPath(),
             slot,
             slotIndex,
-            pin);
+            pin,
+            config.isPkcs11NullInitArgs());
     }
 
     /** {@code PKCS11_SLOT:-1} default convention'ını {@code null}'a normalize eder. */

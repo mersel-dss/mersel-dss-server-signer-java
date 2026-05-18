@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,6 +37,9 @@ import static org.mockito.Mockito.mock;
  * olarak erişir — bu yüzler API olarak public değil ama davranış kontratı
  * production güvenliği için kritik.</p>
  */
+@Epic("PKCS#11 Integration")
+@Feature("IAIK Module — Key/Cert Binding")
+@Severity(SeverityLevel.CRITICAL)
 class IaikPkcs11ModuleKeyBindingTest {
 
     private static Class<?> tokenObjectClass;

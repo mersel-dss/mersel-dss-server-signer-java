@@ -2,6 +2,10 @@ package io.mersel.dss.signer.api.services.keystore;
 
 import io.mersel.dss.signer.api.exceptions.KeyStoreException;
 import io.mersel.dss.signer.api.models.SigningKeyEntry;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -43,6 +47,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * PKCS#12 üretir (BC ile in-memory). Bu, fixture'ların değişiminden
  * bağımsız kontrat doğrulaması sağlar.</p>
  */
+@Epic("Service Layer")
+@Feature("KeyStore Loader (PFX/PKCS#12)")
+@Severity(SeverityLevel.NORMAL)
 class KeyStoreLoaderServiceContractTest {
 
     private static final char[] CORRECT_PIN = "test-pin".toCharArray();

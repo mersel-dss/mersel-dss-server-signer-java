@@ -22,6 +22,8 @@ import org.xipki.pkcs11.wrapper.TokenException;
 import org.xipki.pkcs11.wrapper.TokenInfo;
 
 import java.io.ByteArrayInputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.cert.CertificateFactory;
@@ -81,6 +83,14 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     private final char[] pin;
 
     /**
+     * Operatör elinde "bu kütüphane standart {@code C_Initialize(args)} kabul
+     * etmiyor" bilgisi varsa (TÜBİTAK BİLGEM AKİS macOS sürücüsünün klasik
+     * bug'ı) trial-and-error yapmadan doğrudan NULL-args yoluna gitmesini
+     * sağlar. Env var: {@code PKCS11_NULL_INIT_ARGS=true}.
+     */
+    private final boolean forceNullInitArgs;
+
+    /**
      * Per-thread {@link CertificateFactory}. {@code CertificateFactory} JDK
      * specifikasyonunda <em>thread-safe garanti edilmiyor</em>: "Some
      * implementations are thread-safe ... while others are not." SUN sağlayıcı
@@ -115,16 +125,33 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     private volatile boolean ownsInitialization = false;
 
     /**
+     * AKİS / TÜBİTAK uyumluluk yolu: {@code C_Initialize} {@code NULL} args ile
+     * yapıldıysa true. PKCS#11 v2.40 spec §5.4: "If pInitArgs is NULL_PTR,
+     * Cryptoki may not use threads." Bu yüzden bu modda {@link PKCS11Token}
+     * havuzunu <b>tek session</b>'a sıkıştırıyoruz — kütüphanenin paralel
+     * çağrı altında çökmesini ya da sessiz veri bozulmasını önlemek için.
+     * Akıllı kart donanımı zaten paralel oturum kaldırmıyor; bu kısıt gerçek
+     * kullanım için maliyetsiz.
+     */
+    private volatile boolean singleThreadedMode = false;
+
+    /**
      * İmza ataçımı için bulunan ilk private key + cert eşleşmesi cache'i.
      * Concurrent: {@link ConcurrentHashMap#computeIfAbsent} ile lock-free okuma.
      */
     private final Map<String, ResolvedKey> resolvedKeyCache = new ConcurrentHashMap<>();
 
     public IaikPkcs11Module(String libraryPath, Long slot, Long slotIndex, char[] pin) {
+        this(libraryPath, slot, slotIndex, pin, false);
+    }
+
+    public IaikPkcs11Module(String libraryPath, Long slot, Long slotIndex, char[] pin,
+                            boolean forceNullInitArgs) {
         this.libraryPath = libraryPath;
         this.slot = slot;
         this.slotIndex = slotIndex;
         this.pin = pin == null ? null : pin.clone();
+        this.forceNullInitArgs = forceNullInitArgs;
     }
 
     // --------------------------------------------------------------------
@@ -136,7 +163,9 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
         try {
             LOGGER.info("ipkcs11wrapper modülü yükleniyor: library={}", libraryPath);
             module = PKCS11Module.getInstance(libraryPath);
-            ownsInitialization = initializeIdempotent(module);
+            InitOutcome outcome = initializeIdempotent(module, forceNullInitArgs);
+            ownsInitialization = outcome.owned;
+            singleThreadedMode = outcome.singleThreaded;
 
             Token rawToken = resolveToken();
             TokenInfo info = rawToken.getTokenInfo();
@@ -153,7 +182,17 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
                 LOGGER.warn("PIN sağlanmadı; private key'lere erişim "
                     + "CKA_PRIVATE=true objeler için başarısız olacak.");
             }
-            token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin);
+            // singleThreadedMode: PKCS#11 spec §5.4 NULL-init-args yolunda
+            // kütüphane thread güvencesi vermez → numSessions=1 ile pool'u
+            // sıkıştırırız; PKCS11Token kuyrukta seri kullandırır.
+            if (singleThreadedMode) {
+                LOGGER.info("AKİS uyumluluk modu aktif: PKCS11Token tek session ile "
+                    + "yaratılıyor (kütüphane paralel session güvencesi vermiyor).");
+                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
+                    Integer.valueOf(1));
+            } else {
+                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin);
+            }
             if (effectivePin != null) {
                 LOGGER.info("HSM token'a USER olarak login başarılı.");
             }
@@ -200,6 +239,7 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
                     }
                     module = null;
                     ownsInitialization = false;
+                    singleThreadedMode = false;
                 }
                 if (pin != null) {
                     Arrays.fill(pin, '\0');
@@ -677,6 +717,7 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
         token = null;
         module = null;
         ownsInitialization = false;
+        singleThreadedMode = false;
     }
 
     private static X509Certificate parseCert(byte[] der) {
@@ -704,22 +745,144 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      * edilmişse SafeNet PSI-E3 gibi yapılar {@code CKR_CRYPTOKI_ALREADY_INITIALIZED}
      * fırlatır. Bu durumu ölümcül kabul etmiyoruz — modülü zaten kullanabiliriz.
      *
-     * @return {@code true} eğer {@code C_Initialize} bu çağrıda başarıyla
-     *         çalıştıysa (sahiplik bizdedir; destroy'da finalize çağrılabilir);
-     *         {@code false} eğer Cryptoki başka bir bileşen tarafından zaten
-     *         init edilmişse (finalize çağırırsak diğer bileşenleri patlatırız).
+     * <h3>AKİS uyumluluk fallback'i</h3>
+     * <p>TÜBİTAK BİLGEM'in {@code libakisp11.dylib} (macOS) ve bazı eski
+     * {@code libakisp11.so} (Linux) sürücüleri xipki'nin standart
+     * {@code C_Initialize(CK_C_INITIALIZE_ARGS{flags=CKF_OS_LOCKING_OK})}
+     * çağrısına {@code CKR_ARGUMENTS_BAD} döner — kütüphane macOS/Linux'ta
+     * yalnızca {@code C_Initialize(NULL)} formunu kabul ediyor (Windows
+     * portunda problem yok). Bu sürücü bug'ı için xipki'nin
+     * {@code PKCS11Module.initialize()} metodunu by-pass edip alttaki
+     * {@code PKCS11Implementation.C_Initialize(null, true)}'a doğrudan
+     * gidiyoruz; ardından {@code moduleInfo} ve {@code initVendor()}'ı
+     * reflection ile çalıştırıyoruz.</p>
+     *
+     * <p><b>Trade-off:</b> NULL args = PKCS#11 spec §5.4 gereği kütüphane
+     * thread-unsafe sayılır; {@link #afterPropertiesSet()} bu modu algılayıp
+     * {@link PKCS11Token} pool'unu {@code numSessions=1}'e indirir. Akıllı
+     * kart donanımı zaten paralel oturum kaldırmıyor → kullanıcı için
+     * görünür bir performans kaybı yok.</p>
+     *
+     * @return Sahiplik (finalize bizde mi?) ve mod (tek-thread mu?) bilgisi.
      */
-    private static boolean initializeIdempotent(PKCS11Module module) throws PKCS11Exception {
+    private static InitOutcome initializeIdempotent(PKCS11Module module,
+                                                    boolean forceNullInitArgs) throws PKCS11Exception {
+        if (forceNullInitArgs) {
+            LOGGER.info("PKCS11_NULL_INIT_ARGS=true → standart C_Initialize denenmeden "
+                + "doğrudan NULL-args yoluna gidiliyor (AKİS / TÜBİTAK uyumluluk modu).");
+            initializeWithNullArgs(module);
+            return new InitOutcome(true, true);
+        }
         try {
             module.initialize();
-            return true;
+            return new InitOutcome(true, false);
         } catch (PKCS11Exception e) {
             if (e.getErrorCode() == PKCS11Constants.CKR_CRYPTOKI_ALREADY_INITIALIZED) {
                 LOGGER.info("PKCS#11 modülü önceden initialize edilmiş; mevcut state kullanılıyor "
                     + "ve destroy() üzerinde finalize çağrılmayacak (paylaşımlı state korunur).");
-                return false;
+                return new InitOutcome(false, false);
+            }
+            if (e.getErrorCode() == PKCS11Constants.CKR_ARGUMENTS_BAD) {
+                // AKİS macOS sürücüsü tipik davranışı. Reflection ile NULL-args
+                // yoluna düş; başarılıysa singleThreadedMode aktive ederiz.
+                LOGGER.warn("Standart C_Initialize CKR_ARGUMENTS_BAD ile reddedildi "
+                    + "(genellikle TÜBİTAK AKİS macOS/Linux sürücüsü). NULL-args "
+                    + "fallback deneniyor (AKİS uyumluluk modu).");
+                initializeWithNullArgs(module);
+                LOGGER.info("NULL-args fallback başarılı; bundan sonra tek session "
+                    + "modunda çalışacağız (PKCS#11 spec §5.4).");
+                return new InitOutcome(true, true);
             }
             throw e;
+        }
+    }
+
+    /**
+     * xipki {@link PKCS11Module} private {@code pkcs11} alanını reflection ile
+     * tutuyoruz; alttaki IAIK {@code PKCS11Implementation.C_Initialize(null, true)}
+     * çağrısını doğrudan yapıyoruz. Ardından moduleInfo + vendor init adımlarını
+     * da reflection ile çalıştırıyoruz ki sonraki çağrılar (örn.
+     * {@code module.codeToName}) çökmeyelim.
+     *
+     * <p>İstisna yönetimi: moduleInfo / initVendor adımları best-effort —
+     * vendor.conf'ta AKİS girdisi yok, sorun değil; standart RSA/ECDSA
+     * mekanizmaları ipkcs11wrapper'da vendor-bağımsız çözülür.</p>
+     */
+    private static void initializeWithNullArgs(PKCS11Module module) throws PKCS11Exception {
+        try {
+            Field pkcs11Field = PKCS11Module.class.getDeclaredField("pkcs11");
+            pkcs11Field.setAccessible(true);
+            Object pkcs11Impl = pkcs11Field.get(module);
+            if (pkcs11Impl == null) {
+                throw new IllegalStateException("PKCS11Module.pkcs11 reflection alanı null döndü; "
+                    + "ipkcs11wrapper sürümü beklenenden farklı olabilir.");
+            }
+
+            Method cInit = pkcs11Impl.getClass()
+                .getMethod("C_Initialize", Object.class, boolean.class);
+            try {
+                // Object[] cast explicit — varargs ambiguity'den kaçınmak için.
+                cInit.invoke(pkcs11Impl, new Object[] { null, Boolean.TRUE });
+            } catch (java.lang.reflect.InvocationTargetException ite) {
+                Throwable cause = ite.getCause();
+                if (cause instanceof iaik.pkcs.pkcs11.wrapper.PKCS11Exception) {
+                    iaik.pkcs.pkcs11.wrapper.PKCS11Exception iaikEx =
+                        (iaik.pkcs.pkcs11.wrapper.PKCS11Exception) cause;
+                    if (iaikEx.getErrorCode() == PKCS11Constants.CKR_CRYPTOKI_ALREADY_INITIALIZED) {
+                        // Ortak bir bileşen Cryptoki state'i zaten tutuyor;
+                        // outer initializeIdempotent ALREADY_INITIALIZED dalında
+                        // ownership=false döndürmeli — biz buraya düştüysek
+                        // demek ki ilk denemede başarılı olmadık ama başka biri
+                        // initialize etmiş. Bu nadir bir yarış; konservatif:
+                        // sahipliği reddet.
+                        throw new PKCS11Exception(iaikEx.getErrorCode());
+                    }
+                    throw new PKCS11Exception(iaikEx.getErrorCode());
+                }
+                throw new IllegalStateException("Beklenmedik native C_Initialize hatası", cause);
+            }
+
+            // Best-effort: moduleInfo + initVendor.
+            try {
+                Method cGetInfo = pkcs11Impl.getClass().getMethod("C_GetInfo");
+                Object ckInfo = cGetInfo.invoke(pkcs11Impl);
+                Class<?> ckInfoClass = Class.forName("iaik.pkcs.pkcs11.wrapper.CK_INFO");
+                Class<?> moduleInfoClass = Class.forName("org.xipki.pkcs11.wrapper.ModuleInfo");
+                Object moduleInfo = moduleInfoClass
+                    .getConstructor(ckInfoClass).newInstance(ckInfo);
+                Field moduleInfoField = PKCS11Module.class.getDeclaredField("moduleInfo");
+                moduleInfoField.setAccessible(true);
+                moduleInfoField.set(module, moduleInfo);
+            } catch (Exception ignored) {
+                LOGGER.debug("moduleInfo best-effort populate başarısız (kritik değil): {}",
+                    ignored.getMessage());
+            }
+            try {
+                Method initVendor = PKCS11Module.class.getDeclaredMethod("initVendor");
+                initVendor.setAccessible(true);
+                initVendor.invoke(module);
+            } catch (Exception ignored) {
+                LOGGER.debug("initVendor best-effort çağrı başarısız (kritik değil): {}",
+                    ignored.getMessage());
+            }
+        } catch (PKCS11Exception | RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            // Reflection / native köprüsünde beklenmedik hata → operatöre
+            // mesaj zincirini görünür tut.
+            throw new IllegalStateException(
+                "ipkcs11wrapper NULL-init-args fallback yolu başarısız: "
+                + ex.getMessage(), ex);
+        }
+    }
+
+    /** {@link #initializeIdempotent} sonucu. Çağıran sınıf hangi yolu aldığımızı bilmeli. */
+    private static final class InitOutcome {
+        final boolean owned;
+        final boolean singleThreaded;
+        InitOutcome(boolean owned, boolean singleThreaded) {
+            this.owned = owned;
+            this.singleThreaded = singleThreaded;
         }
     }
 

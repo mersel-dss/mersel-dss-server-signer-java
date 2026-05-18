@@ -5,6 +5,10 @@ import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -22,6 +26,9 @@ import static org.mockito.Mockito.*;
 /**
  * XadesController test'leri.
  */
+@Epic("HTTP API Contract")
+@Feature("XAdES Endpoint")
+@Severity(SeverityLevel.CRITICAL)
 class XadesControllerTest {
 
     @Mock

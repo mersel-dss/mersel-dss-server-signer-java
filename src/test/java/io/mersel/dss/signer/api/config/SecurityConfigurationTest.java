@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.config;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -19,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.*;
     "cors.allowed-methods=GET,POST",
     "cors.max-age=7200"
 })
+@Epic("HTTP API Contract")
+@Feature("Security Filters")
+@Severity(SeverityLevel.NORMAL)
 class SecurityConfigurationTest {
 
     @Autowired

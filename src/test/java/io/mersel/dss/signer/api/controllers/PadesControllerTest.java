@@ -6,6 +6,10 @@ import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -43,6 +47,9 @@ import static org.mockito.Mockito.*;
  * implicit olarak korunur). Bu davranışlar burada test edilmez —
  * out-of-scope, framework-level garantidir.</p>
  */
+@Epic("HTTP API Contract")
+@Feature("PAdES Endpoint")
+@Severity(SeverityLevel.CRITICAL)
 class PadesControllerTest {
 
     @Mock private PAdESSignatureService padesSignatureService;

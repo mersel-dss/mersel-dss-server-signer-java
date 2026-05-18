@@ -3,6 +3,10 @@ package io.mersel.dss.signer.api.models;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -41,6 +45,9 @@ import static org.mockito.Mockito.when;
  * XAdES, PAdES, WS-Security) ortak girdisidir; davranışı yanlış olursa
  * downstream branching tüm sektörde patlar.
  */
+@Epic("Service Layer")
+@Feature("SigningMaterial Backend Abstraction")
+@Severity(SeverityLevel.CRITICAL)
 class SigningMaterialTest {
 
     private static KeyPair rsaKeyPair;

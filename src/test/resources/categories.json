@@ -1,0 +1,53 @@
+[
+  {
+    "name": "🚨 Imza doğrulama regresyonu — verifier-api reddetti",
+    "description": "Pozitif sign+verify roundtrip testlerinde mersel-dss-verifier-api'nin 'isValid=false' veya 'indication != TOTAL_PASSED' dönmesi. Auditor için en kritik kategori: 'Mali Mühür akışını gerçekten kıran bir değişiklik var mı?' sorusuna 1 tıkla cevap.",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*(isValid|TOTAL_PASSED|verifier-api|INDICATION).*",
+    "traceRegex": ".*e2e\\.verifier\\.(XAdES|CAdES|PAdES|WsSecurity)(SignAndVerify|BinaryVariations|DocumentVariations|RuntimeScenarios)E2ETest.*"
+  },
+  {
+    "name": "🧨 XML güvenlik regresyonu — XXE / Billion Laughs sızıntısı",
+    "description": "SecureXmlFactories sertleştirmesi bir parser'da uygulanmadıysa veya bypass edildiyse: XXE/Billion Laughs fixture'ı parser'a sızdı → kritik güvenlik regresyonu.",
+    "matchedStatuses": ["failed"],
+    "traceRegex": ".*(XmlSecurityTest|SecureXmlFactoriesTest|negative/(billion-laughs|xxe-attack)).*"
+  },
+  {
+    "name": "🔐 Kriptografik format / encoding hatası",
+    "description": "DER ↔ raw r||s dönüşümü, PKCS#1 v1.5 DigestInfo, RSA-PSS mechanism reject, XMLDsig SignatureValue formatı gibi alt-katman crypto bug'ları. PKCS#11 wrapper sürüm uyumsuzluklarını veya HSM mechanism eksikliklerini buraya yönlendirir.",
+    "matchedStatuses": ["failed", "broken"],
+    "traceRegex": ".*(Pkcs11EcdsaSignatureEncoder|Pkcs1DigestInfo|IaikSignatureMechanisms|SignatureAlgorithmResolver|EncryptionAlgorithm|DSSASN1Utils).*"
+  },
+  {
+    "name": "🔌 PKCS#11 / HSM erişilemez (SoftHSM2 veya native bağımlılık eksik)",
+    "description": "@Tag(pkcs11-integration) testlerinin lokalde softhsm2-util/pkcs11-tool/libsofthsm2 yoksa skip etmesi beklenir; ama broken/failed olarak görünüyorsa CI runner'da kurulum bozulmuş demektir.",
+    "matchedStatuses": ["broken", "failed", "skipped"],
+    "messageRegex": ".*(SoftHSM|softhsm2|libsofthsm|pkcs11-tool|SOFTHSM2_MODULE|SOFTHSM2_CONF|CKR_).*",
+    "traceRegex": ".*(SoftHsm2TestSupport|IaikPkcs11Module|PKCS11Exception).*"
+  },
+  {
+    "name": "🌐 Test altyapısı (Docker / Testcontainers / GHCR pull) eksik",
+    "description": "verifier-e2e testleri Testcontainers ile ghcr.io/mersel-dss/mersel-dss-verifier-api-java imajına bağımlı. Docker daemon kapalıysa AbstractVerifierE2ETest assumeTrue ile skip eder; broken status burada görünür ise gerçek altyapı sorunu.",
+    "matchedStatuses": ["broken", "failed", "skipped"],
+    "messageRegex": ".*(Docker|Testcontainers|GenericContainer|Ryuk|image pull|ghcr\\.io|Connection refused).*",
+    "traceRegex": ".*(DockerClientFactory|VerifierApiContainer|org\\.testcontainers).*"
+  },
+  {
+    "name": "📋 HTTP kontrat ihlali",
+    "description": "Controller test'lerinde status code, content-type, multipart limit, error model kontratı bozulduğunda. 'API tüketicilerinin sözleşmesi değişti mi?' sorusunu izole eder.",
+    "matchedStatuses": ["failed"],
+    "messageRegex": ".*(status|Content-Type|MediaType|multipart|MaxUpload|PAYLOAD_TOO_LARGE|UNSUPPORTED_MEDIA_TYPE|WRONG_CONTENT_TYPE).*",
+    "traceRegex": ".*(controllers\\.|MultipartLimit|SignEndpointHttp|GlobalExceptionHandler).*"
+  },
+  {
+    "name": "⏭️ Kasıtlı atlanmış testler (preconditions met değil)",
+    "description": "Negatif PFX dosyası repo'da yok, Docker yok, native HSM araçları yok gibi durumlarda Assumptions.assumeTrue ile graceful skip. 'Kaç senaryo gerçekten koştu, kaçı preconditions yüzünden atlandı?' netliği verir.",
+    "matchedStatuses": ["skipped"],
+    "messageRegex": ".*(assumeTrue|Assumption|DisabledIfSystemProperty|PFX yok|fixture yok).*"
+  },
+  {
+    "name": "❌ Ürün hatası — kategorize edilmemiş",
+    "description": "Yukarıdaki dar kategorilere düşmeyen genel failure'lar. Bu kategoriye düşmek = analiz gerekli, kök sebep henüz bilinmiyor. Auditor için 'ne kadar bilinmeyen var?' metriği.",
+    "matchedStatuses": ["failed", "broken"]
+  }
+]

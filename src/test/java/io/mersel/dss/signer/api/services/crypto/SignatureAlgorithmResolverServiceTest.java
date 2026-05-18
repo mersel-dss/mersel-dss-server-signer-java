@@ -2,6 +2,10 @@ package io.mersel.dss.signer.api.services.crypto;
 
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +13,9 @@ import java.security.PrivateKey;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Epic("Crypto Conformance")
+@Feature("Signature Algorithm Resolver")
+@Severity(SeverityLevel.NORMAL)
 class SignatureAlgorithmResolverServiceTest {
 
     private SignatureAlgorithmResolverService resolver;

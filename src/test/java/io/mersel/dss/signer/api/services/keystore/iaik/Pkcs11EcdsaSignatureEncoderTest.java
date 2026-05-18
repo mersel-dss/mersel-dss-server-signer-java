@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1Sequence;
@@ -32,6 +36,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * EC sertifikalı HSM imzaları (e-Fatura, PAdES, CAdES, XAdES)
  * doğrulayıcılar tarafından reddedilir.</p>
  */
+@Epic("Crypto Conformance")
+@Feature("ECDSA Format — DER ↔ Raw r||s")
+@Severity(SeverityLevel.CRITICAL)
 class Pkcs11EcdsaSignatureEncoderTest {
 
     @Nested

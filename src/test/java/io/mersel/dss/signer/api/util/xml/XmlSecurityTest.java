@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.util.xml;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.xml.sax.SAXParseException;
@@ -41,6 +45,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * @see <a href="https://cheatsheetseries.owasp.org/cheatsheets/XML_External_Entity_Prevention_Cheat_Sheet.html">OWASP XXE Prevention Cheat Sheet</a>
  */
 @DisplayName("SecureXmlFactories — gerçek XXE / DoS saldırılarına karşı dayanıklılık")
+@Epic("XML Security Hardening")
+@Feature("Attack Scenarios (XXE / Billion Laughs)")
+@Severity(SeverityLevel.CRITICAL)
 class XmlSecurityTest {
 
     private static final String FIXTURE_DIR = "resources/test-fixtures/negative";

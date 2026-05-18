@@ -2,6 +2,10 @@ package io.mersel.dss.signer.api.services.keystore.iaik;
 
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
@@ -42,6 +46,9 @@ import static org.mockito.Mockito.when;
  * akıttığı stream'i biriktirir ve sonunda HSM'e tek sign çağrısı yapar.
  * Hata olursa PAdES imzası asla geçerli olmaz.</p>
  */
+@Epic("PKCS#11 Integration")
+@Feature("IAIK ContentSigner (BouncyCastle bridge)")
+@Severity(SeverityLevel.NORMAL)
 class IaikContentSignerTest {
 
     private static X509Certificate rsaCert;

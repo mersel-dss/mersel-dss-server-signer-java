@@ -2,6 +2,10 @@ package io.mersel.dss.signer.api.services.keystore.iaik;
 
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
@@ -36,6 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * için bu kontrat ileride biri yanlışlıkla {@code synchronized} eklerse
  * "production'da SLA bozuldu" hatası yerine burada düşsün.</p>
  */
+@Epic("PKCS#11 Integration")
+@Feature("IAIK Module — Thread-Safety Contract")
+@Severity(SeverityLevel.CRITICAL)
 class IaikPkcs11ModuleContractTest {
 
     @Test
@@ -225,26 +232,29 @@ class IaikPkcs11ModuleContractTest {
     }
 
     @Test
-    @DisplayName("initializeIdempotent: başarılı init → true (sahiplik bizde)")
+    @DisplayName("initializeIdempotent: başarılı init → owned=true, singleThreaded=false")
     void initializeIdempotent_returnsTrueOnFreshInit() throws Exception {
         Method m = IaikPkcs11Module.class.getDeclaredMethod(
-            "initializeIdempotent", PKCS11Module.class);
+            "initializeIdempotent", PKCS11Module.class, boolean.class);
         m.setAccessible(true);
 
         PKCS11Module mockModule = Mockito.mock(PKCS11Module.class);
 
-        Object result = m.invoke(null, mockModule);
+        Object outcome = m.invoke(null, mockModule, Boolean.FALSE);
 
-        assertTrue(Boolean.TRUE.equals(result),
-            "initialize() exception atmadıysa metot true dönmeli (init sahibi biziz).");
+        assertTrue(readOutcomeOwned(outcome),
+            "initialize() exception atmadıysa owned=true olmalı (init sahibi biziz).");
+        assertFalse(readOutcomeSingleThreaded(outcome),
+            "Standart init başarılı; singleThreaded modu sadece NULL-args fallback'inde "
+            + "(AKİS uyumluluk) aktif olur.");
         Mockito.verify(mockModule).initialize();
     }
 
     @Test
-    @DisplayName("initializeIdempotent: CKR_CRYPTOKI_ALREADY_INITIALIZED → false (paylaşımlı)")
+    @DisplayName("initializeIdempotent: CKR_CRYPTOKI_ALREADY_INITIALIZED → owned=false (paylaşımlı)")
     void initializeIdempotent_returnsFalseOnAlreadyInitialized() throws Exception {
         Method m = IaikPkcs11Module.class.getDeclaredMethod(
-            "initializeIdempotent", PKCS11Module.class);
+            "initializeIdempotent", PKCS11Module.class, boolean.class);
         m.setAccessible(true);
 
         PKCS11Module mockModule = Mockito.mock(PKCS11Module.class);
@@ -252,10 +262,10 @@ class IaikPkcs11ModuleContractTest {
             PKCS11Constants.CKR_CRYPTOKI_ALREADY_INITIALIZED);
         Mockito.doThrow(alreadyInit).when(mockModule).initialize();
 
-        Object result = m.invoke(null, mockModule);
+        Object outcome = m.invoke(null, mockModule, Boolean.FALSE);
 
-        assertFalse(Boolean.TRUE.equals(result),
-            "Başka bileşen Cryptoki'yi init etmiş; metot false dönmeli ki "
+        assertFalse(readOutcomeOwned(outcome),
+            "Başka bileşen Cryptoki'yi init etmiş; owned=false olmalı ki "
             + "destroy() finalize çağırmasın (codex bulgusu: paylaşımlı state "
             + "korunmalı).");
     }
@@ -264,7 +274,7 @@ class IaikPkcs11ModuleContractTest {
     @DisplayName("initializeIdempotent: CKR_CRYPTOKI_ALREADY_INITIALIZED dışındaki hatayı yutmamalı")
     void initializeIdempotent_propagatesUnrelatedErrors() throws Exception {
         Method m = IaikPkcs11Module.class.getDeclaredMethod(
-            "initializeIdempotent", PKCS11Module.class);
+            "initializeIdempotent", PKCS11Module.class, boolean.class);
         m.setAccessible(true);
 
         PKCS11Module mockModule = Mockito.mock(PKCS11Module.class);
@@ -274,11 +284,75 @@ class IaikPkcs11ModuleContractTest {
         Mockito.doThrow(deviceError).when(mockModule).initialize();
 
         InvocationTargetException ex = assertThrows(InvocationTargetException.class,
-            () -> m.invoke(null, mockModule));
+            () -> m.invoke(null, mockModule, Boolean.FALSE));
 
         assertTrue(ex.getCause() instanceof PKCS11Exception,
-            "Diğer PKCS11Exception'lar swallow edilmemeli; "
-            + "CKR_CRYPTOKI_ALREADY_INITIALIZED için özel davranış sadece o koda özgü.");
+            "Diğer PKCS11Exception'lar swallow edilmemeli; ne "
+            + "CKR_CRYPTOKI_ALREADY_INITIALIZED ne de CKR_ARGUMENTS_BAD için "
+            + "özel davranış geçerli — bu kod ortada hiçbiri değil.");
+    }
+
+    @Test
+    @DisplayName("initializeIdempotent: CKR_ARGUMENTS_BAD → standart initialize() yeniden denenmez (AKİS fallback)")
+    void initializeIdempotent_argumentsBad_triesNullArgsFallbackWithoutRetryingStandard() throws Exception {
+        // Mock PKCS11Module'da pkcs11 alanı null olduğu için NULL-args fallback'i
+        // reflection sırasında IllegalStateException atar — biz burada şunu
+        // doğruluyoruz: standart module.initialize() YALNIZCA BİR KERE çağrıldı
+        // ve CKR_ARGUMENTS_BAD sonrası tekrar denenmedi. Fallback yolunun
+        // alındığını kanıtlamak için kontrolun reflection katmanına geçtiğini
+        // (InvocationTargetException → cause IllegalStateException) gözlüyoruz.
+        Method m = IaikPkcs11Module.class.getDeclaredMethod(
+            "initializeIdempotent", PKCS11Module.class, boolean.class);
+        m.setAccessible(true);
+
+        PKCS11Module mockModule = Mockito.mock(PKCS11Module.class);
+        PKCS11Exception argsBad = new PKCS11Exception(PKCS11Constants.CKR_ARGUMENTS_BAD);
+        Mockito.doThrow(argsBad).when(mockModule).initialize();
+
+        InvocationTargetException ex = assertThrows(InvocationTargetException.class,
+            () -> m.invoke(null, mockModule, Boolean.FALSE));
+
+        // Standart initialize() tam bir kez denendi; AKİS fallback'i de
+        // denendi ama mock'ta gerçek native pkcs11 olmadığı için reflection
+        // katmanı patladı → IllegalStateException görmeliyiz.
+        Mockito.verify(mockModule, Mockito.times(1)).initialize();
+        assertTrue(ex.getCause() instanceof IllegalStateException,
+            "CKR_ARGUMENTS_BAD sonrası NULL-args fallback yolu denenmeli; mock üstünde "
+            + "reflection IllegalStateException atar — bu fallback'in alındığının kanıtıdır. "
+            + "Gerçek cause: " + ex.getCause());
+    }
+
+    @Test
+    @DisplayName("initializeIdempotent: forceNullInitArgs=true → standart initialize() ASLA çağrılmaz")
+    void initializeIdempotent_forceNullSkipsStandardInit() throws Exception {
+        // Operatör PKCS11_NULL_INIT_ARGS=true verdiyse trial-and-error
+        // beklemiyoruz. Mock üstünde NULL-args fallback reflection'a girer
+        // ve patlar — biz module.initialize()'ın hiç çağrılmadığını
+        // doğruluyoruz (operatöre verilen kontratın gereği).
+        Method m = IaikPkcs11Module.class.getDeclaredMethod(
+            "initializeIdempotent", PKCS11Module.class, boolean.class);
+        m.setAccessible(true);
+
+        PKCS11Module mockModule = Mockito.mock(PKCS11Module.class);
+
+        assertThrows(InvocationTargetException.class,
+            () -> m.invoke(null, mockModule, Boolean.TRUE));
+
+        Mockito.verify(mockModule, Mockito.never()).initialize();
+    }
+
+    /** {@code InitOutcome.owned} alanını reflection ile okur. */
+    private static boolean readOutcomeOwned(Object outcome) throws Exception {
+        Field f = outcome.getClass().getDeclaredField("owned");
+        f.setAccessible(true);
+        return f.getBoolean(outcome);
+    }
+
+    /** {@code InitOutcome.singleThreaded} alanını reflection ile okur. */
+    private static boolean readOutcomeSingleThreaded(Object outcome) throws Exception {
+        Field f = outcome.getClass().getDeclaredField("singleThreaded");
+        f.setAccessible(true);
+        return f.getBoolean(outcome);
     }
 
     @Test

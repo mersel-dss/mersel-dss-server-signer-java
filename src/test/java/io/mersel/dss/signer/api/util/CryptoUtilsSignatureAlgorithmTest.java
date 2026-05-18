@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.util;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,6 +20,9 @@ import java.security.spec.ECParameterSpec;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@Epic("Crypto Conformance")
+@Feature("CryptoUtils — Algorithm/OID Resolution")
+@Severity(SeverityLevel.NORMAL)
 class CryptoUtilsSignatureAlgorithmTest {
 
     @Nested

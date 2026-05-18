@@ -18,6 +18,22 @@ public class SignatureServiceConfiguration {
     @Value("${PKCS11_SLOT_LIST_INDEX:-1}")
     private Long pkcs11SlotIndex;
 
+    /**
+     * TÜBİTAK BİLGEM AKİS macOS/Linux sürücüsü gibi standart
+     * {@code C_Initialize(CK_C_INITIALIZE_ARGS{flags=CKF_OS_LOCKING_OK})}
+     * çağrısını {@code CKR_ARGUMENTS_BAD} ile reddeden kütüphaneler için
+     * trial-and-error yapmadan doğrudan {@code C_Initialize(NULL)} yoluna
+     * gidilir. Auto-detect zaten devrede; bu bayrak yalnızca operatöre
+     * "ben biliyorum, hemen NULL'a git" demek için.
+     *
+     * <p>Yan etki: kütüphane PKCS#11 v2.40 §5.4 gereği thread-unsafe
+     * sayılacağı için {@code PKCS11Token} havuzu {@code numSessions=1}'e
+     * sıkıştırılır. Akıllı kart donanımı paralel oturum kaldırmadığı için
+     * pratik bir performans kaybı yoktur.</p>
+     */
+    @Value("${PKCS11_NULL_INIT_ARGS:false}")
+    private boolean pkcs11NullInitArgs;
+
     @Value("${CERTIFICATE_PIN}")
     private String certificatePin;
 
@@ -83,6 +99,10 @@ public class SignatureServiceConfiguration {
 
     public Long getPkcs11SlotIndex() {
         return pkcs11SlotIndex;
+    }
+
+    public boolean isPkcs11NullInitArgs() {
+        return pkcs11NullInitArgs;
     }
 
     public String getIssuerCertificatePath() {

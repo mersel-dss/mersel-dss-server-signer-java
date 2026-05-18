@@ -13,6 +13,10 @@ import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.signature.cades.CAdESSignatureService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -58,6 +62,9 @@ import static org.mockito.Mockito.when;
  * gözlemlenir. {@code Semaphore(2)} altında 50 paralel istek başlasa bile
  * highWaterMark ≤ 2 olmalı.</p>
  */
+@Epic("Concurrency")
+@Feature("Semaphore Coordination (G+H groups)")
+@Severity(SeverityLevel.NORMAL)
 class SignatureServiceSemaphoreConcurrencyTest {
 
     private static final int PERMITS = 2;

@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.config;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -19,6 +23,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * <p>Test prod {@code application.properties}'i direkt classpath'ten okur;
  * Spring lifecycle'a (PFX gerektirir) ihtiyaç duymaz, hızlı çalışır.</p>
  */
+@Epic("HTTP API Contract")
+@Feature("Multipart Limits")
+@Severity(SeverityLevel.MINOR)
 class MultipartConfigSanityTest {
 
     private static final String EXPECTED_LIMIT = "200MB";

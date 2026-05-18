@@ -1,5 +1,9 @@
 package io.mersel.dss.signer.api.util;
 
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -7,6 +11,9 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * CryptoUtils yardımcı sınıfı test'leri.
  */
+@Epic("Crypto Conformance")
+@Feature("CryptoUtils — Hex/Base64 Helpers")
+@Severity(SeverityLevel.MINOR)
 class CryptoUtilsTest {
 
     @Test

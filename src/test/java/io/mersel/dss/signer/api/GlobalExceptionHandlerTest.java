@@ -4,6 +4,10 @@ import io.mersel.dss.signer.api.exceptions.CertificateValidationException;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -29,6 +33,9 @@ import static org.junit.jupiter.api.Assertions.*;
  * yürütülür; production-grade error envelope (kod + mesaj) regression'larını
  * yakalar.</p>
  */
+@Epic("HTTP API Contract")
+@Feature("Global Exception Mapping")
+@Severity(SeverityLevel.NORMAL)
 class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler exceptionHandler;

@@ -550,6 +550,48 @@
             </plugin>
 
             <!--
+                maven-resources-plugin — src/test/resources/categories.json
+                dosyasını Allure'un beklediği yere (target/allure-results/)
+                kopyalar.
+
+                Allure raporlama protokolü: categories.json allure-results/
+                dizininde aranır (junit5 adapter classpath'tan otomatik kopyalama
+                YAPMAZ). Bu kopya 'process-test-resources' phase'inde, Surefire
+                tetiklenmeden önce çalışır → her test koşumunda dosya yerinde
+                olur. 'mvn clean' sonrası da tekrar oluşur.
+
+                Override: dosyayı yeniden adlandırıp src/test/resources/allure/
+                altına taşımak istersen <directory> ve <includes> güncellenmeli.
+                Şu an root-level categories.json bilinçli — Allure ekosisteminin
+                en yaygın kullanılan yol pattern'i.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-allure-categories</id>
+                        <phase>process-test-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/allure-results</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>src/test/resources</directory>
+                                    <includes>
+                                        <include>categories.json</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
                 OWASP Dependency-Check — CVE bilinen 3rd-party dependency
                 tarama. HTML + JSON output. NVD-API key environment'tan
                 opsiyonel okunur (CI'da secret olarak set edilebilir,

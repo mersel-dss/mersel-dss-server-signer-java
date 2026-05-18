@@ -5,6 +5,10 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import io.mersel.dss.signer.api.dtos.TimestampRequestDto;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +43,9 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li><b>E3-alt</b>: TSA bağlanılamaz port (TCP RST) → TimestampException.</li>
  * </ol>
  */
+@Epic("Service Layer")
+@Feature("Timestamp Service — HTTP Contract")
+@Severity(SeverityLevel.NORMAL)
 class TimestampServiceContractTest {
 
     private HttpServer httpServer;

@@ -5,6 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mersel.dss.signer.api.GlobalExceptionHandler;
 import io.mersel.dss.signer.api.services.signature.cades.CAdESSignatureService;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -53,6 +57,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * davranışı.</p>
  */
 @DisplayName("G-2/3/5: Sign endpoint HTTP envelope (empty body 400, malformed 400, wrong CT 415)")
+@Epic("HTTP API Contract")
+@Feature("Sign Endpoint Envelope")
+@Severity(SeverityLevel.NORMAL)
 class SignEndpointHttpEnvelopeContractTest {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();

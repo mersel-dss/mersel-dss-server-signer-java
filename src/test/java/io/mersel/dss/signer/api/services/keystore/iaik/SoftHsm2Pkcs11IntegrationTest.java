@@ -15,6 +15,10 @@ import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreLoaderService;
 import io.mersel.dss.signer.api.testsupport.SoftHsm2TestSupport;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -77,6 +81,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * sızıntı olmaz.</p>
  */
 @Tag("pkcs11-integration")
+@Epic("PKCS#11 Integration")
+@Feature("SoftHSM2 Native E2E")
+@Severity(SeverityLevel.CRITICAL)
 class SoftHsm2Pkcs11IntegrationTest {
 
     private static final String TOKEN_LABEL_PREFIX = "mersel-test-";

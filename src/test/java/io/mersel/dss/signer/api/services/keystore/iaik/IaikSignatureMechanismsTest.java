@@ -1,6 +1,10 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,6 +31,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * hash CKG_MGF1_* sabitleri de doğru olmalı (yoksa Schematron doğrulama
  * geçmez).</p>
  */
+@Epic("PKCS#11 Integration")
+@Feature("Mechanism Resolution (CKM_*)")
+@Severity(SeverityLevel.NORMAL)
 class IaikSignatureMechanismsTest {
 
     // ----------------------------------------------------------------

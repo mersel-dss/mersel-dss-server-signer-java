@@ -8,6 +8,10 @@ import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
 import io.mersel.dss.signer.api.testsupport.PfxBackedPkcs11Signer;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -50,6 +54,9 @@ import static org.mockito.Mockito.when;
  * tek noktadır; branch seçimi yanlış olursa HSM yerine yanlış key kullanılır
  * veya tam tersi olur — kritik hata.</p>
  */
+@Epic("Service Layer")
+@Feature("Crypto Signer (PFX/HSM branching)")
+@Severity(SeverityLevel.CRITICAL)
 class CryptoSignerServiceTest {
 
     private static KeyPair rsaKeyPair;

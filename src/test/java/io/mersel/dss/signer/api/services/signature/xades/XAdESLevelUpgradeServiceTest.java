@@ -6,6 +6,10 @@ import eu.europa.esig.dss.spi.validation.CertificateVerifier;
 import eu.europa.esig.dss.xades.XAdESSignatureParameters;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -15,6 +19,9 @@ import org.mockito.MockitoAnnotations;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@Epic("Service Layer")
+@Feature("XAdES Level Upgrade (T/LT/LTA)")
+@Severity(SeverityLevel.NORMAL)
 class XAdESLevelUpgradeServiceTest {
 
     @Mock

@@ -18,9 +18,9 @@ import java.util.List;
 
 /**
  * Dijital İmza Servisi API'nin ana uygulaması.
- * 
+ * <p>
  * XAdES, PAdES ve WS-Security imzalama servisleri sağlar.
- * 
+ * <p>
  * Command-line kullanım:
  * - java -jar mersel-dss-signer.jar                    : API sunucusunu başlatır
  * - java -jar mersel-dss-signer.jar --list-certificates : Keystore sertifikalarını listeler
@@ -29,9 +29,9 @@ import java.util.List;
 @SpringBootApplication
 @EnableScheduling
 public class SignatureApplication {
-    
+
     private static final Logger LOGGER = LoggerFactory.getLogger(SignatureApplication.class);
-    
+
     public static final String FileSeparator = System.getProperty("file.separator");
     public static final String ROOT_FILE_FOLDER = ".mersel-signature-service";
     public static final String ROOT_DIR = System.getProperty("user.home") + FileSeparator + ROOT_FILE_FOLDER + FileSeparator;
@@ -40,7 +40,7 @@ public class SignatureApplication {
         // Command-line argümanlarını kontrol et
         if (args.length > 0) {
             String command = args[0];
-            
+
             if ("--list-certificates".equals(command) || "--list-certs".equals(command)) {
                 listCertificates();
                 System.exit(0);
@@ -55,13 +55,13 @@ public class SignatureApplication {
                 return;
             }
         }
-        
+
         // Normal Spring Boot başlatma
         LOGGER.info("Mersel DSS Signer API başlatılıyor...");
         LOGGER.info("Log dizini: {}", System.getProperty("LOG_PATH", "./logs"));
-        
+
         SpringApplication.run(SignatureApplication.class, args);
-        
+
         LOGGER.info("Mersel DSS Signer API başarıyla başlatıldı");
     }
 
@@ -71,15 +71,19 @@ public class SignatureApplication {
      */
     private static void listCertificates() {
         System.out.println("\n🔐 Mersel DSS Signer - Certificate Lister\n");
-        
+
         try {
             // Environment variable'lardan yapılandırmayı oku
             String pkcs11Library = System.getenv("PKCS11_LIBRARY");
             String pkcs11SlotListIndexStr = System.getenv("PKCS11_SLOT_LIST_INDEX");
             String pkcs11SlotStr = System.getenv("PKCS11_SLOT");
+            // AKİS / TÜBİTAK uyumluluk: bkz. IaikPkcs11Module Javadoc.
+            // Auto-detect zaten CKR_ARGUMENTS_BAD'da devreye girer; bu env var
+            // operatöre "doğrudan NULL-args'a git" demek için escape hatch.
+            String pkcs11NullInitArgsStr = System.getenv("PKCS11_NULL_INIT_ARGS");
             String pfxPath = System.getenv("PFX_PATH");
             String pin = System.getenv("CERTIFICATE_PIN");
-            
+
             if (pin == null || pin.isEmpty()) {
                 System.err.println("❌ CERTIFICATE_PIN environment variable tanımlanmamış!");
                 System.err.println("\nÖrnek:");
@@ -87,7 +91,7 @@ public class SignatureApplication {
                 System.exit(1);
                 return;
             }
-            
+
             KeyStoreProvider provider;
             IaikPkcs11Module iaikModule = null;
 
@@ -99,25 +103,33 @@ public class SignatureApplication {
             if (StringUtils.hasText(pkcs11Library)) {
                 Long slot = NumberUtils.isDigits(pkcs11SlotStr) ? Long.parseLong(pkcs11SlotStr) : null;
                 Long slotIndex = NumberUtils.isDigits(pkcs11SlotListIndexStr) ? Long.parseLong(pkcs11SlotListIndexStr) : null;
-                slot = slot != null && slot >= 0 ? slot : null;
-                slotIndex = slotIndex != null && slotIndex >= 0 ? slotIndex : null;
+                slot = slot != null && slot >= 0 ? slot : -1;
+                slotIndex = slotIndex != null && slotIndex >= 0 ? slotIndex : -1;
+
+
+                boolean forceNullInitArgs = "true".equalsIgnoreCase(
+                    pkcs11NullInitArgsStr == null ? "" : pkcs11NullInitArgsStr.trim());
 
                 System.out.println("📦 Keystore Type: PKCS#11 (IAIK)");
                 System.out.println("📂 Library: " + pkcs11Library);
                 System.out.println("🎰 Slot: " + (slot != null ? slot : "<unset>"));
                 System.out.println("🎰 Slot List Index: " + (slotIndex != null ? slotIndex : "<unset>"));
+                if (forceNullInitArgs) {
+                    System.out.println("⚙️  Init args: NULL (AKİS / TÜBİTAK uyumluluk modu)");
+                }
                 System.out.println();
 
                 // PKCS#11 yolunda IAIK Module ile listeliyoruz; SunPKCS11
                 // alias-mapping katmanından bağımsız. Module manuel olarak
                 // initialize edilip listing sonunda kapatılır.
-                iaikModule = new IaikPkcs11Module(pkcs11Library, slot, slotIndex, pin.toCharArray());
+                iaikModule = new IaikPkcs11Module(
+                    pkcs11Library, slot, slotIndex, pin.toCharArray(), forceNullInitArgs);
                 iaikModule.afterPropertiesSet();
                 // KeyStoreProvider sadece getType()/info için referans olarak duruyor.
                 provider = new PKCS11KeyStoreProvider(
-                    pkcs11Library,
-                    slot != null ? slot : -1L,
-                    slotIndex != null ? slotIndex : -1L);
+                        pkcs11Library,
+                        slot != null ? slot : -1L,
+                        slotIndex != null ? slotIndex : -1L);
 
             } else if (StringUtils.hasText(pfxPath)) {
                 System.out.println("📦 Keystore Type: PFX/PKCS12");
@@ -148,7 +160,7 @@ public class SignatureApplication {
                     iaikModule.destroy();
                 }
             }
-            
+
         } catch (Exception e) {
             System.err.println("\n❌ Hata: " + e.getMessage());
             e.printStackTrace();
@@ -173,6 +185,10 @@ public class SignatureApplication {
         System.out.println("  PKCS#11 Keystore:");
         System.out.println("    PKCS11_LIBRARY          PKCS#11 kütüphane yolu");
         System.out.println("    PKCS11_SLOT             Slot numarası (varsayılan: 0)");
+        System.out.println("    PKCS11_NULL_INIT_ARGS   AKİS / TÜBİTAK uyumluluk modu (true/false)");
+        System.out.println("                            Sürücü CKR_ARGUMENTS_BAD dönerse otomatik");
+        System.out.println("                            aktive olur; explicit set etmek operatöre");
+        System.out.println("                            trial-and-error'u atlatır.");
         System.out.println("    CERTIFICATE_PIN         PIN kodu\n");
         System.out.println("  PFX Keystore:");
         System.out.println("    PFX_PATH                PFX dosya yolu");

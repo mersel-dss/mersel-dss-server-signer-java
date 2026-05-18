@@ -5,6 +5,10 @@ import io.mersel.dss.signer.api.exceptions.KeyStoreException;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -30,6 +34,9 @@ import static org.mockito.Mockito.when;
  * orijinal HSM hatası kaybolur. Bunun yerine {@link KeyStoreException}
  * sarmalanmalı ve orijinal hata cause olarak korunmalıdır.</p>
  */
+@Epic("Service Layer")
+@Feature("Certificate Info")
+@Severity(SeverityLevel.NORMAL)
 class CertificateInfoServiceTest {
 
     @Nested

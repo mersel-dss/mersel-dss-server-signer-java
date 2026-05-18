@@ -1,6 +1,10 @@
 package io.mersel.dss.signer.api.services.crypto;
 
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +13,9 @@ import java.security.cert.X509Certificate;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@Epic("Crypto Conformance")
+@Feature("Digest Algorithm Resolver")
+@Severity(SeverityLevel.NORMAL)
 class DigestAlgorithmResolverServiceTest {
 
     private DigestAlgorithmResolverService resolver;

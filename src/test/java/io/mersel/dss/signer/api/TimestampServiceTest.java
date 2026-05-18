@@ -7,6 +7,10 @@ import io.mersel.dss.signer.api.dtos.TimestampValidationResponseDto;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
 import io.mersel.dss.signer.api.services.timestamp.TimestampService;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,6 +26,9 @@ import static org.mockito.Mockito.*;
  * TimestampService için unit testler.
  */
 @ExtendWith(MockitoExtension.class)
+@Epic("Service Layer")
+@Feature("Timestamp Service")
+@Severity(SeverityLevel.NORMAL)
 public class TimestampServiceTest {
 
     @Mock

@@ -1,6 +1,10 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
 import eu.europa.esig.dss.enumerations.DigestAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.util.encoders.Hex;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -24,6 +28,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  * <p>Karşılaştırma için kullandığımız beklenen prefix'ler RFC 8017
  * Appendix B.1 ile bire bir uyumludur.</p>
  */
+@Epic("Crypto Conformance")
+@Feature("PKCS#1 v1.5 DigestInfo Wrapping")
+@Severity(SeverityLevel.CRITICAL)
 class Pkcs1DigestInfoTest {
 
     // RFC 8017 §B.1 - sabit DigestInfo prefix'leri (hex)

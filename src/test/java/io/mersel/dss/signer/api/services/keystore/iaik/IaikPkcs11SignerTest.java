@@ -1,6 +1,10 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
+import io.qameta.allure.Epic;
+import io.qameta.allure.Feature;
+import io.qameta.allure.Severity;
+import io.qameta.allure.SeverityLevel;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
@@ -43,6 +47,9 @@ import static org.mockito.Mockito.when;
  * {@link IaikPkcs11Module.ResolvedKey} ve {@link IaikPkcs11Signer} ctor'u
  * package-private — wrapper'ın "internal" sözleşmesini test eder.</p>
  */
+@Epic("PKCS#11 Integration")
+@Feature("IAIK Signer Delegation")
+@Severity(SeverityLevel.CRITICAL)
 class IaikPkcs11SignerTest {
 
     private static X509Certificate cert;
