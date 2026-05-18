@@ -79,14 +79,23 @@ public class XadesController {
             }
 
             boolean zipped = Boolean.TRUE.equals(dto.getZipFile());
-            
-            SignResponse result = xadesSignatureService.signXml(
-                dto.getDocument().getInputStream(),
-                dto.getDocumentType(),
-                dto.getSignatureId(),
-                zipped,
-                signingMaterial
-            );
+
+            // try-with-resources: MultipartFile.getInputStream() Tomcat'in
+            // disk-tabanlı temp dosyasına bir FileInputStream açar. Bu stream
+            // explicit kapatılmazsa Windows'ta dosya silinmesi (cleanupMultipart)
+            // "Cannot delete upload_*.tmp" UncheckedIOException'a düşer
+            // (Linux POSIX semantics'inde belirti vermez ama handle yine sızar).
+            // CADES endpoint'iyle tutarlı pattern.
+            SignResponse result;
+            try (java.io.InputStream is = dto.getDocument().getInputStream()) {
+                result = xadesSignatureService.signXml(
+                    is,
+                    dto.getDocumentType(),
+                    dto.getSignatureId(),
+                    zipped,
+                    signingMaterial
+                );
+            }
 
             LOGGER.info("XAdES imzası başarıyla oluşturuldu. Belge tipi: {}", 
                 dto.getDocumentType());
@@ -125,9 +134,14 @@ public class XadesController {
                     .body(new ErrorModel("INVALID_INPUT", "SOAP belgesi zorunludur"));
             }
 
-            Document soapDocument = Utilities.LoadXMLFromInputStream(
-                dto.getDocument().getInputStream());
-            
+            // try-with-resources: aynı handle-leak kontratı signXades ile;
+            // SOAP parse'i InputStream'i tek-geçişte tükettiği için scope
+            // sonunda stream güvenle kapatılabilir.
+            Document soapDocument;
+            try (java.io.InputStream is = dto.getDocument().getInputStream()) {
+                soapDocument = Utilities.LoadXMLFromInputStream(is);
+            }
+
             boolean useSoap12 = Boolean.TRUE.equals(dto.getSoap1Dot2());
             
             LOGGER.info("WS-Security imzalama isteği - soap1Dot2 parametresi: {}, useSoap12: {}", 

@@ -69,13 +69,21 @@ public class PadesController {
                 ? dto.getAttachment().getBytes() 
                 : null;
 
-            SignResponse result = padesSignatureService.signPdf(
-                dto.getDocument().getInputStream(),
-                attachment,
-                dto.getAttachmentFileName(),
-                appendMode,
-                signingMaterial
-            );
+            // try-with-resources: MultipartFile.getInputStream() Tomcat'in
+            // disk-tabanlı temp dosyasına bir FileInputStream açar. Bu stream
+            // explicit kapatılmazsa Windows'ta cleanupMultipart "Cannot delete
+            // upload_*.tmp" UncheckedIOException'a düşer (Linux'ta belirti
+            // vermez ama handle yine sızar). CADES endpoint'iyle tutarlı pattern.
+            SignResponse result;
+            try (java.io.InputStream is = dto.getDocument().getInputStream()) {
+                result = padesSignatureService.signPdf(
+                    is,
+                    attachment,
+                    dto.getAttachmentFileName(),
+                    appendMode,
+                    signingMaterial
+                );
+            }
 
             LOGGER.info("PAdES imzası başarıyla oluşturuldu (ekleme modu: {})", appendMode);
 
