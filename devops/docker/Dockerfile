@@ -23,7 +23,7 @@ FROM eclipse-temurin:8-jre
 
 LABEL maintainer="Mersel <info@mersel.io>"
 LABEL description="Mersel DSS Signer API - Dijital İmza Servisi"
-LABEL version="0.1.0"
+LABEL version="0.4.0"
 
 # Install required packages
 RUN apt-get update && \

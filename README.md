@@ -20,14 +20,14 @@ Türkiye e-imza standartlarına uygun elektronik imza (XAdES, PAdES, WS-Security
 > Script `pages-output/` klasörünü üretir ve `http://localhost:8765/`'te serve eder (Allure, JaCoCo,
 > Scalar API Reference, OWASP — hepsi tek tarayıcı sekmesinde). Detaylı flag listesi için `--help`.
 
-[Java](https://www.oracle.com/java/)
-[Spring Boot](https://spring.io/projects/spring-boot)
-[License](LICENSE)
-[DSS](https://github.com/esig/dss)
-[Version](https://github.com/mersel-dss/mersel-dss-server-signer-java/releases)
-[Tests](https://dss.mersel.dev/sign-api/testing)
-[GHCR](https://github.com/mersel-dss/mersel-dss-server-signer-java/pkgs/container/mersel-dss-server-signer-java)
-[PRs Welcome](CONTRIBUTING.md)
+[![Java](https://img.shields.io/badge/Java-8+-orange.svg)](https://www.oracle.com/java/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7-green.svg)](https://spring.io/projects/spring-boot)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![DSS](https://img.shields.io/badge/DSS-6.3-blue.svg)](https://github.com/esig/dss)
+[![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)](https://github.com/mersel-dss/mersel-dss-server-signer-java/releases)
+[![Tests](https://img.shields.io/badge/tests-600%2B%20passed-success.svg)](https://mersel-dss.github.io/mersel-dss-server-signer-java/test-report/)
+[![GHCR](https://ghcr-badge.egpl.dev/mersel-dss/mersel-dss-server-signer-java/latest_tag?trim=major&label=ghcr.io)](https://github.com/mersel-dss/mersel-dss-server-signer-java/pkgs/container/mersel-dss-server-signer-java)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 ---
 

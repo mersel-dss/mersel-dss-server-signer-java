@@ -54,7 +54,7 @@ spec:
     spec:
       containers:
       - name: sign-api
-        image: mersel-dss-signer-api:0.1.0
+        image: mersel-dss-signer-api:0.4.0
         ports:
         - containerPort: 8085
           name: http

@@ -15,7 +15,7 @@ public class OpenApiConfiguration {
         return new OpenAPI().components(new Components())
                 .info(new Info()
                         .title("mersel-dss - Java Signer API - Serverside")
-                        .version("v0.1.0")
+                        .version("v0.4.0")
                         .description("[https://github.com/mersel-dss/mersel-dss-server-signer-java](https://github.com/mersel-dss/mersel-dss-server-signer-java)"));
     }
 }
