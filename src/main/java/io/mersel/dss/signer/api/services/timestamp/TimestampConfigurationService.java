@@ -4,6 +4,7 @@ import eu.europa.esig.dss.service.http.commons.TimestampDataLoader;
 import eu.europa.esig.dss.service.tsp.OnlineTSPSource;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.services.timestamp.tubitak.TubitakTimestampDataLoader;
+import io.mersel.dss.signer.api.services.timestamp.tubitak.TubitakTspDetector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,7 +40,13 @@ public class TimestampConfigurationService {
         this.tspServerUrl = tspServerUrl;
         this.tspUserId = tspUserId;
         this.tspUserPassword = tspUserPassword;
-        this.isTubitakTsp = isTubitakTsp;
+        this.isTubitakTsp = TubitakTspDetector.resolveTubitakTspMode(isTubitakTsp, tspServerUrl);
+
+        if (!isTubitakTsp && this.isTubitakTsp) {
+            LOGGER.info("IS_TUBITAK_TSP explicit olarak set edilmemiş, ancak TS_SERVER_HOST " +
+                    "({}) KamuSM zaman damgası endpoint'i; TÜBİTAK modu otomatik aktif edildi.",
+                    tspServerUrl);
+        }
     }
 
     /**

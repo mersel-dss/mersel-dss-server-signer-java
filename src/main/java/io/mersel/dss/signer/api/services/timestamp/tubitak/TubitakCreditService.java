@@ -35,7 +35,13 @@ public class TubitakCreditService {
         this.tspServerUrl = tspServerUrl;
         this.tspUserId = tspUserId;
         this.tspUserPassword = tspUserPassword;
-        this.isTubitakTsp = isTubitakTsp;
+        this.isTubitakTsp = TubitakTspDetector.resolveTubitakTspMode(isTubitakTsp, tspServerUrl);
+
+        if (!isTubitakTsp && this.isTubitakTsp) {
+            LOGGER.info("IS_TUBITAK_TSP explicit olarak set edilmemiş, ancak TS_SERVER_HOST " +
+                    "({}) KamuSM zaman damgası endpoint'i; kontör servisi TÜBİTAK modunda " +
+                    "çalışacak.", tspServerUrl);
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.models.configurations;
 
+import io.mersel.dss.signer.api.services.timestamp.tubitak.TubitakTspDetector;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -149,7 +150,14 @@ public class SignatureServiceConfiguration {
         return maxSessionCount;
     }
 
+    /**
+     * Etkin TÜBİTAK modu. {@code IS_TUBITAK_TSP} açıkça {@code true} ise
+     * her zaman {@code true}; aksi halde {@code TS_SERVER_HOST} KamuSM
+     * zaman damgası endpoint'lerinden birine işaret ediyorsa otomatik
+     * olarak {@code true} döner. Operatörün bayrağı set etmeyi
+     * unutmasına karşı fail-safe.
+     */
     public boolean isTubitakTsp() {
-        return isTubitakTsp;
+        return TubitakTspDetector.resolveTubitakTspMode(isTubitakTsp, timeStampServerHost);
     }
 }
