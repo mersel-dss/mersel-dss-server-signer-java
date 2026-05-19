@@ -77,41 +77,75 @@ class IaikSignatureMechanismsTest {
     }
 
     // ----------------------------------------------------------------
-    // ECDSA: CKM_ECDSA_<HASH>
+    // ECDSA: her zaman raw CKM_ECDSA + dış digest (universal HSM uyumu)
     // ----------------------------------------------------------------
 
+    /**
+     * <h3>Politika değişikliği (Mayıs 2026)</h3>
+     * <p>ECDSA için kombine {@code CKM_ECDSA_<HASH>} mekanizmaları
+     * <b>kullanılmıyor</b>. Sebep: SoftHSM2 + bazı production HSM driver'ları
+     * (SafeNet ProtectServer K7, eski Luna) bu mekanizmaları mechanism-list'te
+     * bildirip {@code C_SignInit}'te reddediyor; ayrıca xipki ipkcs11wrapper
+     * 1.0.9'da {@code PKCS11Token.opInit()} swallow-bug'i gerçek hata kodunu
+     * yutuyor → güvenilir fallback yapılamıyor.</p>
+     *
+     * <p>Üretim politikası: ECDSA imzasının tüm digest varyantları
+     * (SHA1/224/256/384/512) {@code CKM_ECDSA} mekanizmasına eşlenir;
+     * digest Java tarafında hesaplanır.</p>
+     */
     @Nested
-    @DisplayName("ECDSA mapping")
+    @DisplayName("ECDSA mapping — her zaman raw CKM_ECDSA")
     class EcdsaMapping {
 
         @Test
-        void ecdsaSha1_shouldMapToCkmEcdsaSha1() {
+        void ecdsaSha1_shouldAlwaysMapToRawCkmEcdsa() {
             Mechanism m = IaikSignatureMechanisms.resolveMechanism(SignatureAlgorithm.ECDSA_SHA1);
-            assertEquals(PKCS11Constants.CKM_ECDSA_SHA1, m.getMechanismCode());
+            assertEquals(PKCS11Constants.CKM_ECDSA, m.getMechanismCode(),
+                "ECDSA varyantları her zaman raw CKM_ECDSA'ya eşlenmeli "
+                + "(combined CKM_ECDSA_SHA1 universal HSM desteği yok).");
+            assertNull(m.getParameters(), "Raw CKM_ECDSA parametresizdir");
         }
 
         @Test
-        void ecdsaSha224_shouldMapToCkmEcdsaSha224() {
+        void ecdsaSha224_shouldAlwaysMapToRawCkmEcdsa() {
             Mechanism m = IaikSignatureMechanisms.resolveMechanism(SignatureAlgorithm.ECDSA_SHA224);
-            assertEquals(PKCS11Constants.CKM_ECDSA_SHA224, m.getMechanismCode());
+            assertEquals(PKCS11Constants.CKM_ECDSA, m.getMechanismCode());
         }
 
         @Test
-        void ecdsaSha256_shouldMapToCkmEcdsaSha256() {
+        void ecdsaSha256_shouldAlwaysMapToRawCkmEcdsa() {
             Mechanism m = IaikSignatureMechanisms.resolveMechanism(SignatureAlgorithm.ECDSA_SHA256);
-            assertEquals(PKCS11Constants.CKM_ECDSA_SHA256, m.getMechanismCode());
+            assertEquals(PKCS11Constants.CKM_ECDSA, m.getMechanismCode(),
+                "SoftHSM2/SafeNet/Luna driver'larında CKM_ECDSA_SHA256 reddedilebilir; "
+                + "biz ECDSA için universal destekli raw CKM_ECDSA + dış SHA-256 yolunu kullanıyoruz.");
         }
 
         @Test
-        void ecdsaSha384_shouldMapToCkmEcdsaSha384() {
+        void ecdsaSha384_shouldAlwaysMapToRawCkmEcdsa() {
             Mechanism m = IaikSignatureMechanisms.resolveMechanism(SignatureAlgorithm.ECDSA_SHA384);
-            assertEquals(PKCS11Constants.CKM_ECDSA_SHA384, m.getMechanismCode());
+            assertEquals(PKCS11Constants.CKM_ECDSA, m.getMechanismCode());
         }
 
         @Test
-        void ecdsaSha512_shouldMapToCkmEcdsaSha512() {
+        void ecdsaSha512_shouldAlwaysMapToRawCkmEcdsa() {
             Mechanism m = IaikSignatureMechanisms.resolveMechanism(SignatureAlgorithm.ECDSA_SHA512);
-            assertEquals(PKCS11Constants.CKM_ECDSA_SHA512, m.getMechanismCode());
+            assertEquals(PKCS11Constants.CKM_ECDSA, m.getMechanismCode());
+        }
+
+        @Test
+        @DisplayName("ECDSA mekanizması her durumda requiresExternalDigest=true olmalı")
+        void resolvedEcdsaMechanism_alwaysRequiresExternalDigest() {
+            // Politikanın kontratı: resolveMechanism çıktısı caller tarafından
+            // requiresExternalDigest ile sorgulanır; ECDSA için her zaman true
+            // dönmeli ki caller dış SHA-* digest hesaplasın.
+            for (SignatureAlgorithm alg : new SignatureAlgorithm[] {
+                    SignatureAlgorithm.ECDSA_SHA1, SignatureAlgorithm.ECDSA_SHA224,
+                    SignatureAlgorithm.ECDSA_SHA256, SignatureAlgorithm.ECDSA_SHA384,
+                    SignatureAlgorithm.ECDSA_SHA512}) {
+                Mechanism m = IaikSignatureMechanisms.resolveMechanism(alg);
+                assertTrue(IaikSignatureMechanisms.requiresExternalDigest(m),
+                    "ECDSA varyantı " + alg + " için resolveMechanism çıktısı dış digest beklemeli");
+            }
         }
     }
 

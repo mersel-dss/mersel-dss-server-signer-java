@@ -395,15 +395,18 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     // --------------------------------------------------------------------
 
     /**
-     * Sağlanan private key handle'ı üzerinden HSM'de imza atar. Eğer
-     * {@link IaikSignatureMechanisms} ECDSA / RSA-PKCS mekanizmasını
-     * destekleyemiyor diye raw mekanizmaya düşürmek isterse digest'i
-     * dışarıda hesaplayıp raw byte'ları imzalatır.
-     */
-    /**
-     * Token üzerinde imza atar. PKCS11Token kendi içinde thread-safe oturum
-     * havuzu yönettiği için bu metoda eş zamanlı çağrı sağlanır; üst sınır
-     * {@code signatureSemaphore} ile kontrol edilir.
+     * Sağlanan private key handle'ı üzerinden HSM'de imza atar.
+     *
+     * <p>{@link IaikSignatureMechanisms} ile DSS algoritmasını PKCS#11
+     * mekanizmasına çevirir; ECDSA için her zaman raw {@code CKM_ECDSA} +
+     * dış digest kullanır (universal HSM uyumu). RSA için combined
+     * {@code CKM_<HASH>_RSA_PKCS} ile tek round-trip imza atar; mekanizma
+     * reddedilirse {@link #signWithRawFallback} ile raw {@code CKM_RSA_PKCS} +
+     * PKCS#1 DigestInfo wrap'e düşer.</p>
+     *
+     * <p>PKCS11Token kendi içinde thread-safe oturum havuzu yönettiği için
+     * bu metoda eş zamanlı çağrı sağlanır; üst sınır
+     * {@code signatureSemaphore} ile kontrol edilir.</p>
      */
     byte[] signOnSession(long privateKeyHandle,
                          byte[] dataToSign,
@@ -418,71 +421,37 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             return invokeSign(mechanism, privateKeyHandle, inputData,
                 signatureAlgorithm, dataToSign.length);
         } catch (PKCS11Exception ckEx) {
-            // Bazı eski HSM'lerde CKM_<HASH>_ECDSA / CKM_<HASH>_RSA_PKCS
-            // desteklenmez. Fallback'i deneyelim — RSA-PSS hariç (raw
-            // CKM_RSA_PKCS'e indirgeme PSS imzasını sessizce v1.5'e çevirir,
-            // bu yanlış imzadır → açıkça reddet).
-            if (ckEx.getErrorCode() == PKCS11Constants.CKR_MECHANISM_INVALID) {
+            long errorCode = ckEx.getErrorCode();
+            // ─────────────────────────────────────────────────────────────
+            // Mekanizma uyumsuzluğu → raw fallback
+            // ─────────────────────────────────────────────────────────────
+            // ECDSA için {@link IaikSignatureMechanisms} zaten her zaman raw
+            // CKM_ECDSA kullanır — bu yüzden combined-mode mekanizma reddi
+            // pratik olarak yalnızca RSA tarafında oluşabilir. Yine de tüm
+            // standart "mekanizma desteklenmiyor" hata kodları için aynı
+            // savunmacı davranışı uyguluyoruz.
+            //
+            // RSA-PSS hariç (raw CKM_RSA_PKCS'e indirgeme PSS imzasını
+            // sessizce v1.5'e çevirir → yanlış imza; açıkça reddediyoruz).
+            // ─────────────────────────────────────────────────────────────
+            boolean mechanismRejected =
+                errorCode == PKCS11Constants.CKR_MECHANISM_INVALID
+                || errorCode == PKCS11Constants.CKR_FUNCTION_NOT_SUPPORTED
+                || errorCode == PKCS11Constants.CKR_KEY_TYPE_INCONSISTENT;
+            if (mechanismRejected) {
                 if (signatureAlgorithm.getEncryptionAlgorithm() == EncryptionAlgorithm.RSASSA_PSS) {
                     throw new io.mersel.dss.signer.api.exceptions.SignatureException(
-                        "HSM bu sürümüyle RSA-PSS imzayı desteklemiyor; raw fallback "
-                        + "PKCS#1 v1.5'e indirgeme yapar, bu imza GEÇERSİZ olur. "
-                        + "Lütfen RSA-PSS yerine RSA-PKCS#1 v1.5 algoritmasıyla "
-                        + "yapılandırın veya HSM firmware'ini güncelleyin.", ckEx);
+                        "HSM bu sürümüyle RSA-PSS imzayı desteklemiyor (CKR=0x"
+                            + Long.toHexString(errorCode) + "); raw fallback PKCS#1 v1.5'e "
+                            + "indirgeme yapar, bu imza GEÇERSİZ olur. Lütfen RSA-PSS yerine "
+                            + "RSA-PKCS#1 v1.5 algoritmasıyla yapılandırın veya HSM "
+                            + "firmware'ini güncelleyin.", ckEx);
                 }
-                LOGGER.warn("Mekanizma reddedildi (CKR_MECHANISM_INVALID); raw fallback'e düşülüyor.");
+                LOGGER.warn("Mekanizma reddedildi (CKR=0x{}, alg={}, mech=0x{}); "
+                    + "raw fallback'e düşülüyor.",
+                    Long.toHexString(errorCode), signatureAlgorithm,
+                    Long.toHexString(mechanism.getMechanismCode()));
                 return signWithRawFallback(privateKeyHandle, dataToSign, signatureAlgorithm);
-            }
-            // ──────────────────────────────────────────────────────────────
-            // xipki/ipkcs11wrapper 1.0.9 — opInit() swallow-bug workaround
-            // ──────────────────────────────────────────────────────────────
-            // PKCS11Token.opInit() yalnızca CKR_USER_NOT_LOGGED_IN için
-            // re-init yapıyor; başka her PKCS11Exception'ı SESSİZCE yutuyor
-            // (master'da `else { throw ex; }` ile düzeltildi, ama 2024-07-20
-            // sonrası release yok). Sonuç: alttaki session.sign(data) çağrısı
-            // C_SignInit YAPILMAMIŞ bir session üzerinde koşar ve
-            // CKR_OPERATION_NOT_INITIALIZED döner. Bozuk session pool'a geri
-            // eklendiği için cascade fail başlar (CI'da gözlenen pattern:
-            // N başarılı + arkasından ardarda hep fail).
-            //
-            // Workaround: pool'u flush et (corrupt session'lar atılır), sign'ı
-            // bir kez daha dene. İkinci deneme de fail ediyorsa kalıcı bir
-            // HSM/driver sorunu var demektir — bu sefer gerçek hatayı yukarı
-            // bırakırız (auditor için sessiz başarısızlık üretmiyoruz).
-            //
-            // Upstream tracking: https://github.com/xipki/ipkcs11wrapper master
-            // şu anda düzeltilmiş; sürüm > 1.0.9 publish edildiğinde bu blok
-            // kaldırılabilir (TEST_BACKLOG'a not düşüldü).
-            // ──────────────────────────────────────────────────────────────
-            if (ckEx.getErrorCode() == PKCS11Constants.CKR_OPERATION_NOT_INITIALIZED) {
-                LOGGER.warn("PKCS#11 session state tutarsız (CKR_OPERATION_NOT_INITIALIZED) — "
-                    + "xipki 1.0.9 opInit() swallow-bug şüphesi. Session pool flush + "
-                    + "sign retry deneniyor (alg={}, mech=0x{}, keyHandle=0x{}).",
-                    signatureAlgorithm, Long.toHexString(mechanism.getMechanismCode()),
-                    Long.toHexString(privateKeyHandle));
-                try {
-                    token.closeAllSessions();
-                } catch (Exception flushEx) {
-                    // Best-effort: flush başarısız olsa bile retry'ı denemekten kaybedeceğimiz
-                    // bir şey yok; sonraki borrowSession yeni session yaratır.
-                    LOGGER.warn("Session pool flush başarısız (best-effort, retry yine denenecek): {}",
-                        flushEx.getMessage());
-                }
-                try {
-                    byte[] signature = invokeSign(mechanism, privateKeyHandle, inputData,
-                        signatureAlgorithm, dataToSign.length);
-                    LOGGER.info("Sign retry başarılı (corrupt session flush sonrası); "
-                        + "xipki opInit swallow-bug'dan kurtarıldı.");
-                    return signature;
-                } catch (PKCS11Exception retryEx) {
-                    // İkinci denemede de PKCS11 hatası — kalıcı bir sorun var.
-                    throw new io.mersel.dss.signer.api.exceptions.SignatureException(
-                        "HSM imza başarısız (session pool flush + retry sonrası da): "
-                            + retryEx.getMessage(), retryEx);
-                } catch (Exception retryEx) {
-                    throw new io.mersel.dss.signer.api.exceptions.SignatureException(
-                        "HSM imza başarısız (retry sırasında beklenmedik hata)", retryEx);
-                }
             }
             throw new io.mersel.dss.signer.api.exceptions.SignatureException(
                 "HSM imza başarısız: " + ckEx.getMessage(), ckEx);
@@ -493,9 +462,29 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     }
 
     /**
-     * Tek bir {@code token.sign} çağrısını sarmalar (logging + EC/DSA normalize
-     * dahil). {@link #signOnSession}'daki retry yolundan da çağrılabilsin diye
-     * extract edildi — aynı log/normalize davranışı her iki yolda da aynı.
+     * Tek bir {@code token.sign} çağrısını sarmalar (logging + EC/DSA
+     * normalize dahil). Doğrudan PKCS11Token'ın public API'sini kullanır;
+     * private internals'a reflection ile dokunmuyoruz.
+     *
+     * <h3>xipki/ipkcs11wrapper 1.0.9 opInit() swallow-bug</h3>
+     * <p>{@link PKCS11Token#sign(Mechanism, long, byte[])} kendi içinde
+     * {@code opInit()} çağırır; bu metot {@code C_SignInit} hatalarından SADECE
+     * {@code CKR_USER_NOT_LOGGED_IN}'i yakalar, diğer her
+     * {@code PKCS11Exception}'ı (CKR_MECHANISM_INVALID, CKR_KEY_HANDLE_INVALID,
+     * vs.) <em>sessizce yutar</em>; sonuç altta {@code CKR_OPERATION_NOT_INITIALIZED}
+     * olarak görünür ve gerçek hata kodu kaybolur.</p>
+     *
+     * <p>Bu bug'i deterministik tetiklemenin ana yolu (CI'da gözlenen) ECDSA
+     * combined mekanizmalarıydı ({@code CKM_ECDSA_SHA256} SoftHSM2'de
+     * mechanism-list'te var ama C_SignInit'te reddediliyor).
+     * {@link IaikSignatureMechanisms} ECDSA için her zaman raw {@code CKM_ECDSA}
+     * üreterek bu yolu by-pass eder. RSA combined mekanizmaları
+     * ({@code CKM_<HASH>_RSA_PKCS}) tüm production HSM'lerinde stabil
+     * çalışmıştır; bu yolda swallow-bug'a değme olasılığı pratik olarak yok.</p>
+     *
+     * <p>Upstream tracking: xipki/ipkcs11wrapper master {@code else throw ex}
+     * ile düzeltildi (commit 2024-11); resmi {@code v1.1+} sürümü yayınlandığında
+     * bu Javadoc notu kaldırılabilir.</p>
      */
     private byte[] invokeSign(Mechanism mechanism,
                               long privateKeyHandle,
@@ -534,8 +523,11 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             if (enc == EncryptionAlgorithm.RSA) {
                 inputData = Pkcs1DigestInfo.wrap(inputData, signatureAlgorithm.getDigestAlgorithm());
             }
-            byte[] signature = token.sign(rawMech, privateKeyHandle, inputData);
-            return normalizeIfEcOrDsa(signature, signatureAlgorithm);
+            // Raw mekanizma için de aynı invokeSign yolu kullanılır
+            // (token.sign + normalizeIfEcOrDsa). DRY: tek logging + normalize
+            // davranışı her iki kod yolunda da geçerlidir.
+            return invokeSign(rawMech, privateKeyHandle, inputData,
+                signatureAlgorithm, dataToSign.length);
         } catch (io.mersel.dss.signer.api.exceptions.SignatureException e) {
             throw e;
         } catch (Exception e) {

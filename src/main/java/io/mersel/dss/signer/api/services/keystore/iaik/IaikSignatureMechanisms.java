@@ -10,9 +10,10 @@ import org.xipki.pkcs11.wrapper.params.RSA_PKCS_PSS_PARAMS;
 /**
  * DSS {@link SignatureAlgorithm} -&gt; PKCS#11 {@link Mechanism} donusumu.
  *
- * <p>Stratejimiz "tek-shot hashing": mumkun oldugunda token'in
- * {@code CKM_<HASH>_RSA_PKCS} (orn. {@code CKM_SHA256_RSA_PKCS}) mekanizmasini
- * kullanarak digest hesaplamasini HSM'e yaptiririz. Bu yol:</p>
+ * <h2>RSA: combined mod (tek round-trip)</h2>
+ * <p>RSA icin token'in {@code CKM_<HASH>_RSA_PKCS} (orn.
+ * {@code CKM_SHA256_RSA_PKCS}) mekanizmasini kullanarak digest hesaplamasini
+ * HSM'e yaptiririz. Bu yol:</p>
  * <ul>
  *   <li>JCE-uyumlu davranir (DSS'in bekledigi {@code Signature.sign()}
  *       ciktisiyla bit-bit ayni imzayi uretir).</li>
@@ -21,10 +22,27 @@ import org.xipki.pkcs11.wrapper.params.RSA_PKCS_PSS_PARAMS;
  *       insa etmek zorunda kalmayiz.</li>
  * </ul>
  *
- * <p>EC icin durum farkli: bazi tokenler (SafeNet ProtectServer K7 dahil)
- * yalnizca {@code CKM_ECDSA_SHA1} saglar; SHA-256/384/512 icin ham
- * {@code CKM_ECDSA} mekanizmasini kullanir ve digest'i disaridan veririz.
- * {@link #requiresExternalDigest(Mechanism)} bu farki isaret eder.</p>
+ * <h2>ECDSA: her zaman raw {@code CKM_ECDSA} + dis digest</h2>
+ * <p>ECDSA icin combined mekanizmalari ({@code CKM_ECDSA_SHA256} vb.)
+ * <b>kullanmiyoruz</b>. Sebep: SoftHSM2 ve bazi production HSM driver'lari
+ * (SafeNet ProtectServer K7, eski Luna firmware) bu mekanizmalari
+ * mechanism-list'te bildirir ama {@code C_SignInit}'te
+ * {@code CKR_MECHANISM_INVALID} / {@code CKR_FUNCTION_NOT_SUPPORTED} doner.
+ * Ayrica xipki ipkcs11wrapper 1.0.9'da {@code PKCS11Token.opInit()}
+ * <em>swallow-bug</em>'i bu hatayi {@code CKR_OPERATION_NOT_INITIALIZED}'a
+ * cevirip <b>gercek hata kodunu yutuyor</b> — bu yuzden combined-mode
+ * basarisizliklarini guvenilir bicimde tespit edemiyoruz.</p>
+ *
+ * <p>Coz&uuml;m: ECDSA icin her zaman raw {@code CKM_ECDSA} kullanip digest'i
+ * Java tarafinda hesapliyoruz. Bu, tum production HSM'lerinde universal
+ * destek goren tek ECDSA imza yolu. JCA verifier'i raw r||s ciktisi yerine
+ * ASN.1 DER SEQUENCE bekledigi icin
+ * {@link Pkcs11EcdsaSignatureEncoder#normalizeToDer} ile cevirim yapilir.</p>
+ *
+ * <h2>RSA-PSS ve DSA</h2>
+ * <p>PSS combined modu kalir (raw fallback PSS imzayi sessizce v1.5'e
+ * cevirir — yanlistir, reddetmek dogru davranis). DSA combined modu da
+ * kalir (Turkiye'de pratik olarak olu, raw fallback yolu mevcut degil).</p>
  */
 final class IaikSignatureMechanisms {
 
@@ -43,7 +61,9 @@ final class IaikSignatureMechanisms {
                 return new Mechanism(rsaPkcsCkm(digest));
             case ECDSA:
             case PLAIN_ECDSA:
-                return new Mechanism(ecdsaCkm(digest));
+                // Kasitli olarak combined CKM_ECDSA_<HASH> kullanmiyoruz —
+                // class javadoc'undaki "ECDSA: her zaman raw" politikasi.
+                return new Mechanism(PKCS11Constants.CKM_ECDSA);
             case DSA:
                 return new Mechanism(dsaCkm(digest));
             default:
@@ -54,6 +74,9 @@ final class IaikSignatureMechanisms {
 
     static boolean requiresExternalDigest(Mechanism mechanism) {
         long m = mechanism.getMechanismCode();
+        // CKM_ECDSA ve raw CKM_RSA_PKCS digest'i disarida bekler.
+        // Combined hash+sign mekanizmalari (CKM_<HASH>_RSA_PKCS,
+        // CKM_<HASH>_RSA_PKCS_PSS) HSM icinde digest hesaplar.
         return m == PKCS11Constants.CKM_ECDSA
             || m == PKCS11Constants.CKM_RSA_PKCS;
     }
@@ -76,19 +99,6 @@ final class IaikSignatureMechanisms {
             default:
                 throw new IllegalArgumentException(
                     "RSA-PKCS icin desteklenmeyen digest: " + digest);
-        }
-    }
-
-    private static long ecdsaCkm(DigestAlgorithm digest) {
-        switch (digest) {
-            case SHA1:   return PKCS11Constants.CKM_ECDSA_SHA1;
-            case SHA224: return PKCS11Constants.CKM_ECDSA_SHA224;
-            case SHA256: return PKCS11Constants.CKM_ECDSA_SHA256;
-            case SHA384: return PKCS11Constants.CKM_ECDSA_SHA384;
-            case SHA512: return PKCS11Constants.CKM_ECDSA_SHA512;
-            default:
-                throw new IllegalArgumentException(
-                    "ECDSA icin desteklenmeyen digest: " + digest);
         }
     }
 
