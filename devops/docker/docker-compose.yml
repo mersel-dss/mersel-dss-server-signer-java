@@ -16,26 +16,47 @@ services:
     ports:
       - "8085:8085"
     environment:
-      # Server Configuration
+      # ─── Spring Profile ─────────────────────────────────────────────
+      # Production'da boş bırakın; test için "local,pfx-kurum01-rsa2048"
+      # gibi composition için bkz. docs/RUN_PROFILES.md
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-}
+
+      # ─── Server ─────────────────────────────────────────────────────
       - SERVER_PORT=8085
-      
-      # Certificate Configuration
+
+      # ─── Sertifika (PFX) ────────────────────────────────────────────
       - PFX_PATH=${PFX_PATH:-/app/certs/certificate.pfx}
       - CERTIFICATE_PIN=${CERTIFICATE_PIN:-changeme}
       - CERTIFICATE_ALIAS=${CERTIFICATE_ALIAS:-1}
-      
-      # Timestamp Configuration (optional)
+
+      # ─── HSM / PKCS#11 (opsiyonel) ──────────────────────────────────
+      - PKCS11_LIBRARY=${PKCS11_LIBRARY:-}
+      - PKCS11_SLOT=${PKCS11_SLOT:--1}
+      - PKCS11_SLOT_LIST_INDEX=${PKCS11_SLOT_LIST_INDEX:--1}
+      - PKCS11_NULL_INIT_ARGS=${PKCS11_NULL_INIT_ARGS:-false}
+
+      # ─── TÜBİTAK Zaman Damgası ──────────────────────────────────────
       - IS_TUBITAK_TSP=${IS_TUBITAK_TSP:-false}
       - TS_SERVER_HOST=${TS_SERVER_HOST:-http://zd.kamusm.gov.tr}
       - TS_USER_ID=${TS_USER_ID:-}
       - TS_USER_PASSWORD=${TS_USER_PASSWORD:-}
-      
-      # Logging
+
+      # ─── XAdES SigningTime Timezone (issue #7) ──────────────────────
+      # Default '+03:00' — TÜBİTAK MA3 referans çıktısı uyumlu.
+      - XADES_SIGNING_TIME_ZONE=${XADES_SIGNING_TIME_ZONE:-+03:00}
+
+      # ─── Trusted Root ───────────────────────────────────────────────
+      - TRUSTED_ROOT_CERT_FOLDER_PATH=${TRUSTED_ROOT_CERT_FOLDER_PATH:-}
+
+      # ─── CORS ───────────────────────────────────────────────────────
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}
+
+      # ─── Logging ────────────────────────────────────────────────────
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LOG_PATH=/app/logs
-      
-      # JVM Options
-      - JAVA_OPTS=-Xmx1g -Xms512m -XX:+UseG1GC
+
+      # ─── JVM ────────────────────────────────────────────────────────
+      - JAVA_OPTS=${JAVA_OPTS:--Xms512m -Xmx1g -XX:+UseG1GC -XX:MaxGCPauseMillis=100}
     volumes:
       # Mount test certificates (development) - RSA and EC384 test certs
       - ../../resources/test-certs:/app/certs:ro

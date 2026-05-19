@@ -1,0 +1,23 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    Mersel DSS Signer — Default geliştirici run config.
+
+    Bu config 'local' profile'ını aktive eder; bu da KURUM01 RSA-2048 test PFX'ini
+    seçer (KamuSM publicly published, PIN=614573, dosya
+    resources/test-certs/testkurum01_rsa2048@test.com.tr_614573.pfx). Tüm OS'larda
+    çalışır — PFX dosya yolu repo-relatif.
+
+    `mvn spring-boot:run` ile birebir aynı davranış; tek fark IDE'nin debugger'ı
+    bu config üzerinden attach edebilmesi.
+  -->
+  <configuration default="false" name="Signer · Default (KURUM01 RSA-2048)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="mersel-dss-signer-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="io.mersel.dss.signer.api.SignatureApplication" />
+    <option name="ACTIVE_PROFILES" value="local,pfx-kurum01-rsa2048" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

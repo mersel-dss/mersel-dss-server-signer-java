@@ -1,0 +1,23 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    TÜBİTAK Mali Mühür AKİS (Linux) ile çalıştırır.
+
+    ÖN KOŞUL: AKİS Linux sürücüsü kurulu + pcscd çalışıyor + kart takılı.
+    Default path /usr/local/lib/libakisp11.so; distro paketi farklı yere koyduysa
+    PKCS11_LIBRARY env'iyle override edilir (ör. Ubuntu:
+    /usr/lib/x86_64-linux-gnu/libakisp11.so).
+  -->
+  <configuration default="false" name="Signer · Mali Mühür AKİS (Linux)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="CERTIFICATE_PIN" value="REPLACE_WITH_YOUR_PIN" />
+    </envs>
+    <module name="mersel-dss-signer-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="io.mersel.dss.signer.api.SignatureApplication" />
+    <option name="ACTIVE_PROFILES" value="local,mali-muhur-akis-linux" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

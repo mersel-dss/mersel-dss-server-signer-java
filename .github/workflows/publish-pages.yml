@@ -75,6 +75,23 @@ jobs:
           cache: maven
 
       # ───────────────────────────────────────────────────────────────────
+      # pandoc — Production Deployment Runbook (deployment/) markdown→HTML
+      # render'ı için. ubuntu-latest'te apt registry'de hazır (~5 sn install).
+      # docs/deployment/build.sh hem CI hem local için aynı pandoc args'ı
+      # kullanır; sürüm farkı önemli değil (gfm reader 2.x'ten beri stabil).
+      # ───────────────────────────────────────────────────────────────────
+      - name: Install pandoc (deployment runbook renderer)
+        # apt registry bir an down olursa veya GitHub runner network'ü
+        # geçici sorun yaşarsa deployment/ section'ı atlasın ama Allure/
+        # JaCoCo/OpenAPI/Security publish'i çökmesin.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq pandoc
+          pandoc --version | head -1
+
+      # ───────────────────────────────────────────────────────────────────
       # NVD veri tabanı cache — OWASP Dependency-Check ilk koşumunda ~5 dk
       # download yapar. ~/.m2/repository altında tutulan data klasörünü
       # cache key'i ile restore ediyoruz; ay başı invalidate etmek için
@@ -150,6 +167,36 @@ jobs:
               -DexcludedGroups=pkcs11-integration \
               -DverifierImage="$VERIFIER_IMAGE"
           fi
+
+      # ───────────────────────────────────────────────────────────────────
+      # Allure executor.json — raporun sağ üst köşesindeki "GitHub Actions"
+      # widget'ını besler. reportUrl Evidence Site landing'e back-link verir:
+      # Allure → landing loop kapansın diye. allure-maven-plugin
+      # target/allure-results/ klasörünü `mvn allure:report` öncesi inceler;
+      # executor.json oradaysa otomatik olarak widgets/executors.json'a
+      # serialize edilir.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Inject Allure executor.json (loop back to Evidence Site)
+        # Defansif: dosya yazılamazsa (disk full vs.) Allure raporu yine
+        # üretilsin — sadece executor widget'ı kaybolur, content kalır.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p target/allure-results
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          cat > target/allure-results/executor.json <<EOF
+          {
+            "name": "GitHub Actions",
+            "type": "github",
+            "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "buildOrder": ${{ github.run_number }},
+            "buildName": "Build #${{ github.run_number }}",
+            "buildUrl": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            "reportName": "Mersel DSS Signer — Evidence",
+            "reportUrl": "${PAGES_URL}"
+          }
+          EOF
+          echo "→ executor.json reportUrl: $PAGES_URL"
 
       # ───────────────────────────────────────────────────────────────────
       # Allure report — allure-results/ → static HTML. History inject
@@ -407,6 +454,48 @@ jobs:
 
           echo "===== pages-output structure ====="
           find pages-output -maxdepth 2 -type d | sort
+
+      # ───────────────────────────────────────────────────────────────────
+      # Production Deployment Runbook — devops/ ve docs/RUN_PROFILES.md
+      # markdown'larını pandoc ile sekmeli HTML'e render eder ve
+      # pages-output/deployment/ altına yazar. Landing'deki "Production
+      # Runbook" kartı buraya işaret eder; Allure executor.json'daki
+      # reportUrl ise landing'e geri döner — loop kapanır.
+      # ───────────────────────────────────────────────────────────────────
+      - name: Build Production Deployment Runbook
+        # pandoc install fail olduysa veya markdown'larda pandoc'un
+        # patlayacağı bir kenar durumu varsa, deployment/ section'ı
+        # placeholder olarak yayınlansın — diğer raporlar etkilenmesin.
+        # Çıkış başarısızsa Assemble pages-output zaten boş placeholder
+        # üretmedi (deployment/ dizini Assemble adımında yaratılmıyor);
+        # bu yüzden başarısızlığa karşı manuel placeholder yazalım.
+        continue-on-error: true
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+          GENERATED_AT: ${{ steps.date.outputs.iso }}
+          REPO_SLUG: ${{ github.repository }}
+          GIT_REF: ${{ github.ref_name }}
+        run: |
+          set -uo pipefail
+          mkdir -p pages-output/deployment
+          if bash docs/deployment/build.sh -o pages-output/deployment; then
+            echo "→ deployment/ içeriği:"
+            ls -la pages-output/deployment/
+          else
+            echo "::warning::Deployment runbook üretilemedi — placeholder yazılıyor"
+            cat > pages-output/deployment/index.html <<'EOF'
+          <!doctype html><meta charset=utf-8>
+          <title>Deployment runbook unavailable</title>
+          <h1>Deployment runbook üretilemedi</h1>
+          <p>Bu build'de runbook render edilemedi. Markdown kaynakları repo'da hazır:</p>
+          <ul>
+            <li><a href="https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/devops/systemd/README.md">Linux SystemD</a></li>
+            <li><a href="https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/devops/windows-service/README.md">Windows Service</a></li>
+            <li><a href="https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/devops/docker/README.md">Docker</a></li>
+            <li><a href="https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/RUN_PROFILES.md">Run Profilleri</a></li>
+          </ul>
+          EOF
+          fi
 
       - name: Upload Surefire reports (artifact, retention)
         if: always()

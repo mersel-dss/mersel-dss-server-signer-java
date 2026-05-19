@@ -1,0 +1,12 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Signer · PFX RSA-2048 (KURUM03)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <module name="mersel-dss-signer-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="io.mersel.dss.signer.api.SignatureApplication" />
+    <option name="ACTIVE_PROFILES" value="local,pfx-kurum03-rsa2048" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

@@ -1,0 +1,25 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    TÜBİTAK Mali Mühür AKİS (macOS) ile çalıştırır.
+
+    ÖN KOŞUL: AKİS macOS sürücüsünün kurulu olması + kart takılı + CERTIFICATE_PIN
+    biliniyor olması. PIN env block'ta placeholder olarak duruyor; operatör
+    Run Configuration düzenleyip kendi PIN'ini girer.
+
+    Sürücü default'ta /usr/local/lib/libakisp11.dylib bekler; farklı yer varsa
+    PKCS11_LIBRARY env'iyle override edilir.
+  -->
+  <configuration default="false" name="Signer · Mali Mühür AKİS (macOS)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <envs>
+      <env name="CERTIFICATE_PIN" value="REPLACE_WITH_YOUR_PIN" />
+    </envs>
+    <module name="mersel-dss-signer-api" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="io.mersel.dss.signer.api.SignatureApplication" />
+    <option name="ACTIVE_PROFILES" value="local,mali-muhur-akis-mac" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

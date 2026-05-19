@@ -1,0 +1,120 @@
+<!--
+  =============================================================================
+   mersel-dss-signer.xml — WinSW (Windows Service Wrapper) yapılandırması
+  =============================================================================
+   WinSW, Java JAR'larını Windows servisine sarmalayan açık kaynak bir
+   wrapper'dır. Spring Boot fat-jar bu XML ile birlikte tek-binary Windows
+   servisi haline gelir.
+
+   Yerleşim (Install-Service.ps1 otomatik yapar):
+     C:\Program Files\mersel-dss-signer\
+     ├── mersel-dss-signer.exe          (WinSW binary — adı XML ile aynı olmalı!)
+     ├── mersel-dss-signer.xml          (BU dosya)
+     ├── mersel-dss-signer-api.jar      (Spring Boot fat-jar)
+     ├── mersel-dss-signer.env          (operatör tarafından oluşturulan secret env)
+     └── logs\                          (WinSW stdout/stderr + Spring logback çıktısı)
+
+   WinSW DLL/Exe adı XML dosyasıyla AYNI olmalı — wrapper kendi XML'ini
+   "<exename>.xml" pattern'i ile arar.
+
+   Resmi WinSW: https://github.com/winsw/winsw
+   ETKİN KOMUTLAR:
+     mersel-dss-signer.exe install       # servisi kaydet
+     mersel-dss-signer.exe uninstall     # servisi kaldır
+     mersel-dss-signer.exe start | stop | restart | status
+  =============================================================================
+-->
+<service>
+
+    <!-- ───────────────────── kimlik ───────────────────── -->
+    <id>mersel-dss-signer</id>
+    <name>Mersel DSS Signer API</name>
+    <description>Mersel DSS Signer — Dijital İmza Servisi (PAdES, XAdES, CAdES, WS-Security). https://dss.mersel.dev</description>
+
+    <!-- ───────────────────── exec ─────────────────────────
+         Default Java yolu sistem PATH'ten. JAVA_HOME tanımlıysa onu
+         tercih etmek için Install-Service.ps1 <executable>'ı dinamik
+         olarak %JAVA_HOME%\bin\java.exe'ye yazabilir. ─────────────── -->
+    <executable>java</executable>
+    <arguments>-Xms256m -Xmx1g -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Djava.security.egd=file:/dev/./urandom -Dfile.encoding=UTF-8 -jar "%BASE%\mersel-dss-signer-api.jar"</arguments>
+
+    <!-- Çalışma dizini — %BASE% otomatik olarak exe/xml ile aynı dizini gösterir. -->
+    <workingdirectory>%BASE%</workingdirectory>
+
+    <!-- ───────────────────── env değişkenleri ─────────────
+         WinSW <env> elementleri runtime'da process'e geçer.
+         Install-Service.ps1 .env dosyasından okuyup BURAYA inject eder
+         (placeholder bloğu replace edilir). Manuel düzenleme yerine
+         scripti kullanmak önerilir — yine de templatten haberdar ol. -->
+
+    <!-- BEGIN_ENV_INJECTION (Install-Service.ps1 bu blok ile dosyayı günceller) -->
+    <env name="SERVER_PORT"  value="8085" />
+    <env name="LOG_PATH"     value="%BASE%\logs" />
+    <env name="LOG_LEVEL"    value="INFO" />
+    <!-- Production'da SPRING_PROFILES_ACTIVE BOŞ. Test için:
+         <env name="SPRING_PROFILES_ACTIVE" value="local,pfx-kurum01-rsa2048" /> -->
+
+    <!-- PFX senaryosu (örnek — gerçek değerleri Install-Service.ps1 yazar) -->
+    <!-- <env name="PFX_PATH"          value="C:\ProgramData\mersel-dss-signer\certs\production.pfx" /> -->
+    <!-- <env name="CERTIFICATE_PIN"   value="__SET_BY_INSTALLER__" /> -->
+    <!-- <env name="CERTIFICATE_ALIAS" value="1" /> -->
+
+    <!-- HSM senaryosu (AKİS Windows DLL'i) -->
+    <!-- <env name="PKCS11_LIBRARY"    value="C:\Windows\System32\akisp11.dll" /> -->
+    <!-- <env name="PKCS11_SLOT"       value="-1" /> -->
+    <!-- <env name="PKCS11_SLOT_LIST_INDEX" value="-1" /> -->
+    <!-- <env name="PKCS11_NULL_INIT_ARGS"  value="false" /> -->
+    <!-- <env name="CERTIFICATE_PIN"        value="__SET_BY_INSTALLER__" /> -->
+
+    <!-- TÜBİTAK TSP -->
+    <!-- <env name="IS_TUBITAK_TSP"   value="true" /> -->
+    <!-- <env name="TS_SERVER_HOST"   value="http://zd.kamusm.gov.tr" /> -->
+    <!-- <env name="TS_USER_ID"       value="__SET_BY_INSTALLER__" /> -->
+    <!-- <env name="TS_USER_PASSWORD" value="__SET_BY_INSTALLER__" /> -->
+
+    <!-- XAdES SigningTime (issue #7) — default '+03:00' TÜBİTAK MA3 uyumlu -->
+    <!-- <env name="XADES_SIGNING_TIME_ZONE" value="+03:00" /> -->
+    <!-- END_ENV_INJECTION -->
+
+    <!-- ───────────────────── log ──────────────────────────
+         WinSW stdout/stderr'i %BASE%\logs altına size-based rotate eder.
+         Spring Boot kendi log dosyasını ayrıca logback-spring.xml ile yazar
+         (LOG_PATH env'i üstte verildi). ─────────────────────────────────── -->
+    <log mode="roll-by-size">
+        <sizeThreshold>10240</sizeThreshold> <!-- KB → 10 MB -->
+        <keepFiles>8</keepFiles>
+    </log>
+    <logmode>append</logmode>
+
+    <!-- ───────────────────── davranış ─────────────────────
+         SC_ACTION_RESTART üç başarısız kalkıştan sonra. Restart-on-failure
+         davranışı systemd "Restart=on-failure" muadili. ─────────────── -->
+    <onfailure action="restart" delay="10 sec" />
+    <onfailure action="restart" delay="30 sec" />
+    <onfailure action="restart" delay="60 sec" />
+    <resetfailure>1 hour</resetfailure>
+
+    <!-- ───────────────────── shutdown ─────────────────────
+         Spring Boot SIGTERM'i yakalar — Windows'ta WinSW önce CTRL+BREAK
+         gönderir (stopParentProcessFirst=true), sonra graceful kill bekler. -->
+    <stoptimeout>60 sec</stoptimeout>
+    <stopparentprocessfirst>true</stopparentprocessfirst>
+
+    <!-- ───────────────────── startup ──────────────────────
+         AKİS smart card kullanılacaksa SCardSvr bağımlılığı önerilir.
+         PFX-only deployment'larda silinebilir. ─────────────────────── -->
+    <depend>SCardSvr</depend>
+    <startmode>Automatic</startmode>
+    <delayedAutoStart>true</delayedAutoStart>
+
+    <!-- ───────────────────── güvenlik ─────────────────────
+         Default'ta LocalSystem hesabı (yüksek yetki). Production'da
+         dedicated bir hizmet hesabı (örn. svc_mersel_signer) tavsiye edilir.
+         Install-Service.ps1 -ServiceAccount parametresiyle override eder. -->
+    <!-- <serviceaccount>
+        <username>.\svc_mersel_signer</username>
+        <password>__SET_BY_INSTALLER__</password>
+        <allowservicelogon>true</allowservicelogon>
+    </serviceaccount> -->
+
+</service>

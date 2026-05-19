@@ -121,6 +121,30 @@ cd devops/docker
 docker-compose up -d
 ```
 
+### Linux Production — SystemD
+
+```bash
+mvn clean package -DskipTests
+sudo ./devops/systemd/install.sh
+sudo nano /etc/mersel-dss-signer/mersel-dss-signer.env   # PIN / PFX / TSP
+sudo systemctl start mersel-dss-signer
+```
+
+Hardened unit (NoNewPrivileges, ProtectSystem=strict), `journalctl -u mersel-dss-signer -f` ile log. Detay: [`devops/systemd/`](devops/systemd/).
+
+### Windows Production — Windows Service
+
+```powershell
+# Admin PowerShell
+mvn clean package -DskipTests
+cd .\devops\windows-service
+Copy-Item .\mersel-dss-signer.env.example .\mersel-dss-signer.env
+notepad .\mersel-dss-signer.env                          # PIN / PFX / TSP
+.\Install-Service.ps1
+```
+
+WinSW (Windows Service Wrapper) ile JAR sarmalanır; restart-on-failure, Event Viewer entegrasyonu, NTFS ACL ile XML kilitli. Detay: [`devops/windows-service/`](devops/windows-service/).
+
 ### Manuel
 
 ```bash
@@ -195,8 +219,13 @@ curl -X POST http://localhost:8085/v1/padessign \
 ```
 sign-api/
 ├── src/main/java/              # Java kaynak kodları
-├── devops/                     # Docker, K8s, monitoring
-├── scripts/                    # Yardımcı scriptler
+├── devops/                     # Production deployment paketleri
+│   ├── docker/                 #   Container (dev + prod)
+│   ├── systemd/                #   Linux native servisi (hardened unit)
+│   ├── windows-service/        #   Windows native servisi (WinSW + NSSM)
+│   ├── monitoring/             #   Prometheus + Grafana + AlertManager
+│   └── kubernetes/             #   K8s manifests (preview)
+├── scripts/                    # Yardımcı scriptler (dev-run, test, fixture)
 ├── resources/test-certs/       # Test sertifikaları (PFX)
 ├── resources/test-fixtures/    # E2E fixture'lar (XAdES, WS-Security)
 └── examples/                   # Kullanım örnekleri

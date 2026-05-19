@@ -12,22 +12,27 @@
 #    ├─ test-report/            Allure Report (Suites/Behaviors/Trend + attachments)
 #    ├─ coverage/               JaCoCo HTML (line/branch coverage)
 #    ├─ openapi/                Scalar API Reference (CDN-loaded, tek HTML + openapi.json)
-#    └─ security/               OWASP Dependency-Check raporu
+#    ├─ security/               OWASP Dependency-Check raporu
+#    └─ deployment/             Production Deployment Runbook (Linux/Win/Docker/Run Profiles
+#                               tabbed; devops/ ve docs/RUN_PROFILES.md'den pandoc render)
 #
 #  Kullanım:
-#    ./scripts/serve-pages-locally.sh                  # tam koşum (E2E dahil)
-#    ./scripts/serve-pages-locally.sh --skip-e2e       # sadece unit testler
-#    ./scripts/serve-pages-locally.sh --skip-tests     # mevcut target/'i kullan
-#    ./scripts/serve-pages-locally.sh --skip-owasp     # NVD scan'i atla (~5dk tasarruf)
-#    ./scripts/serve-pages-locally.sh --skip-openapi   # OpenAPI bootstrap'ı atla
-#    ./scripts/serve-pages-locally.sh --port 9000      # alternatif port
-#    ./scripts/serve-pages-locally.sh --no-serve       # üret ama serve etme
-#    ./scripts/serve-pages-locally.sh --fast           # = --skip-e2e --skip-owasp
+#    ./scripts/serve-pages-locally.sh                    # tam koşum (E2E dahil)
+#    ./scripts/serve-pages-locally.sh --skip-e2e         # sadece unit testler
+#    ./scripts/serve-pages-locally.sh --skip-tests       # mevcut target/'i kullan
+#    ./scripts/serve-pages-locally.sh --skip-owasp       # NVD scan'i atla (~5dk tasarruf)
+#    ./scripts/serve-pages-locally.sh --skip-openapi     # OpenAPI bootstrap'ı atla
+#    ./scripts/serve-pages-locally.sh --skip-deployment  # deployment/ runbook'u atla
+#    ./scripts/serve-pages-locally.sh --port 9000        # alternatif port
+#    ./scripts/serve-pages-locally.sh --no-serve         # üret ama serve etme
+#    ./scripts/serve-pages-locally.sh --fast             # = --skip-e2e --skip-owasp
 #
 #  Bağımlılıklar:
 #    - JDK 8+, Maven
-#    - python3 (HTTP server için — macOS'ta default var)
+#    - python3 (HTTP server + landing/runbook template injection için)
 #    - envsubst veya python (landing template injection için)
+#    - pandoc (deployment runbook render için — yoksa o section atlanır)
+#         macOS: brew install pandoc | Ubuntu: sudo apt-get install -y pandoc
 #    - Docker (sadece --skip-e2e DEĞİLSE — verifier-api container için)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,19 +48,21 @@ SKIP_TESTS=false
 SKIP_E2E=false
 SKIP_OWASP=false
 SKIP_OPENAPI=false
+SKIP_DEPLOYMENT=false
 NO_SERVE=false
 PORT=8765
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --skip-tests)   SKIP_TESTS=true ;;
-    --skip-e2e)     SKIP_E2E=true ;;
-    --skip-owasp)   SKIP_OWASP=true ;;
-    --skip-openapi) SKIP_OPENAPI=true ;;
-    --no-serve)     NO_SERVE=true ;;
-    --fast)         SKIP_E2E=true; SKIP_OWASP=true ;;
-    --port)         PORT="$2"; shift ;;
-    --port=*)       PORT="${1#*=}" ;;
+    --skip-tests)      SKIP_TESTS=true ;;
+    --skip-e2e)        SKIP_E2E=true ;;
+    --skip-owasp)      SKIP_OWASP=true ;;
+    --skip-openapi)    SKIP_OPENAPI=true ;;
+    --skip-deployment) SKIP_DEPLOYMENT=true ;;
+    --no-serve)        NO_SERVE=true ;;
+    --fast)            SKIP_E2E=true; SKIP_OWASP=true ;;
+    --port)            PORT="$2"; shift ;;
+    --port=*)          PORT="${1#*=}" ;;
     -h|--help)
       sed -n '2,40p' "$0"
       exit 0
@@ -92,6 +99,7 @@ info "Test koşumu:    $([ "$SKIP_TESTS" = true ] && echo "ATLANDI (mevcut targe
 info "E2E suite:      $([ "$SKIP_E2E" = true ] && echo "ATLANDI" || echo "DAHİL (Docker gerekli)")"
 info "OWASP scan:     $([ "$SKIP_OWASP" = true ] && echo "ATLANDI" || echo "ÇALIŞACAK (ilk koşumda ~5dk NVD download)")"
 info "OpenAPI bundle: $([ "$SKIP_OPENAPI" = true ] && echo "ATLANDI" || echo "Spring Boot başlat → /v3/api-docs çek")"
+info "Deployment:     $([ "$SKIP_DEPLOYMENT" = true ] && echo "ATLANDI" || echo "ÇALIŞACAK (pandoc → tabbed runbook)")"
 info "HTTP serve:     $([ "$NO_SERVE" = true ] && echo "HAYIR" || echo "EVET (port $PORT)")"
 
 # ─── 1) Test koşumu ──────────────────────────────────────────────────────────
@@ -349,13 +357,52 @@ EOF
   warn "security/ ← placeholder"
 fi
 
-# Landing — envsubst veya python fallback ile placeholder injection
+# Build metadata — hem landing hem deployment build için aynı değerler
+# kullanılmalı; deployment'tan ÖNCE export edip aşağıdaki tüm child
+# process'lerden erişilebilsin.
 export BUILD_NUMBER="local-$(date +%H%M%S)"
 export COMMIT_SHORT="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 export COMMIT_URL="$(git config --get remote.origin.url 2>/dev/null | sed 's|\.git$||')/commit/$(git rev-parse HEAD 2>/dev/null || echo HEAD)"
 export GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 export TEST_TOTAL TEST_PASSED TEST_FAILED COVERAGE_PCT BRANCH_COVERAGE_PCT
 export REPO_SLUG="mersel-dss/mersel-dss-server-signer-java"
+export GIT_REF="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)"
+
+# Deployment Runbook — pandoc varsa devops/ + docs/RUN_PROFILES.md'yi
+# tabbed HTML'e render eder. Yoksa minimal placeholder bırakır (link'ler
+# GitHub blob'a düşer; auditor markdown'ı oradan da okuyabilir).
+mkdir -p pages-output/deployment
+if [ "$SKIP_DEPLOYMENT" = true ]; then
+  cat > pages-output/deployment/index.html <<'EOF'
+<!doctype html><meta charset=utf-8><title>Deployment runbook skipped</title>
+<h1>Deployment runbook üretimi atlandı</h1>
+<p><code>--skip-deployment</code> flag'i verildi. <code>bash docs/deployment/build.sh</code>
+   ile manuel üretebilirsin.</p>
+EOF
+  warn "deployment/ ← placeholder (--skip-deployment)"
+elif ! command -v pandoc >/dev/null 2>&1; then
+  cat > pages-output/deployment/index.html <<'EOF'
+<!doctype html><meta charset=utf-8><title>Deployment runbook unavailable</title>
+<h1>Deployment runbook üretilemedi</h1>
+<p>pandoc yüklü değil. <code>brew install pandoc</code> veya
+   <code>sudo apt-get install -y pandoc</code> sonrası tekrar koş.</p>
+EOF
+  warn "deployment/ ← placeholder (pandoc yok — 'brew install pandoc' önerilir)"
+else
+  if bash docs/deployment/build.sh -o pages-output/deployment >/dev/null; then
+    ok "deployment/ ← Production Runbook (Linux | Windows | Docker | Run Profiles)"
+  else
+    warn "deployment/ build.sh başarısız — placeholder yazılıyor"
+    cat > pages-output/deployment/index.html <<'EOF'
+<!doctype html><meta charset=utf-8><title>Deployment runbook failed</title>
+<h1>Deployment runbook üretimi başarısız</h1>
+<p>Detay için: <code>bash docs/deployment/build.sh -o pages-output/deployment</code>
+   komutunu manuel olarak çalıştır.</p>
+EOF
+  fi
+fi
+
+# Landing — envsubst veya python fallback ile placeholder injection
 
 if command -v envsubst >/dev/null 2>&1; then
   envsubst < docs/landing/index.html > pages-output/index.html
@@ -420,6 +467,7 @@ echo "${BOLD}${GREEN}║${RESET}    ${CYAN}${URL}test-report/${RESET}     → Al
 echo "${BOLD}${GREEN}║${RESET}    ${CYAN}${URL}coverage/${RESET}        → JaCoCo (line/branch coverage)    "
 echo "${BOLD}${GREEN}║${RESET}    ${CYAN}${URL}openapi/${RESET}         → Scalar API Reference            "
 echo "${BOLD}${GREEN}║${RESET}    ${CYAN}${URL}security/${RESET}        → OWASP Dependency-Check          "
+echo "${BOLD}${GREEN}║${RESET}    ${CYAN}${URL}deployment/${RESET}      → Production Runbook (Linux/Win/Docker)"
 echo "${BOLD}${GREEN}╚═══════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 info "Ctrl+C ile durdur."

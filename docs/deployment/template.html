@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mersel DSS Signer — Production Deployment Runbook</title>
+  <meta name="description"
+        content="Mersel DSS Signer'ı production'a alma kılavuzu: Linux SystemD, Windows Service (WinSW), Docker Compose ve geliştirici Run Profilleri. Tüm içerik repo'daki devops/ README.md kaynaklarından otomatik üretilir." />
+
+  <!--
+    Tailwind Play CDN — typography plugin ile pandoc-üretimli HTML'i
+    auto-stylet eder. Production-grade bundle değil; auditor-grade hız:
+    tek HTTP request, JS framework yok, dark mode toggle yok (KISS).
+  -->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+
+  <style>
+    :root {
+      --ink: #0f172a;
+      --paper: #f8fafc;
+      --accent: #0ea5a4;
+      --accent-soft: #ccfbf1;
+    }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    code, pre, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+    /* Tab bar — sticky, üst kenarda; mobil'de scroll, desktop'ta yan-yana. */
+    .tab-btn {
+      position: relative;
+      padding: 0.875rem 1.25rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      color: #475569;
+      white-space: nowrap;
+      transition: color .15s ease;
+    }
+    .tab-btn:hover { color: #0f172a; }
+    .tab-btn.is-active { color: var(--accent); }
+    .tab-btn.is-active::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: -1px;
+      height: 2px;
+      background: var(--accent);
+    }
+    .tab-panel[hidden] { display: none; }
+
+    /* Pandoc-üretimli kod bloklarını prose default'undan ayır — auditor
+       için sertifika path'leri / komutlar net okunmalı. */
+    .prose pre {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      font-size: 0.825rem;
+      line-height: 1.55;
+      overflow-x: auto;
+    }
+    .prose code:not(pre code) {
+      background: #f1f5f9;
+      color: #0f172a;
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      font-size: 0.875em;
+      font-weight: 500;
+    }
+    .prose table {
+      font-size: 0.875rem;
+    }
+    .prose blockquote {
+      border-left-color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.75rem 1rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      font-style: normal;
+      color: #134e4a;
+    }
+    .prose blockquote p:first-of-type::before,
+    .prose blockquote p:last-of-type::after { content: ''; }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+  <!-- ═══════════════════════════ Header ═══════════════════════════ -->
+  <header class="border-b border-slate-200 bg-white">
+    <div class="max-w-6xl mx-auto px-6 py-6 flex items-start justify-between gap-6 flex-wrap">
+      <div>
+        <p class="text-xs uppercase tracking-wider text-slate-500 mb-2">
+          mersel-dss / signer-api · Production Runbook
+        </p>
+        <h1 class="text-3xl font-bold tracking-tight text-slate-900">
+          Üretime alma kılavuzu.
+          <span class="text-teal-600">Tek kaynak, dört kanal.</span>
+        </h1>
+        <p class="mt-3 max-w-2xl text-slate-600 leading-relaxed">
+          Linux SystemD, Windows Service (WinSW), Docker Compose ve
+          geliştirici Run Profilleri için end-to-end kurulum + işletim
+          kılavuzu. İçerik repo'daki <code class="mono text-sm bg-slate-100 px-1 rounded">devops/</code>
+          ve <code class="mono text-sm bg-slate-100 px-1 rounded">docs/</code> markdown'larından otomatik üretilir;
+          README güncellenir → bu sayfa otomatik senkron olur.
+        </p>
+      </div>
+
+      <a href="../"
+         class="self-start inline-flex items-center gap-2 px-4 py-2 rounded-lg
+                border border-slate-300 text-slate-700 hover:border-teal-600 hover:text-teal-700
+                text-sm font-medium transition-colors">
+        <span aria-hidden="true">↩</span>
+        Evidence Site'a dön
+      </a>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════ Tab nav ═══════════════════════════ -->
+  <nav class="sticky top-0 z-10 bg-white border-b border-slate-200 shadow-sm">
+    <div class="max-w-6xl mx-auto px-6">
+      <div role="tablist" aria-label="Deployment kanalları"
+           class="flex gap-1 overflow-x-auto -mx-2 px-2">
+        <button role="tab" type="button" data-tab="linux"
+                class="tab-btn is-active"
+                aria-controls="tab-linux" aria-selected="true">
+          Linux <span class="text-slate-400 font-normal">(SystemD)</span>
+        </button>
+        <button role="tab" type="button" data-tab="windows"
+                class="tab-btn"
+                aria-controls="tab-windows" aria-selected="false">
+          Windows <span class="text-slate-400 font-normal">(WinSW)</span>
+        </button>
+        <button role="tab" type="button" data-tab="docker"
+                class="tab-btn"
+                aria-controls="tab-docker" aria-selected="false">
+          Docker
+        </button>
+        <button role="tab" type="button" data-tab="run-profiles"
+                class="tab-btn"
+                aria-controls="tab-run-profiles" aria-selected="false">
+          Run Profilleri <span class="text-slate-400 font-normal">(IDE / CLI)</span>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══════════════════════════ Tab panels ═══════════════════════════ -->
+  <main class="max-w-6xl mx-auto px-6 py-10">
+
+    <section id="tab-linux" role="tabpanel" aria-labelledby="tab-linux-btn"
+             class="tab-panel prose prose-slate max-w-none">
+      <!-- BEGIN_LINUX_CONTENT -->
+      <!-- pandoc devops/systemd/README.md çıktısı buraya inject edilir. -->
+      <!-- END_LINUX_CONTENT -->
+    </section>
+
+    <section id="tab-windows" role="tabpanel" aria-labelledby="tab-windows-btn"
+             class="tab-panel prose prose-slate max-w-none" hidden>
+      <!-- BEGIN_WINDOWS_CONTENT -->
+      <!-- pandoc devops/windows-service/README.md çıktısı buraya inject edilir. -->
+      <!-- END_WINDOWS_CONTENT -->
+    </section>
+
+    <section id="tab-docker" role="tabpanel" aria-labelledby="tab-docker-btn"
+             class="tab-panel prose prose-slate max-w-none" hidden>
+      <!-- BEGIN_DOCKER_CONTENT -->
+      <!-- pandoc devops/docker/README.md çıktısı buraya inject edilir. -->
+      <!-- END_DOCKER_CONTENT -->
+    </section>
+
+    <section id="tab-run-profiles" role="tabpanel" aria-labelledby="tab-run-profiles-btn"
+             class="tab-panel prose prose-slate max-w-none" hidden>
+      <!-- BEGIN_RUN_PROFILES_CONTENT -->
+      <!-- pandoc docs/RUN_PROFILES.md çıktısı buraya inject edilir. -->
+      <!-- END_RUN_PROFILES_CONTENT -->
+    </section>
+
+    <!-- ═══════════════════════════ Footer ═══════════════════════════ -->
+    <footer class="mt-16 pt-8 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+      <div>
+        Bu sayfa
+        <a href="../" class="text-teal-700 hover:text-teal-900 underline decoration-dotted">
+          Evidence Site
+        </a>
+        derlenirken
+        <code class="mono bg-slate-100 px-1 rounded">docs/deployment/build.sh</code> ile pandoc
+        kullanılarak repo'daki <code class="mono bg-slate-100 px-1 rounded">README.md</code> kaynaklarından üretilir.
+      </div>
+      <div class="mono text-slate-400">
+        build #<!--BUILD_NUMBER-->dev<!--/BUILD_NUMBER--> · <!--GENERATED_AT-->local<!--/GENERATED_AT-->
+      </div>
+    </footer>
+  </main>
+
+  <!-- ═══════════════════════════ Tab routing ═══════════════════════════ -->
+  <script>
+    (function () {
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const panels = Array.from(document.querySelectorAll('[role="tabpanel"]'));
+
+      function activate(tabId, pushHash) {
+        const target = tabs.find(t => t.dataset.tab === tabId);
+        if (!target) return;
+        tabs.forEach(t => {
+          const active = t === target;
+          t.classList.toggle('is-active', active);
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+          t.tabIndex = active ? 0 : -1;
+        });
+        panels.forEach(p => {
+          const show = p.id === 'tab-' + tabId;
+          p.hidden = !show;
+        });
+        if (pushHash) {
+          history.replaceState(null, '', '#' + tabId);
+        }
+        // Sticky tab bar yüksekliğini hesaba katarak scroll'u sıfırla
+        // (deep-link açıldığında "tab değişti ama içerik görünmedi" hissi olmasın)
+        window.scrollTo({ top: 0, behavior: pushHash ? 'smooth' : 'auto' });
+      }
+
+      tabs.forEach(t => {
+        t.addEventListener('click', () => activate(t.dataset.tab, true));
+        t.addEventListener('keydown', (e) => {
+          // Sol/sağ ok ile tab değiştir (WAI-ARIA tab pattern)
+          if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+          e.preventDefault();
+          const idx = tabs.indexOf(t);
+          const next = e.key === 'ArrowRight'
+            ? tabs[(idx + 1) % tabs.length]
+            : tabs[(idx - 1 + tabs.length) % tabs.length];
+          activate(next.dataset.tab, true);
+          next.focus();
+        });
+      });
+
+      // Initial: hash varsa onu kullan, yoksa default 'linux'
+      const initial = (location.hash || '').replace(/^#/, '');
+      if (initial && tabs.some(t => t.dataset.tab === initial)) {
+        activate(initial, false);
+      }
+
+      // Browser back/forward butonları ile hash değişimini follow et
+      window.addEventListener('hashchange', () => {
+        const next = location.hash.replace(/^#/, '');
+        if (next && tabs.some(t => t.dataset.tab === next)) {
+          activate(next, false);
+        }
+      });
+    })();
+  </script>
+
+</body>
+</html>

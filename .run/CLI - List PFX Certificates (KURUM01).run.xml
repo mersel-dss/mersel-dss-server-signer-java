@@ -1,0 +1,24 @@
+<component name="ProjectRunConfigurationManager">
+  <!--
+    SignatureApplication'ı --list-certificates moduyla çalıştırır;
+    Spring context kaldırmaz, sadece KURUM01 PFX'ini açıp içindeki sertifika
+    bilgilerini stdout'a basar. Hızlı smoke-test için.
+
+    listCertificates() Spring context kaldırmadığı için Spring profile yerine
+    direkt env var'ları okur — bu yüzden envs block'ta hem PFX_PATH hem PIN
+    explicit verilmiş.
+  -->
+  <configuration default="false" name="CLI · List PFX Certificates (KURUM01)" type="Application" factoryName="Application">
+    <envs>
+      <env name="PFX_PATH" value="resources/test-certs/testkurum01_rsa2048@test.com.tr_614573.pfx" />
+      <env name="CERTIFICATE_PIN" value="614573" />
+    </envs>
+    <option name="MAIN_CLASS_NAME" value="io.mersel.dss.signer.api.SignatureApplication" />
+    <module name="mersel-dss-signer-api" />
+    <option name="PROGRAM_PARAMETERS" value="--list-certificates" />
+    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

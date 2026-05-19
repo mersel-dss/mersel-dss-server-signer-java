@@ -1,201 +1,174 @@
-# 🚀 DevOps Klasörü
+# DevOps
 
-Bu klasörde Sign API için deployment ve operasyon dosyaları bulunmaktadır.
+Mersel DSS Signer API'yi farklı ortamlarda (Linux / Windows / Container / K8s) deploy etmek için gerekli tüm yapılandırma dosyaları ve helper script'ler burada toplanmıştır.
 
-## 📁 Klasör Yapısı
+## Hızlı Yön
+
+| Senaryo | Klasör | Tek Komut |
+|---|---|---|
+| **Geliştirici makinesi** (laptop, IDE'siz) | [`docker/`](./docker/) | `docker-compose up -d` |
+| **Linux Production** (bare-metal / VM) | [`systemd/`](./systemd/) | `sudo ./devops/systemd/install.sh` |
+| **Windows Production** (Server 2019/2022) | [`windows-service/`](./windows-service/) | `.\Install-Service.ps1` (admin PS) |
+| **Container Orchestration** | [`kubernetes/`](./kubernetes/) | v0.5.0 — preview manifest |
+| **Observability** | [`monitoring/`](./monitoring/) | Docker-compose ile birlikte |
+
+> **Geliştirici modu** — `mvn spring-boot:run` ile profile-based çalıştırmak için bkz. [`docs/RUN_PROFILES.md`](../docs/RUN_PROFILES.md). DevOps klasörü **production deployment**'a odaklıdır; IDE Run Configuration'ları ve `scripts/dev-run.{sh,bat}` ayrı katmandır.
+
+---
+
+## Klasör Yapısı
 
 ```
 devops/
-├── docker/                 # Docker deployment
-│   ├── Dockerfile
-│   ├── docker-compose.yml
+├── docker/                          # Container deployment
+│   ├── Dockerfile                   # Production multi-stage image
+│   ├── Dockerfile.pkcs11-tests      # Integration test image (softhsm2 + JDK)
+│   ├── docker-compose.yml           # Sign API + Prometheus + Grafana (+ AlertManager profile)
 │   ├── .dockerignore
-│   ├── .env.example       # Production template
-│   ├── .env.test.kurum1   # Test Kurum 1
-│   ├── .env -> .env.test.kurum1  # Symlink
-│   ├── unix/              # Unix helper scripts
-│   │   ├── start-test-kurum1.sh
-│   │   ├── start-test-kurum2.sh
-│   │   └── start-test-kurum3.sh
-│   ├── windows/           # Windows helper scripts
-│   │   ├── start-test-kurum1.ps1
-│   │   ├── start-test-kurum2.ps1
-│   │   └── start-test-kurum3.ps1
+│   ├── .env.example                 # Production env şablonu
+│   ├── .env.test.kurum1             # Test Kurum 1 (RSA-2048)
+│   ├── .env -> .env.test.kurum1     # Symlink (default)
+│   ├── unix/start-test-kurum.sh     # Parametreli helper (./start-test-kurum.sh 2 ec384)
+│   ├── windows/start-test-kurum.ps1 # PowerShell muadili
 │   └── README.md
-├── monitoring/            # Monitoring stack configurations
-│   ├── prometheus/
-│   │   ├── prometheus.yml
-│   │   └── alerts.yml
-│   ├── grafana/
-│   │   ├── provisioning/
-│   │   └── dashboards/
-│   └── alertmanager/
-│       └── alertmanager.yml
-└── kubernetes/            # Kubernetes manifests (gelecek)
-    └── README.md
-```
-
-## 🐳 Docker
-
-### Hızlı Başlangıç
-
-**Test Sertifikaları ile:**
-
-```bash
-# Docker dizinine git
-cd devops/docker
-
-# Unix/Linux/macOS
-./unix/start-test-kurum1.sh
-
-# Windows
-.\windows\start-test-kurum1.ps1
-
-# veya direkt
-docker-compose up -d  # Varsayılan: .env.test.kurum1
-```
-
-**Production için:**
-
-```bash
-cd devops/docker
-
-# .env dosyasını düzenle
-cp .env.example .env
-nano .env
-
-# Başlat
-docker-compose up -d
-```
-
-**Detaylı bilgi:** [Docker](https://dss.mersel.dev/devops/docker)
-
-### Kullanılabilir Komutlar
-
-```bash
-# Monitoring stack ile başlat
-docker-compose up -d
-
-# Sadece Sign API
-docker-compose up -d sign-api
-
-# Log'ları izle
-docker-compose logs -f sign-api
-
-# Durdur
-docker-compose down
-
-# Temizle (volumes dahil)
-docker-compose down -v
-```
-
-## 📊 Monitoring
-
-### Prometheus
-
-**URL:** http://localhost:9090
-
-**Yapılandırma:**
-- Scrape interval: 15s
-- Retention: 90 gün
-- Alert rules: 8 kural
-
-### Grafana
-
-**URL:** http://localhost:3000  
-**Varsayılan:** admin / admin
-
-**Önerilen Dashboard ID: 11378** (Spring Boot 2.x)
-
-### AlertManager
-
-**URL:** http://localhost:9093
-
-Aktif etmek için:
-```bash
-docker-compose --profile monitoring-full up -d
-```
-
-## ☸️ Kubernetes
-
-> 🚧 **Yakında:** Kubernetes manifest'leri v0.2.0'da eklenecek
-
-Planlanan özellikler:
-- Deployment manifests
-- Service definitions
-- ConfigMaps & Secrets
-- Ingress configuration
-- HPA (Horizontal Pod Autoscaler)
-- PersistentVolumeClaims
-
-## 🔧 Yapılandırma
-
-### Environment Variables
-
-`.env` dosyasında ayarlanabilir:
-
-```bash
-# Sertifika
-CERTIFICATE_PIN=your-password
-CERTIFICATE_ALIAS=1
-
-# Timestamp
-IS_TUBITAK_TSP=true
-TS_USER_ID=your-id
-TS_USER_PASSWORD=your-password
-
-# Grafana
-GRAFANA_PASSWORD=secure-password
-```
-
-### Secrets Yönetimi
-
-Production'da:
-```bash
-# Docker secrets kullan
-echo "your-password" | docker secret create cert_pin -
-
-# docker-compose.yml'de:
-# secrets:
-#   - cert_pin
-```
-
-## 📚 İlgili Dökümanlar
-
-- [Docker](https://dss.mersel.dev/devops/docker) - Docker kullanım rehberi
-- [Monitoring](https://dss.mersel.dev/sign-api/monitoring) - Prometheus & Grafana detayları
-- [Actuator Endpoints](https://dss.mersel.dev/sign-api/actuator-endpoints) - Health checks
-- [Ana Dokümantasyon](https://dss.mersel.dev) - Merkezi dokümantasyon
-
-## 🎯 Örnek Kullanım
-
-### Development
-
-```bash
-cd devops/docker
-docker-compose up -d
-```
-
-### Production
-
-```bash
-cd devops/docker
-
-# .env ile production ayarları
-cat > .env << EOF
-CERTIFICATE_PIN=${PROD_CERT_PIN}
-CERTIFICATE_ALIAS=production-cert
-IS_TUBITAK_TSP=true
-TS_USER_ID=${PROD_TS_USER}
-TS_USER_PASSWORD=${PROD_TS_PASS}
-GRAFANA_PASSWORD=${SECURE_GRAFANA_PASS}
-EOF
-
-# Başlat
-docker-compose up -d
+│
+├── systemd/                         # Linux SystemD servisi (hardened unit)
+│   ├── mersel-dss-signer.service    # Unit dosyası
+│   ├── mersel-dss-signer.env.example
+│   ├── install.sh                   # Otomatik kurulum (user + dizinler + start)
+│   ├── uninstall.sh                 # Temiz kaldırma (--purge ile env+log+user)
+│   └── README.md
+│
+├── windows-service/                 # Windows servisi (WinSW + NSSM alt.)
+│   ├── mersel-dss-signer.xml        # WinSW XML şablonu
+│   ├── mersel-dss-signer.env.example
+│   ├── Install-Service.ps1          # WinSW indirir, env inject eder, kurar
+│   ├── Uninstall-Service.ps1        # -KeepLogs, -Purge bayrakları
+│   └── README.md
+│
+├── monitoring/                      # Observability stack
+│   ├── prometheus/                  # prometheus.yml + alerts.yml
+│   ├── grafana/                     # Auto-provisioning + dashboards
+│   ├── alertmanager/                # Routing & receivers
+│   ├── load-test.sh                 # Metric generation için load test
+│   └── README.md
+│
+├── kubernetes/                      # K8s manifests (preview)
+│   └── README.md                    # v0.5.0 roadmap
+│
+└── README.md                        # Bu dosya
 ```
 
 ---
 
-**🚀 Modern DevOps practices ile kolay deployment!**
+## Deployment Karar Matrisi
 
+| Kriter | Docker Compose | SystemD | Windows Service | Kubernetes |
+|---|---|---|---|---|
+| **Kurulum süresi** | Dakikalar | Dakikalar | Dakikalar | Saatler (ilk setup) |
+| **Native PKCS#11 (smart card)** | Sınırlı (USB passthrough) | ✅ Tam | ✅ Tam | Sınırlı (DaemonSet + privileged) |
+| **JIT + JNI performansı** | ✅ Linux native | ✅ Native | ✅ Native | ✅ Pod native |
+| **HA / Auto-scale** | Manual | Manual (multiple unit) | Manual | ✅ HPA |
+| **Log aggregation** | Docker logs / Loki | journald → rsyslog | Event Viewer | Vector/Fluentd |
+| **Operatör profili** | Containerlı senaryolar | klasik sysadmin | Windows admin | platform team |
+| **Önerilen kullanım** | Dev + staging | Tek-makine prod, on-prem | Windows-only prod, on-prem | Multi-tenant prod |
+
+**Pratik öneri**:
+- Smart card / AKİS HSM kullanıyorsan → **SystemD veya Windows Service** (kart fiziksel olarak makineye takılı, container'a passthrough operasyonel acı).
+- Bulut yedeği veya stateless API (PFX-based) → **Docker Compose** veya **Kubernetes**.
+
+---
+
+## Spring Profile vs Env Variable
+
+Uygulama config'i iki kaynaktan beslenir:
+
+1. **`application.properties` + profile** (`application-<profile>.properties`) — repo'da versiyonlanır, **Spring Profile** ile aktive edilir.
+2. **Environment variable** — runtime'da operatör tarafından verilir, secret'ları taşır.
+
+Production deployment'larda **`SPRING_PROFILES_ACTIVE` boş bırakılır** (default `application.properties` yüklenir) ve secret'lar (PIN, parola, PKCS#11 yolu) env variable olarak verilir. Test/staging için profile composition kullanılır:
+
+```
+SPRING_PROFILES_ACTIVE=local,pfx-kurum01-rsa2048    # PFX test, network off
+SPRING_PROFILES_ACTIVE=local,mali-muhur-akis-linux  # Mali Mühür AKİS Linux sürücüsü, network off
+```
+
+Detaylı mimari: [`docs/RUN_PROFILES.md`](../docs/RUN_PROFILES.md).
+
+---
+
+## Ortak Env Variable'lar
+
+Aşağıdaki değişkenler **tüm deployment'larda** geçerlidir (kaynak: [`application.properties`](../src/main/resources/application.properties)).
+
+| Kategori | Variable | Default | Açıklama |
+|---|---|---|---|
+| Server | `SERVER_PORT` | 8085 | HTTP port |
+| Logging | `LOG_PATH` | `./logs` | Logback file appender hedefi |
+| Logging | `LOG_LEVEL` | `INFO` | Root + uygulama paketi seviyesi |
+| **PFX** | `PFX_PATH` | — | PFX dosyasının yolu |
+| **PFX** | `CERTIFICATE_PIN` | — | PFX parolası |
+| **PFX/HSM** | `CERTIFICATE_ALIAS` | `1` | Alias |
+| **HSM** | `PKCS11_LIBRARY` | — | PKCS#11 sürücü yolu (.so / .dylib / .dll) |
+| **HSM** | `PKCS11_SLOT` | -1 | Slot ID (-1 = auto) |
+| **HSM** | `PKCS11_SLOT_LIST_INDEX` | -1 | Slot list index (-1 = auto) |
+| **HSM** | `PKCS11_NULL_INIT_ARGS` | false | `CKR_ARGUMENTS_BAD` fallback için true |
+| **TSP** | `IS_TUBITAK_TSP` | (auto) | TÜBİTAK TSP modu — host'tan tespit edilir |
+| **TSP** | `TS_SERVER_HOST` | — | TSP endpoint URL |
+| **TSP** | `TS_USER_ID` / `TS_USER_PASSWORD` | — | TÜBİTAK abone bilgileri |
+| **XAdES** | `XADES_SIGNING_TIME_ZONE` | `+03:00` | SigningTime timezone ([issue #7](https://github.com/mersel-dss/mersel-dss-server-signer-java/issues/7)) |
+| **Trusted root** | `TRUSTED_ROOT_CERT_FOLDER_PATH` | — | Custom kök sertifika klasörü |
+| CORS | `CORS_ALLOWED_ORIGINS` | `*` | Production'da spesifik domain |
+| JVM | `JAVA_OPTS` | (deployment-spesifik) | Heap, GC, security flag'leri |
+
+> Her deployment klasörünün kendi `*.env.example` dosyasında bu listenin **deployment'a özgü yorumlu sürümü** bulunur.
+
+---
+
+## Sertifika (PFX) Yerleşim Konvansiyonu
+
+Production deployment'larda PFX dosyası **uygulama jar'ı ile aynı yerde tutulmaz**. Tavsiye ettiğimiz dizinler:
+
+| Platform | PFX Dizini | İzin |
+|---|---|---|
+| Linux / SystemD | `/etc/mersel-dss-signer/certs/` | `0750 root:signer`, dosya `0400` |
+| Windows Service | `C:\ProgramData\mersel-dss-signer\certs\` | NTFS ACL: SYSTEM + Administrators only |
+| Docker | Bind-mount: `-v /host/certs:/app/certs:ro` | Read-only |
+| Kubernetes | `Secret` (base64) → `volumeMount` | RBAC ile sınırlı |
+
+Bu konvansiyon **defense-in-depth** sağlar:
+- `signer` kullanıcısı sadece kendi okuduğu dosyaları görür.
+- Uygulama compromise olsa bile PFX'i farklı yere kopyalayamaz.
+- Log dump'lara PFX yolu düşse bile başka süreç dosyaya erişemez.
+
+Repo'daki **test sertifikaları** (`resources/test-certs/*.pfx`) public KamuSM test PFX'leridir; production deployment'a SİZMAZ — `Dockerfile`'ın `COPY` adımı `test-certs` opsiyonel pattern'iyle yapılır, production env'inde **kendi** PFX'inizi mount edersiniz.
+
+---
+
+## Smoke Test (Deployment Sonrası)
+
+```bash
+# Health
+curl http://localhost:8085/actuator/health
+# {"status":"UP"}
+
+# Info
+curl http://localhost:8085/actuator/info
+
+# Metrikler (Prometheus formatı)
+curl http://localhost:8085/actuator/prometheus | head -50
+
+# Sertifika bilgisi (uygulama düzgün cert okudu mu?)
+curl http://localhost:8085/info-certificate
+```
+
+Daha kapsamlı smoke test için: [`devops/monitoring/load-test.sh`](./monitoring/load-test.sh) — 6 farklı endpoint'i ardışık çağırır.
+
+---
+
+## İlgili Dokümanlar
+
+- [`docs/RUN_PROFILES.md`](../docs/RUN_PROFILES.md) — Spring profile mimarisi (IDE + CLI)
+- [`DSS_OVERRIDE.md`](../DSS_OVERRIDE.md) — DSS upstream override'ları (XAdES SigningTime vb.)
+- [Ana dokümantasyon](https://dss.mersel.dev) — Merkezi developer portal
+- [Actuator Endpoints](https://dss.mersel.dev/sign-api/actuator-endpoints) — Health/Info/Metrics referansı

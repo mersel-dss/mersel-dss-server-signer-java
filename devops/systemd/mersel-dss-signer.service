@@ -1,0 +1,124 @@
+# =============================================================================
+#  mersel-dss-signer.service — Linux SystemD unit
+# =============================================================================
+#  Mersel DSS Signer API'yi Linux'ta uzun-süreli, otomatik-restart edebilen,
+#  hardened bir sistem servisi olarak çalıştırır.
+#
+#  Kurulum:
+#    1) sudo cp devops/systemd/mersel-dss-signer.service \
+#               /etc/systemd/system/mersel-dss-signer.service
+#    2) sudo cp devops/systemd/mersel-dss-signer.env.example \
+#               /etc/mersel-dss-signer/mersel-dss-signer.env
+#       (sonra dosyayı düzenle — sertifika PIN'i, profile vs.)
+#    3) sudo systemctl daemon-reload
+#    4) sudo systemctl enable --now mersel-dss-signer
+#    5) sudo journalctl -u mersel-dss-signer -f
+#
+#  ÖN KOŞULLAR:
+#    • Java 8+ JRE — default path /usr/bin/java; farklıysa
+#      Environment="JAVA_HOME=/path" + ExecStart'ı güncelle.
+#    • Signer kullanıcısı — devops/systemd/install.sh otomatik oluşturur:
+#        sudo useradd --system --no-create-home \
+#                     --home-dir /opt/mersel-dss-signer \
+#                     --shell /usr/sbin/nologin signer
+#    • JAR yerleşimi — /opt/mersel-dss-signer/mersel-dss-signer-api.jar
+#    • Log dizini — /var/log/mersel-dss-signer (owner: signer:signer)
+#    • Env dosyası — /etc/mersel-dss-signer/mersel-dss-signer.env
+#      (chmod 0640 önerilir — PIN/parola taşır).
+#    • HSM senaryosunda: pcscd servisi çalışır olmalı (After=pcscd.service).
+# =============================================================================
+
+[Unit]
+Description=Mersel DSS Signer API — Dijital İmza Servisi
+Documentation=https://dss.mersel.dev/devops/systemd
+Documentation=file:/opt/mersel-dss-signer/README.md
+# Network gerekli (KamuSM TSP, OCSP, AIA fetch). HSM senaryosunda pcscd zorunlu;
+# PFX-only deployment'ta After=pcscd.service satırı zararsız (yoksa atlanır).
+After=network-online.target pcscd.service
+Wants=network-online.target
+# pcscd opsiyonel — varsa beklenir, yoksa servis yine kalkar.
+Wants=pcscd.service
+
+[Service]
+Type=simple
+User=signer
+Group=signer
+
+# Çalışma dizini — log/temp dosyaları buraya düşer.
+WorkingDirectory=/opt/mersel-dss-signer
+
+# Env dosyası — sertifika PIN'i, TÜBİTAK kimlik bilgileri ve SPRING_PROFILES_ACTIVE
+# burada tutulur. EnvironmentFile=- ön eki "dosya yoksa hata verme" demektir;
+# production deployment'ta dosyayı eksiksiz doldurmak operatörün sorumluluğunda.
+EnvironmentFile=-/etc/mersel-dss-signer/mersel-dss-signer.env
+
+# JVM ve uygulama varsayılanları. Env dosyasında override edilebilir.
+Environment="JAVA_OPTS=-Xms256m -Xmx1g -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
+Environment="SERVER_PORT=8085"
+Environment="LOG_PATH=/var/log/mersel-dss-signer"
+# Production'da Spring profile set EDİLMEZ — application.properties default'u kullanılır.
+# Test/staging için: SPRING_PROFILES_ACTIVE=local,pfx-kurum01-rsa2048
+# (bkz. docs/RUN_PROFILES.md)
+
+ExecStart=/usr/bin/java \
+    $JAVA_OPTS \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Dfile.encoding=UTF-8 \
+    -jar /opt/mersel-dss-signer/mersel-dss-signer-api.jar
+
+# Graceful shutdown — Spring Boot SIGTERM'i yakalar, in-flight istekleri bitirir.
+KillSignal=SIGTERM
+TimeoutStopSec=60
+# Hard kill timeout — Spring shutdown 60sn içinde dönmezse zorla durdur.
+SendSIGKILL=yes
+
+# Restart policy — runtime hatalarında dirençli ol, ama "config patladı"
+# durumunda sonsuz döngüye girme (StartLimitBurst).
+Restart=on-failure
+RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
+
+# Standard output / error → journald. `journalctl -u mersel-dss-signer -f`
+# ile takip edilir. Spring Boot logback dosyaya da yazar (logback-spring.xml).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mersel-dss-signer
+
+# ─── Security Hardening ────────────────────────────────────────────────────
+# Saldırı yüzeyi minimizasyonu. Smart card / HSM kullanımı bu kısıtlarla
+# uyumludur (PrivateDevices=no şart — /dev/bus/usb erişimi için).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=no
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# ↑ MemoryDenyWriteExecute=false — JVM JIT W^X yasağına aykırı çalışır.
+# G1 GC code cache write+exec mapping yapar; true verirsen JVM crash eder.
+
+# Yalnızca log + work dizinine yazma izni. PFX'i okumak içinse ReadOnlyPaths.
+ReadWritePaths=/var/log/mersel-dss-signer /opt/mersel-dss-signer/logs /opt/mersel-dss-signer/work
+ReadOnlyPaths=/opt/mersel-dss-signer /etc/mersel-dss-signer
+
+# AKİS/PCSC için /run/pcscd ve /var/run/pcscd erişimi gerekir.
+# PrivateDevices=no zaten /dev/bus/usb'yi açık bıraktığı için ek path gerekmiyor.
+
+# IP filtresi — sadece localhost'tan bağlanılacaksa Engelle (örn. ingress
+# reverse-proxy önde duruyorsa). Default'ta tüm IPv4/IPv6 açık.
+# IPAddressAllow=127.0.0.1 ::1
+# IPAddressDeny=any
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+[Install]
+WantedBy=multi-user.target

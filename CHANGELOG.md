@@ -7,6 +7,65 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+- **Run/Debug profilleri — IntelliJ, Cursor, VS Code ve CLI tek-tıkla**
+  ([docs/RUN_PROFILES.md](docs/RUN_PROFILES.md)).
+  - **Spring profile katmanları**: `local` (ortak ortam ayarları — network off,
+    DEBUG log) + bir alt-profile birleşimi. PFX varyantları: `pfx-kurum01-rsa2048`
+    (default), `pfx-kurum02-rsa2048` (sm.gov.tr), `pfx-kurum02-ec384`,
+    `pfx-kurum03-rsa2048`, `pfx-kurum03-ec384`. HSM varyantları (OS-spesifik
+    PKCS#11 yolu): `mali-muhur-akis-mac`, `mali-muhur-akis-linux`, `mali-muhur-akis-windows`.
+  - **IntelliJ/Cursor**: `.run/` klasöründe 11 paylaşımlı run configuration —
+    Spring Boot main class, aktif profile ve `WORKING_DIRECTORY=$PROJECT_DIR$`
+    önceden set. Geliştirici Run dropdown'undan seçip ▶ veya 🐞 basıyor.
+  - **VS Code**: `.vscode/launch.json` + `.vscode/tasks.json` aynı senaryoları
+    `vscode-java` debugger ve Maven hedefleri olarak sağlar.
+  - **CLI (IDE'siz)**: `scripts/dev-run.sh` (POSIX) ve `scripts/dev-run.bat`
+    (Windows) — OSTYPE / uname tabanlı OS auto-detect; HSM senaryosunda
+    `CERTIFICATE_PIN` yoksa fail-fast. `./scripts/dev-run.sh list` ile
+    yardım çıktısı.
+  - PFX dosyaları repo-relatif yolla referans edilir (`resources/test-certs/`);
+    macOS / Linux / Windows üçünde de fark gözetmeden çalışır. HSM
+    profillerindeki `PKCS11_LIBRARY` default yolu OS-spesifik (AKİS Homebrew
+    / apt / Windows installer konvansiyonu).
+
+- **DevOps — Linux SystemD + Windows Service production deployment paketleri**
+  ([devops/systemd/](devops/systemd/), [devops/windows-service/](devops/windows-service/)).
+  - **Linux SystemD**: hardened unit dosyası (`NoNewPrivileges`, `ProtectSystem=strict`,
+    `PrivateTmp`, `RestrictNamespaces` vb.) + idempotent `install.sh` (signer
+    kullanıcısı, dizin yapısı, `EnvironmentFile` 0640) ve `--purge` destekli
+    `uninstall.sh`. `MemoryDenyWriteExecute=false` bilinçli (JVM JIT zorunluluğu);
+    `PrivateDevices=no` AKİS smart card için açık.
+  - **Windows Service**: WinSW (Windows Service Wrapper) XML şablonu +
+    `Install-Service.ps1` (WinSW indirme, `.env` parse → XML `<env>` injection,
+    NTFS ACL ile XML kilidi, opsiyonel dedicated service account). `SCardSvr`
+    bağımlılığı, `delayedAutoStart`, restart-on-failure policy. NSSM alternatifi
+    ayrıca README'de dokümante. `Uninstall-Service.ps1` `-KeepLogs` ve `-Purge`
+    bayraklarıyla.
+  - **`devops/docker/`** modernize edildi: `docker-compose.yml` env bloğu
+    `SPRING_PROFILES_ACTIVE`, `XADES_SIGNING_TIME_ZONE`, PKCS#11 grubu,
+    `TRUSTED_ROOT_CERT_FOLDER_PATH` ve `CORS_ALLOWED_ORIGINS`'ı kapsıyor;
+    README'deki var olmayan `start-test-kurum{1,2,3}` dosya referansları
+    gerçekteki parametreli `start-test-kurum.{sh,ps1}` script'iyle hizalandı.
+  - **`devops/README.md`** sıfırdan yazıldı: 4-yollu deployment karar matrisi
+    (Docker / SystemD / Windows / K8s), Spring profile vs ENV variable ayrımı,
+    sertifika yerleşim konvansiyonu, ortak env variable tablosu.
+
+- **XAdES `<SigningTime>` timezone parametrik hâle getirildi**
+  ([issue #7](https://github.com/mersel-dss/mersel-dss-server-signer-java/issues/7)).
+  - Default `+03:00` (TÜBİTAK MA3 referans çıktısı ile birebir aynı; İMZAGER
+    lokal gösterimi ile tutarlı). DSS upstream her zaman UTC (`Z`) basıyordu,
+    bu da TÜBİTAK ekosistemindeki imzalarla diff üretiyordu.
+  - `XADES_SIGNING_TIME_ZONE` ENV ile değiştirilebilir: `Z`/`UTC` (ETSI saf
+    yorumu), `+03:00` (default), `+05:30` (ileride farklı pazar) veya
+    `Europe/Istanbul` (IANA bölge) kabul edilir. Geçersiz string fail-fast.
+  - Yeni override: `XAdESSignatureBuilder#incorporateSigningTime()` artık
+    `XAdESSigningTimeZoneHolder.formatSigningTime()` üzerinden gider; eski
+    `DomUtils.createXMLGregorianCalendar()` çağrısı OVERRIDE_DSS marker'ı ile
+    kapatıldı. Detay: `DSS_OVERRIDE.md` bölüm 7a.
+  - Yeni testler: `XAdESSigningTimeZoneHolderTest` (parse/format birim),
+    `XAdESSigningTimeFormatTest` (uçtan uca XML çıktısı doğrulaması).
+
 ### Fixed
 - **`CertificateLifecycleNegativeE2ETest` — 24/24 PASS, 0 SKIP** (default GHCR
   `:main` image ile, flag gerekmiyor).

@@ -117,7 +117,7 @@
       Raporlar &amp; kanıtlar
     </h2>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
 
       <!-- Test Execution Report -->
       <a href="test-report/" class="card group block bg-white rounded-xl border border-slate-200 p-6">
@@ -215,6 +215,33 @@
         <div class="mt-4 flex gap-2 text-xs">
           <span class="px-2 py-1 bg-rose-50 text-rose-700 rounded mono">CVE scan</span>
           <span class="px-2 py-1 bg-rose-50 text-rose-700 rounded mono">CPE match</span>
+        </div>
+      </a>
+
+      <!-- Production Deployment Runbook -->
+      <a href="deployment/" class="card group block bg-white rounded-xl border border-slate-200 p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <div class="text-xs uppercase tracking-wider text-sky-700 font-semibold">
+              Production Runbook
+            </div>
+            <h3 class="mt-1 text-xl font-semibold text-slate-900 group-hover:text-sky-700">
+              Deployment Kılavuzu &rarr;
+            </h3>
+          </div>
+          <span class="text-2xl text-slate-300 group-hover:text-sky-500">→</span>
+        </div>
+        <p class="mt-3 text-sm text-slate-600 leading-relaxed">
+          Linux SystemD, Windows Service (WinSW), Docker Compose ve
+          geliştirici Run Profilleri için sekmeli kurulum + işletim
+          kılavuzu. <code class="px-1 bg-slate-100 rounded mono">devops/</code> README'lerinden
+          otomatik render — markdown güncel → site güncel.
+        </p>
+        <div class="mt-4 flex gap-2 flex-wrap text-xs">
+          <a href="deployment/#linux"        class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Linux</a>
+          <a href="deployment/#windows"      class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Windows</a>
+          <a href="deployment/#docker"       class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Docker</a>
+          <a href="deployment/#run-profiles" class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Run Profiles</a>
         </div>
       </a>
     </div>
