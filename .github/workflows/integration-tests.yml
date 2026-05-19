@@ -290,12 +290,20 @@ jobs:
           sudo apt-get install -y --no-install-recommends softhsm2 opensc
 
       - name: Verify native dependencies
+        # NOT: pkcs11-tool'un yeni sürümlerinde (OpenSC 0.25+) `--version`
+        # bayrağı kaldırıldı; `unrecognized option` mesajıyla exit 2 dönüp
+        # `set -euo pipefail` altında tüm step'i fail ediyor. Sürüm tespitini
+        # `dpkg -s` ile paket metadata'sından alıyoruz; binary'nin varlığı
+        # `which` ile, native modülün varlığı ise libsofthsm2.so listing'i
+        # ile doğrulanıyor — gerçek smoke check zaten sonraki PKCS#11 test
+        # adımında koşuyor.
         run: |
           set -euo pipefail
           which softhsm2-util
           which pkcs11-tool
           softhsm2-util --version
-          pkcs11-tool --version
+          dpkg -s opensc 2>/dev/null | grep -E '^(Package|Version):' || \
+            echo "ℹ️  opensc paket metadata'sı okunamadı (binary yine de mevcut)"
           echo "--- libsofthsm2 lokasyonu ---"
           ls -la /usr/lib/softhsm/ 2>/dev/null || true
           ls -la /usr/lib/x86_64-linux-gnu/softhsm/ 2>/dev/null || true

@@ -218,32 +218,69 @@
         </div>
       </a>
 
-      <!-- Production Deployment Runbook -->
-      <a href="deployment/" class="card group block bg-white rounded-xl border border-slate-200 p-6">
-        <div class="flex items-start justify-between gap-4">
-          <div>
+      <!--
+        Production Deployment Runbook — full-width hero card.
+        Not: outer <a> KULLANILMIYOR, çünkü içinde her platform için ayrı
+        anchor var (HTML5 nested <a> yasak). Başlık satırı ayrı bir link;
+        4 platform kutusu kendi #section'ına gider.
+      -->
+      <section class="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-6">
+        <div class="grid lg:grid-cols-5 gap-6 lg:gap-8 items-start">
+
+          <!-- Sol: başlık + açıklama (2/5) -->
+          <div class="lg:col-span-2">
             <div class="text-xs uppercase tracking-wider text-sky-700 font-semibold">
               Production Runbook
             </div>
-            <h3 class="mt-1 text-xl font-semibold text-slate-900 group-hover:text-sky-700">
-              Deployment Kılavuzu &rarr;
-            </h3>
+            <a href="deployment/" class="group inline-flex items-baseline gap-2 mt-1">
+              <h3 class="text-xl font-semibold text-slate-900 group-hover:text-sky-700">
+                Deployment Kılavuzu
+              </h3>
+              <span class="text-xl text-slate-300 group-hover:text-sky-500 leading-none">→</span>
+            </a>
+            <p class="mt-3 text-sm text-slate-600 leading-relaxed">
+              Linux SystemD, Windows Service (WinSW), Docker Compose ve
+              geliştirici Run Profilleri için sekmeli kurulum + işletim
+              kılavuzu. <code class="px-1 bg-slate-100 rounded mono">devops/</code> README'lerinden
+              otomatik render — markdown güncel → site güncel.
+            </p>
           </div>
-          <span class="text-2xl text-slate-300 group-hover:text-sky-500">→</span>
+
+          <!-- Sağ: 4 platform mini-kartı (3/5).
+               Mobilde 2x2, lg'de 1x4 — Run Profiles artık asla "tek başına alt satır" olmuyor. -->
+          <div class="lg:col-span-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
+
+            <a href="deployment/#linux"
+               class="card block rounded-lg border border-slate-200 hover:border-sky-400 p-3 bg-slate-50/60 hover:bg-sky-50">
+              <div class="text-[11px] uppercase tracking-wider text-sky-700 font-semibold mono">Linux</div>
+              <div class="mt-1 text-sm font-medium text-slate-900">SystemD service</div>
+              <div class="mt-0.5 text-xs text-slate-500 mono">install.sh + .service</div>
+            </a>
+
+            <a href="deployment/#windows"
+               class="card block rounded-lg border border-slate-200 hover:border-sky-400 p-3 bg-slate-50/60 hover:bg-sky-50">
+              <div class="text-[11px] uppercase tracking-wider text-sky-700 font-semibold mono">Windows</div>
+              <div class="mt-1 text-sm font-medium text-slate-900">WinSW service</div>
+              <div class="mt-0.5 text-xs text-slate-500 mono">Install-Service.ps1</div>
+            </a>
+
+            <a href="deployment/#docker"
+               class="card block rounded-lg border border-slate-200 hover:border-sky-400 p-3 bg-slate-50/60 hover:bg-sky-50">
+              <div class="text-[11px] uppercase tracking-wider text-sky-700 font-semibold mono">Docker</div>
+              <div class="mt-1 text-sm font-medium text-slate-900">Compose stack</div>
+              <div class="mt-0.5 text-xs text-slate-500 mono">docker compose up</div>
+            </a>
+
+            <a href="deployment/#run-profiles"
+               class="card block rounded-lg border border-slate-200 hover:border-sky-400 p-3 bg-slate-50/60 hover:bg-sky-50">
+              <div class="text-[11px] uppercase tracking-wider text-sky-700 font-semibold mono">Run Profiles</div>
+              <div class="mt-1 text-sm font-medium text-slate-900">IDE dev runs</div>
+              <div class="mt-0.5 text-xs text-slate-500 mono">.run/ XML profiles</div>
+            </a>
+
+          </div>
         </div>
-        <p class="mt-3 text-sm text-slate-600 leading-relaxed">
-          Linux SystemD, Windows Service (WinSW), Docker Compose ve
-          geliştirici Run Profilleri için sekmeli kurulum + işletim
-          kılavuzu. <code class="px-1 bg-slate-100 rounded mono">devops/</code> README'lerinden
-          otomatik render — markdown güncel → site güncel.
-        </p>
-        <div class="mt-4 flex gap-2 flex-wrap text-xs">
-          <a href="deployment/#linux"        class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Linux</a>
-          <a href="deployment/#windows"      class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Windows</a>
-          <a href="deployment/#docker"       class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Docker</a>
-          <a href="deployment/#run-profiles" class="px-2 py-1 bg-sky-50 text-sky-700 rounded hover:bg-sky-100 mono">Run Profiles</a>
-        </div>
-      </a>
+      </section>
     </div>
 
     <!-- ═══════════════════════════ Why this site ═══════════════════════════ -->
