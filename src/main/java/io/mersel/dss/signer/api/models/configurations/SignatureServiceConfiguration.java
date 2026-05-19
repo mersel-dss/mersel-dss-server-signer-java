@@ -1,8 +1,11 @@
 package io.mersel.dss.signer.api.models.configurations;
 
+import eu.europa.esig.dss.xades.signature.XAdESSigningTimeZoneHolder;
 import io.mersel.dss.signer.api.services.timestamp.tubitak.TubitakTspDetector;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import java.time.ZoneId;
 
 @Component
 public class SignatureServiceConfiguration {
@@ -77,6 +80,25 @@ public class SignatureServiceConfiguration {
 
     @Value("${CERTSTORE_PATH:SertifikaDeposu.svt}")
     private String certStorePath;
+
+    /**
+     * XAdES {@code <SigningTime>} elemanının XML çıktısında kullanılacak
+     * zaman dilimi. Default {@code +03:00} — TÜBİTAK MA3 referans çıktısı
+     * ve İMZAGER lokal gösterimi ile birebir uyumlu (bkz. issue #7).
+     *
+     * <p>Desteklenen değerler:</p>
+     * <ul>
+     *   <li>Sabit ofset: {@code +03:00}, {@code -05:30}</li>
+     *   <li>UTC: {@code Z}, {@code UTC}, {@code GMT}</li>
+     *   <li>IANA bölge: {@code Europe/Istanbul} (DST destekli)</li>
+     * </ul>
+     *
+     * <p><b>ETSI/EN 319 132-1 saf yorumu</b> {@code Z} ister; bu kullanıcılar
+     * için ENV'i {@code Z} olarak set etmek yeterlidir. Default Türkiye
+     * ekosistemi gözetilerek {@code +03:00} bırakılmıştır.</p>
+     */
+    @Value("${XADES_SIGNING_TIME_ZONE:+03:00}")
+    private String xadesSigningTimeZone;
 
     public String getPkcs11LibraryPath() {
         return pkcs11LibraryPath;
@@ -159,5 +181,24 @@ public class SignatureServiceConfiguration {
      */
     public boolean isTubitakTsp() {
         return TubitakTspDetector.resolveTubitakTspMode(isTubitakTsp, timeStampServerHost);
+    }
+
+    /**
+     * XAdES {@code <SigningTime>} için yapılandırılmış zaman dilimini ham
+     * string olarak döner. Çoğunlukla loglama / observability içindir;
+     * çözümlenmiş hâli için {@link #getXadesSigningTimeZone()} kullanın.
+     */
+    public String getXadesSigningTimeZoneRaw() {
+        return xadesSigningTimeZone;
+    }
+
+    /**
+     * XAdES {@code <SigningTime>} için kullanılacak {@link ZoneId}. Parse
+     * başarısız olursa fail-fast: uygulama açılışta hatayla durur, böylece
+     * üretimde sessizce yanlış formatta imza üretmek yerine yapılandırma
+     * problemi erken yakalanır.
+     */
+    public ZoneId getXadesSigningTimeZone() {
+        return XAdESSigningTimeZoneHolder.parseZone(xadesSigningTimeZone);
     }
 }

@@ -290,6 +290,32 @@
             <version>3.0.2</version>
         </dependency>
 
+        <!--
+            Legacy javax.xml.bind API (JSR-222, JAXB 2.3) — KALDIRILMASIN.
+            ===================================================================
+            Swagger Core 2.2.9 (springdoc-openapi 1.7.0 transitively getirir)
+            SwaggerAnnotationIntrospector.java:29'da hâlâ doğrudan
+            `javax.xml.bind.annotation.XmlElement` CLASS LITERAL referansı
+            tutuyor (bkz. swagger-core issue #4517). Bu paket Java 9'da
+            deprecated, Java 11'de JDK'dan tamamen kaldırıldı. JDK 21 ile
+            çalıştığımız için classpath'te yok → `/v3/api-docs`,
+            `/swagger-ui/**` veya OpenAPI endpoint'i ilk çağrıldığında
+            `NoClassDefFoundError: javax/xml/bind/annotation/XmlElement`
+            ile patlıyor (uygulama ayakta kalır ama Swagger ölü).
+
+            Yukarıdaki `jakarta.xml.bind-api` 3.0.1 ile çakışmaz — paket adı
+            farklı (`jakarta.xml.bind.*` vs `javax.xml.bind.*`); JVM iki
+            namespace'i ayrı görür, runtime conflict olmaz.
+
+            Spring Boot 3.x'e geçildiğinde springdoc-openapi-starter-webmvc-ui
+            2.x kullanılır ve bu dependency düşürülebilir.
+        -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+            <version>2.3.1</version>
+        </dependency>
+
         <!-- https://mvnrepository.com/artifact/commons-io/commons-io -->
         <dependency>
             <groupId>commons-io</groupId>

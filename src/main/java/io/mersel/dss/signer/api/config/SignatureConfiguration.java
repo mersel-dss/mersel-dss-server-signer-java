@@ -7,6 +7,7 @@ import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.spi.validation.RevocationDataVerifier;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
 import eu.europa.esig.dss.spi.x509.aia.DefaultAIASource;
+import eu.europa.esig.dss.xades.signature.XAdESSigningTimeZoneHolder;
 import io.mersel.dss.signer.api.models.SigningContext;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.configurations.SignatureServiceConfiguration;
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 
 import java.security.cert.X509Certificate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -40,6 +42,9 @@ public class SignatureConfiguration {
     private final SignatureServiceConfiguration config;
     private final KamusmRootCertificateService rootCertificateService;
 
+    private static final org.slf4j.Logger LOGGER =
+            org.slf4j.LoggerFactory.getLogger(SignatureConfiguration.class);
+
     public SignatureConfiguration(SignatureServiceConfiguration config,
                                  KamusmRootCertificateService rootCertificateService) {
         this.config = config;
@@ -47,6 +52,24 @@ public class SignatureConfiguration {
         
         // DSS OCSP için GET metodu kullanımını etkinleştir
         System.setProperty("dss.http.use.get.for.ocsp", "true");
+
+        configureXadesSigningTimeZone();
+    }
+
+    /**
+     * XAdES {@code <SigningTime>} timezone'unu Spring config'ten okuyup DSS
+     * override builder'ın gördüğü statik holder'a yansıtır. Spring container
+     * dışında çalışan testlerde holder default'ta ({@code +03:00}) kalır.
+     *
+     * <p>Geçersiz timezone string'i fail-fast davranır: container açılışta
+     * patlar, üretimde sessizce yanlış formatta imza üretmek yerine erken
+     * hata.</p>
+     */
+    private void configureXadesSigningTimeZone() {
+        ZoneId zone = config.getXadesSigningTimeZone();
+        XAdESSigningTimeZoneHolder.setZone(zone);
+        LOGGER.info("XAdES SigningTime timezone yapılandırıldı: {} (raw='{}')",
+                zone, config.getXadesSigningTimeZoneRaw());
     }
 
     /**

@@ -70,14 +70,17 @@ Bu projede, DSS kütüphanesinin kaynak kodundan **6 ana sınıf** proje içine 
 
 Aşağıdaki DSS sınıfları proje içinde override edilmiştir:
 
-| Dosya | Paket | Ana Değişiklik |
-|-------|-------|----------------|
-| `XAdESSignatureBuilder.java` | `eu.europa.esig.dss.xades.signature` | Reference sıralaması + KeyInfo sadece imzacı sertifikası + KeyValue (RSAKeyValue) |
-| `XAdESLevelBaselineT.java` | `eu.europa.esig.dss.xades.signature` | 76 karakter base64 satır sonları |
-| `XAdESLevelC.java` | `eu.europa.esig.dss.xades.signature` | OCSP/CRL cache + CRL Number |
-| `XAdESLevelXL.java` | `eu.europa.esig.dss.xades.signature` | 76 karakter base64 (XL seviyesi) |
-| `XAdESLevelA.java` | `eu.europa.esig.dss.xades.signature` | Arşiv timestamp'leri için base64 |
-| `DetachedSignatureBuilder.java` | `eu.europa.esig.dss.xades.signature` | Detached imza özellikleri |
+
+| Dosya                             | Paket                                | Ana Değişiklik                                                                                                            |
+| --------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `XAdESSignatureBuilder.java`      | `eu.europa.esig.dss.xades.signature` | Reference sıralaması + KeyInfo sadece imzacı sertifikası + KeyValue (RSAKeyValue) + **SigningTime configurable timezone** |
+| `XAdESLevelBaselineT.java`        | `eu.europa.esig.dss.xades.signature` | 76 karakter base64 satır sonları                                                                                          |
+| `XAdESLevelC.java`                | `eu.europa.esig.dss.xades.signature` | OCSP/CRL cache + CRL Number                                                                                               |
+| `XAdESLevelXL.java`               | `eu.europa.esig.dss.xades.signature` | 76 karakter base64 (XL seviyesi)                                                                                          |
+| `XAdESLevelA.java`                | `eu.europa.esig.dss.xades.signature` | Arşiv timestamp'leri için base64                                                                                          |
+| `DetachedSignatureBuilder.java`   | `eu.europa.esig.dss.xades.signature` | Detached imza özellikleri                                                                                                 |
+| `XAdESSigningTimeZoneHolder.java` | `eu.europa.esig.dss.xades.signature` | **DSS-dışı yardımcı:** SigningTime zaman dilimini taşıyan statik singleton                                                |
+
 
 > **Not:** Bu dosyaların **orijinal DSS lisansı** (LGPL v2.1) korunmuştur ve her dosyanın başında lisans bilgisi mevcuttur.
 
@@ -94,6 +97,7 @@ Aşağıdaki DSS sınıfları proje içinde override edilmiştir:
 DSS kütüphanesinin orijinal kodunda, `ds:SignedInfo` içindeki `ds:Reference` elemanlarının sırası TÜBİTAK BES formatı ile uyumsuzdur.
 
 **DSS Orijinal Sırası:**
+
 ```xml
 <ds:SignedInfo>
     <ds:Reference URI="#r-data-001">          <!-- 1. Data/Object -->
@@ -103,6 +107,7 @@ DSS kütüphanesinin orijinal kodunda, `ds:SignedInfo` içindeki `ds:Reference` 
 ```
 
 **TÜBİTAK BES Beklentisi:**
+
 ```xml
 <ds:SignedInfo>
     <ds:Reference URI="#xades-...">           <!-- 1. SignedProperties (İLK) -->
@@ -114,6 +119,7 @@ DSS kütüphanesinin orijinal kodunda, `ds:SignedInfo` içindeki `ds:Reference` 
 #### Etki
 
 Yanlış sıralama nedeniyle:
+
 - ❌ TÜBİTAK doğrulayıcısı, Enveloped imzaları bile **Detached** olarak algılar
 - ❌ `<ds:Transform Algorithm="...#enveloped-signature"/>` elementi göz ardı edilir
 - ❌ İmza doğrulama başarısız olur veya yanlış imza türü rapor edilir
@@ -132,6 +138,7 @@ incorporateReferenceKeyInfo();           // Son olarak (KeyInfo)
 ```
 
 #### Etkilenen Bileşenler
+
 - ✅ Tüm XAdES imza tipleri (Enveloped, Enveloping, Detached, Internally Detached)
 - ✅ e-Fatura, e-Arşiv Raporu, e-İrsaliye vb.
 
@@ -181,6 +188,7 @@ certificates.add(params.getSigningCertificate());
 ```
 
 #### Etkilenen Bileşenler
+
 - ✅ Tüm XAdES imzalar (B, T, C, XL, A seviyeleri)
 - ✅ KeyInfo referansı içeren imzalar
 
@@ -226,6 +234,7 @@ uVwXyZaBcDeFgHiJkLmNoP9qRsTuVwXy...
 ```
 
 > **Neden?** 
+>
 > - KeyValue elemanı, sertifikaya ek olarak public key bilgisini doğrudan XML içinde sağlar
 > - TÜBİTAK BES formatına uyum için zorunludur
 > - **Modulus değeri 76 karakterde satır sonuna gitmeli** (RFC 2045 base64 standardı)
@@ -282,6 +291,7 @@ private void addRSAKeyValue(final Element keyInfoElement, final CertificateToken
 ```
 
 **Özellikler:**
+
 - ✅ RSA Public Key desteği (Modulus + Exponent)
 - ✅ Non-RSA sertifikalar için graceful degradation (warning log + skip)
 - ✅ **Modulus için TÜBİTAK standart Base64 encoding** (76 karakterde satır sonu - XadesUtil.formatWithBase64)
@@ -289,6 +299,7 @@ private void addRSAKeyValue(final Element keyInfoElement, final CertificateToken
 - ✅ XML DSig namespace uyumu (getXmldsigNamespace() kullanımı)
 
 #### Etkilenen Bileşenler
+
 - ✅ Tüm XAdES imzalar (B, T, C, XL, A seviyeleri)
 - ✅ RSA tabanlı sertifikalar (ECC/DSA için eklenmez)
 - ✅ TÜBİTAK BES format doğrulama
@@ -298,6 +309,7 @@ private void addRSAKeyValue(final Element keyInfoElement, final CertificateToken
 ### 4. Base64 Satır Sonları (76 Karakter)
 
 **📁 Dosyalar:** 
+
 - `XAdESLevelBaselineT.java` (satır 282-294, 353-365, 394-406)
 - `XadesUtil.java` (yardımcı sınıf)
 
@@ -336,12 +348,14 @@ XadesUtil.createEncapsulatedCertificateElement(
 ```
 
 **XadesUtil Metotları:**
+
 - `createEncapsulatedCertificateElement()` - Sertifikalar için
 - `createEncapsulatedCRLElement()` - CRL'ler için
 - `createEncapsulatedOCSPElement()` - OCSP yanıtları için
 - `formatWithBase64()` - Timestamp'ler için (genel amaçlı)
 
 #### Etkilenen Bileşenler
+
 - ✅ `<xades:CertificateValues>` (XL seviyesi)
 - ✅ `<xades:RevocationValues>` (XL seviyesi)
 - ✅ `<xades:EncapsulatedTimeStamp>` (T, LT, LTA seviyeleri)
@@ -391,6 +405,7 @@ incorporateC14nMethod(timeStampDom, timestampC14nMethod);
 > **Not:** Bu farklılık doğrulamada sorun yaratmamaktadır. EN 319 132-1 standardına göre bu element zorunludur, ancak TÜBİTAK çıktılarında yer almamaktadır.
 
 #### Etkilenen Bileşenler
+
 - ✅ `<xades:SignatureTimeStamp>` (T seviyesi)
 - ✅ `<xades:ArchiveTimeStamp>` (A seviyesi)
 
@@ -405,6 +420,7 @@ incorporateC14nMethod(timeStampDom, timestampC14nMethod);
 DSS'de **ciddi bir sorun** vardır: XAdES-C ve XAdES-XL seviyelerinde OCSP/CRL yanıtları **iki kez ayrı ayrı** çekilir.
 
 **XAdES-C Seviyesi (Referanslar):**
+
 ```xml
 <xades:CompleteRevocationRefs>
     <xades:OCSPRefs>
@@ -416,6 +432,7 @@ DSS'de **ciddi bir sorun** vardır: XAdES-C ve XAdES-XL seviyelerinde OCSP/CRL y
 ```
 
 **XAdES-XL Seviyesi (Gömülü Değerler):**
+
 ```xml
 <xades:RevocationValues>
     <xades:OCSPValues>
@@ -425,6 +442,7 @@ DSS'de **ciddi bir sorun** vardır: XAdES-C ve XAdES-XL seviyelerinde OCSP/CRL y
 ```
 
 **Sonuç:**
+
 - ❌ İki OCSP yanıtı farklı olabilir (OCSP nonce, timestamp farkı)
 - ❌ DigestValue eşleşmez
 - ❌ XAdES-A doğrulaması başarısız olur
@@ -445,6 +463,7 @@ protected String currentSignatureId;
 **İş Akışı:**
 
 1️⃣ **C Seviyesi (Reference oluşturma):**
+
 ```java
 // OCSP token alınır
 OCSPToken ocspToken = fetchFromOCSP(certificate);
@@ -458,6 +477,7 @@ byte[] digest = ocspToken.getDigest(digestAlgorithm);
 ```
 
 2️⃣ **XL Seviyesi (Gömülü değer ekleme):**
+
 ```java
 // Cache'den aynı OCSP alınır
 OCSPToken cachedOcspToken = ocspCacheBySignature.get(signatureId).get(certKey);
@@ -467,6 +487,7 @@ byte[] ocspBytes = cachedOcspToken.getEncoded();
 ```
 
 3️⃣ **Cleanup (Memory leak önleme):**
+
 ```java
 // İmza işlemi bittiğinde
 XAdESLevelC.cleanupOcspCache(signatureId);
@@ -480,10 +501,79 @@ XAdESLevelC.cleanupOcspCache(signatureId);
 - ✅ **Fallback:** 5 dakikadan eski cache'ler periyodik temizlenir
 
 #### Etkilenen Bileşenler
+
 - ✅ XAdES-C seviyesi (OCSP/CRL referansları)
 - ✅ XAdES-XL seviyesi (OCSP/CRL gömülü değerleri)
 - ✅ XAdES-A seviyesi (arşiv timestamp'leri)
 - ✅ e-Arşiv Raporu (otomatik XAdES-A yükseltme)
+
+---
+
+### 7a. SigningTime Timezone (Issue #7)
+
+**📁 Dosyalar:**
+
+- `XAdESSignatureBuilder.java` (`incorporateSigningTime()` metodu)
+- `XAdESSigningTimeZoneHolder.java` (DSS-dışı yardımcı)
+
+#### Problem
+
+DSS upstream'in {@code incorporateSigningTime()} metodu, imza zamanını
+{@code DomUtils.createXMLGregorianCalendar(Date)} ile üretir ve **her zaman
+UTC** ({@code 2025-11-19T11:22:52Z}) basar. Bu, ETSI EN 319 132-1 ile
+uyumludur, ancak:
+
+- TÜBİTAK MA3 referans imzaları {@code +03:00} ofseti ile yazar
+(örn. {@code 2025-11-19T14:22:52+03:00}) — bu farklılık
+[issue #7](https://github.com/mersel-dss/mersel-dss-server-signer-java/issues/7)'de
+raporlandı.
+- İMZAGER gibi lokal araçlar XML'i okurken UTC değeri gösterir, kullanıcının
+bilgisayar saati Istanbul olduğunda görsel kafa karışıklığı yaratır.
+
+#### Çözüm
+
+`<SigningTime>` çıktısının zaman dilimi **parametrik** hale getirildi.
+{@code xsd:dateTime} grameri zaten hem {@code Z} hem de {@code +HH:MM}
+formatlarını kabul ettiği için bu değişiklik standart dışı değildir.
+
+**Default:** {@code +03:00} (TÜBİTAK MA3 ile birebir aynı).
+**ENV ile değiştirilebilir:** {@code XADES_SIGNING_TIME_ZONE=Z} ile UTC'ye dönülür.
+
+```java
+// ########################OVERRIDE_DSS#########################
+// DSS orijinali (UTC sabit):
+//   final XMLGregorianCalendar xmlGregorianCalendar = DomUtils.createXMLGregorianCalendar(signingDate);
+//   final String xmlSigningTime = xmlGregorianCalendar.toXMLFormat();
+// TÜBİTAK uyumu için configurable timezone (default +03:00, ENV ile değiştirilebilir).
+final String xmlSigningTime = XAdESSigningTimeZoneHolder.formatSigningTime(signingDate);
+// #############################################################
+```
+
+**{@code XAdESSigningTimeZoneHolder} — DSS değil, köprü helper:** Spring
+container'ında {@code SignatureConfiguration} açılışta
+{@code XADES_SIGNING_TIME_ZONE} property'sini parse edip
+{@code setZone(ZoneId)} ile statik field'ı doldurur. Spring dışı testlerde
+default {@code +03:00} kalır.
+
+#### Geçerli Değerler
+
+
+| ENV değeri               | Çıktı örneği                      | Notu                                |
+| ------------------------ | --------------------------------- | ----------------------------------- |
+| {@code +03:00} (default) | {@code 2025-11-19T14:22:52+03:00} | TÜBİTAK MA3 uyumlu                  |
+| {@code Z} / {@code UTC}  | {@code 2025-11-19T11:22:52Z}      | ETSI saf yorumu                     |
+| {@code +05:30}           | {@code 2025-11-19T16:52:52+05:30} | İleride farklı pazar için           |
+| {@code Europe/Istanbul}  | {@code 2025-11-19T14:22:52+03:00} | DST destekli (TR için fark üretmez) |
+
+
+> Geçersiz string (örn. {@code "+3"}, {@code "Bogus/Mars"}) verilirse uygulama
+> açılışta {@code DateTimeException} ile patlar — fail-fast.
+
+#### Etkilenen Bileşenler
+
+- ✅ Tüm XAdES seviyeleri (B, T, C, XL, A) — SigningTime tek noktada üretilir
+- ✅ e-Fatura, e-Arşiv Raporu, e-İrsaliye vb. tüm XAdES belgeleri
+- ✅ Sertifika doğrulamasını **etkilemez** (notBefore/notAfter UTC Date üzerinden karşılaştırılır)
 
 ---
 
@@ -507,6 +597,7 @@ DSS, CRL referanslarına `<xades:Number>` elemanını **eklememektedir**:
 ```
 
 **DSS Kaynak Kodu:**
+
 ```java
 // DSS orijinalinde yorumlanmış:
 // DSSXMLUtils.addTextElement(documentDom, crlRefDom, XAdESNamespaces.XAdES, "xades:Number", ???);
@@ -546,6 +637,7 @@ try {
 ```
 
 **XadesUtil.extractCrlNumber():**
+
 ```java
 public static String extractCrlNumber(X509CRL crl) {
     byte[] extensionValue = crl.getExtensionValue("2.5.29.20"); // CRLNumber OID
@@ -560,6 +652,7 @@ public static String extractCrlNumber(X509CRL crl) {
 ```
 
 #### Etkilenen Bileşenler
+
 - ✅ XAdES-C seviyesi (`<xades:CRLRefs>`)
 - ✅ İMZAGER doğrulaması
 - ✅ Tüm CRL içeren imzalar
@@ -567,7 +660,8 @@ public static String extractCrlNumber(X509CRL crl) {
 #### Upstream Katkı
 
 Bu düzeltme için DSS projesine **Pull Request** gönderilmiştir:
-- 🔗 https://github.com/esig/dss/pull/187
+
+- 🔗 [https://github.com/esig/dss/pull/187](https://github.com/esig/dss/pull/187)
 
 > **Not:** DSS upstream'e merge edilene kadar bu override kalıcıdır.
 
@@ -577,47 +671,56 @@ Bu düzeltme için DSS projesine **Pull Request** gönderilmiştir:
 
 ### 🎯 İmza Seviyeleri
 
-| Seviye | Etkilenen Override'lar |
-|--------|------------------------|
-| XAdES-B (Basic) | Reference Sıralaması, KeyInfo, KeyValue |
-| XAdES-T (Timestamp) | Base64 Satır Sonları, CanonicalizationMethod |
-| XAdES-C (Complete) | OCSP Cache, CRL Number |
-| XAdES-XL (eXtended Long) | Base64 Satır Sonları, OCSP Cache |
-| XAdES-A (Archival) | OCSP Cache, Base64 Satır Sonları |
+
+| Seviye                   | Etkilenen Override'lar                       |
+| ------------------------ | -------------------------------------------- |
+| XAdES-B (Basic)          | Reference Sıralaması, KeyInfo, KeyValue      |
+| XAdES-T (Timestamp)      | Base64 Satır Sonları, CanonicalizationMethod |
+| XAdES-C (Complete)       | OCSP Cache, CRL Number                       |
+| XAdES-XL (eXtended Long) | Base64 Satır Sonları, OCSP Cache             |
+| XAdES-A (Archival)       | OCSP Cache, Base64 Satır Sonları             |
+
 
 ### 📄 Belge Tipleri
 
-| Belge Tipi | Kritik Override'lar |
-|------------|---------------------|
-| e-Fatura (UBL) | Reference Sıralaması, KeyInfo, KeyValue |
+
+| Belge Tipi     | Kritik Override'lar                           |
+| -------------- | --------------------------------------------- |
+| e-Fatura (UBL) | Reference Sıralaması, KeyInfo, KeyValue       |
 | e-Arşiv Raporu | **Tüm override'lar** (XAdES-A'ya yükseltilir) |
-| e-İrsaliye | Reference Sıralaması, KeyInfo, KeyValue |
-| HrXml | Reference Sıralaması, KeyValue |
-| Genel XML | Reference Sıralaması, KeyValue |
+| e-İrsaliye     | Reference Sıralaması, KeyInfo, KeyValue       |
+| HrXml          | Reference Sıralaması, KeyValue                |
+| Genel XML      | Reference Sıralaması, KeyValue                |
+
 
 ### 🔧 Servisler
 
-| Servis | Bağımlı Olduğu Override |
-|--------|-------------------------|
-| `XAdESSignatureService` | Reference Sıralaması, KeyInfo, KeyValue, OCSP Cache |
-| `XAdESLevelUpgradeService` | OCSP Cache, Base64, CRL Number |
-| `XAdESDocumentPlacementService` | Yok (doğrudan etkilenmez) |
+
+| Servis                          | Bağımlı Olduğu Override                             |
+| ------------------------------- | --------------------------------------------------- |
+| `XAdESSignatureService`         | Reference Sıralaması, KeyInfo, KeyValue, OCSP Cache |
+| `XAdESLevelUpgradeService`      | OCSP Cache, Base64, CRL Number                      |
+| `XAdESDocumentPlacementService` | Yok (doğrudan etkilenmez)                           |
+
 
 ---
 
 ## Özet Tablo
 
-| Override | Dosya | Satır | Kritiklik | TÜBİTAK Uyumu |
-|----------|-------|-------|-----------|---------------|
-| Reference Sıralaması | XAdESSignatureBuilder.java | 231-266 | 🔴 Kritik | Zorunlu |
-| KeyInfo Sertifikası | XAdESSignatureBuilder.java | 556-577 | 🟡 Önemli | Zorunlu |
-| KeyValue (RSAKeyValue) | XAdESSignatureBuilder.java | 598-717 | 🟡 Önemli | Zorunlu |
-| Base64 Satır Sonları | XAdESLevelBaselineT.java | Çoklu | 🟡 Önemli | Zorunlu |
-| CanonicalizationMethod | XAdESLevelBaselineT.java | 669-698 | 🟢 Düşük | Opsiyonel |
-| OCSP Cache | XAdESLevelC.java | 61-650 | 🔴 Kritik | Kritik (Digest) |
-| CRL Number | XAdESLevelC.java | 414-433 | 🟡 Önemli | İMZAGER için |
+
+| Override               | Dosya                      | Satır   | Kritiklik | TÜBİTAK Uyumu   |
+| ---------------------- | -------------------------- | ------- | --------- | --------------- |
+| Reference Sıralaması   | XAdESSignatureBuilder.java | 231-266 | 🔴 Kritik | Zorunlu         |
+| KeyInfo Sertifikası    | XAdESSignatureBuilder.java | 556-577 | 🟡 Önemli | Zorunlu         |
+| KeyValue (RSAKeyValue) | XAdESSignatureBuilder.java | 598-717 | 🟡 Önemli | Zorunlu         |
+| Base64 Satır Sonları   | XAdESLevelBaselineT.java   | Çoklu   | 🟡 Önemli | Zorunlu         |
+| CanonicalizationMethod | XAdESLevelBaselineT.java   | 669-698 | 🟢 Düşük  | Opsiyonel       |
+| OCSP Cache             | XAdESLevelC.java           | 61-650  | 🔴 Kritik | Kritik (Digest) |
+| CRL Number             | XAdESLevelC.java           | 414-433 | 🟡 Önemli | İMZAGER için    |
+
 
 **Kritiklik Seviyeleri:**
+
 - 🔴 **Kritik:** İmza doğrulaması başarısız olur
 - 🟡 **Önemli:** Format uyumsuzluğu, bazı doğrulayıcılar sorun çıkarır
 - 🟢 **Düşük:** Estetik/standart uyumu, doğrulama etkilenmez
@@ -640,11 +743,13 @@ Bu override'ların geliştirilmesinde katkıda bulunanlar:
 Bu override'lar, orijinal DSS kodunun **LGPL v2.1** lisansına tabidir. Her override edilmiş dosyanın başında orijinal DSS lisans başlığı korunmuştur.
 
 **DSS Framework:**
-- 🔗 https://github.com/esig/dss
+
+- 🔗 [https://github.com/esig/dss](https://github.com/esig/dss)
 - 📄 Lisans: LGPL v2.1
 - 🏢 Copyright: European Commission (CEF Programme)
 
 **Bu Proje:**
+
 - Override'lar açıkça işaretlenmiştir
 - LGPL v2.1 koşullarına uygun şekilde türetilmiştir
 - Kaynak kod değişiklikleri bu dokümanda belgelenmiştir
@@ -654,4 +759,3 @@ Bu override'lar, orijinal DSS kodunun **LGPL v2.1** lisansına tabidir. Her over
 **Son Güncelleme:** Kasım 2025  
 **DSS Versiyonu:** 6.3  
 **Doküman Versiyonu:** 1.0
-

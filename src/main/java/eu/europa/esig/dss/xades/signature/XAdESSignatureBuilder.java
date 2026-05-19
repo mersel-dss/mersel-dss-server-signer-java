@@ -52,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.*;
 
-import javax.xml.datatype.XMLGregorianCalendar;
 import java.math.BigInteger;
 import java.security.PublicKey;
 import java.security.interfaces.ECPublicKey;
@@ -1186,11 +1185,27 @@ public abstract class XAdESSignatureBuilder extends XAdESBuilder implements Sign
      * 		<SigningTime>2013-11-23T11:22:52Z</SigningTime>
      * 	}
      * </pre>
+     *
+     * <p><b>Override notu (issue #7):</b> DSS upstream
+     * {@link DomUtils#createXMLGregorianCalendar(Date)} kullanır ve çıktıyı
+     * her zaman UTC ({@code Z} sonekli) basar. TÜBİTAK MA3 referans
+     * çıktısında {@code SigningTime} timezone'lu yazıldığı için ve İMZAGER
+     * gibi yerel doğrulayıcılarda XML metnine bakan operatör için kafa
+     * karışıklığı yarattığı için, çıktının zaman dilimini
+     * {@link XAdESSigningTimeZoneHolder#getZone()} üzerinden parametrik
+     * hale getirdik. Default {@code +03:00}, ENV
+     * {@code XADES_SIGNING_TIME_ZONE} ile değiştirilebilir
+     * ({@code Z}/{@code UTC} dahil).</p>
      */
     private void incorporateSigningTime() {
         final Date signingDate = params.bLevel().getSigningDate();
-        final XMLGregorianCalendar xmlGregorianCalendar = DomUtils.createXMLGregorianCalendar(signingDate);
-        final String xmlSigningTime = xmlGregorianCalendar.toXMLFormat();
+        // ########################OVERRIDE_DSS#########################
+        // DSS orijinali (UTC sabit):
+        //   final XMLGregorianCalendar xmlGregorianCalendar = DomUtils.createXMLGregorianCalendar(signingDate);
+        //   final String xmlSigningTime = xmlGregorianCalendar.toXMLFormat();
+        // TÜBİTAK uyumu için configurable timezone (default +03:00, ENV ile değiştirilebilir).
+        final String xmlSigningTime = XAdESSigningTimeZoneHolder.formatSigningTime(signingDate);
+        // #############################################################
 
         final Element signingTimeDom = DomUtils.createElementNS(documentDom, getXadesNamespace(), getCurrentXAdESElements().getElementSigningTime());
         signedSignaturePropertiesDom.appendChild(signingTimeDom);
