@@ -409,17 +409,14 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
                          byte[] dataToSign,
                          SignatureAlgorithm signatureAlgorithm) {
         ensureTokenOpen();
-        try {
-            Mechanism mechanism = IaikSignatureMechanisms.resolveMechanism(signatureAlgorithm);
-            byte[] inputData = IaikSignatureMechanisms.requiresExternalDigest(mechanism)
-                ? hash(dataToSign, signatureAlgorithm)
-                : dataToSign;
+        Mechanism mechanism = IaikSignatureMechanisms.resolveMechanism(signatureAlgorithm);
+        byte[] inputData = IaikSignatureMechanisms.requiresExternalDigest(mechanism)
+            ? hash(dataToSign, signatureAlgorithm)
+            : dataToSign;
 
-            byte[] signature = token.sign(mechanism, privateKeyHandle, inputData);
-            LOGGER.debug("HSM imza tamamlandı: mech=0x{}, dataLen={}, sigLen={}",
-                Long.toHexString(mechanism.getMechanismCode()),
-                dataToSign.length, signature.length);
-            return normalizeIfEcOrDsa(signature, signatureAlgorithm);
+        try {
+            return invokeSign(mechanism, privateKeyHandle, inputData,
+                signatureAlgorithm, dataToSign.length);
         } catch (PKCS11Exception ckEx) {
             // Bazı eski HSM'lerde CKM_<HASH>_ECDSA / CKM_<HASH>_RSA_PKCS
             // desteklenmez. Fallback'i deneyelim — RSA-PSS hariç (raw
@@ -436,12 +433,80 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
                 LOGGER.warn("Mekanizma reddedildi (CKR_MECHANISM_INVALID); raw fallback'e düşülüyor.");
                 return signWithRawFallback(privateKeyHandle, dataToSign, signatureAlgorithm);
             }
+            // ──────────────────────────────────────────────────────────────
+            // xipki/ipkcs11wrapper 1.0.9 — opInit() swallow-bug workaround
+            // ──────────────────────────────────────────────────────────────
+            // PKCS11Token.opInit() yalnızca CKR_USER_NOT_LOGGED_IN için
+            // re-init yapıyor; başka her PKCS11Exception'ı SESSİZCE yutuyor
+            // (master'da `else { throw ex; }` ile düzeltildi, ama 2024-07-20
+            // sonrası release yok). Sonuç: alttaki session.sign(data) çağrısı
+            // C_SignInit YAPILMAMIŞ bir session üzerinde koşar ve
+            // CKR_OPERATION_NOT_INITIALIZED döner. Bozuk session pool'a geri
+            // eklendiği için cascade fail başlar (CI'da gözlenen pattern:
+            // N başarılı + arkasından ardarda hep fail).
+            //
+            // Workaround: pool'u flush et (corrupt session'lar atılır), sign'ı
+            // bir kez daha dene. İkinci deneme de fail ediyorsa kalıcı bir
+            // HSM/driver sorunu var demektir — bu sefer gerçek hatayı yukarı
+            // bırakırız (auditor için sessiz başarısızlık üretmiyoruz).
+            //
+            // Upstream tracking: https://github.com/xipki/ipkcs11wrapper master
+            // şu anda düzeltilmiş; sürüm > 1.0.9 publish edildiğinde bu blok
+            // kaldırılabilir (TEST_BACKLOG'a not düşüldü).
+            // ──────────────────────────────────────────────────────────────
+            if (ckEx.getErrorCode() == PKCS11Constants.CKR_OPERATION_NOT_INITIALIZED) {
+                LOGGER.warn("PKCS#11 session state tutarsız (CKR_OPERATION_NOT_INITIALIZED) — "
+                    + "xipki 1.0.9 opInit() swallow-bug şüphesi. Session pool flush + "
+                    + "sign retry deneniyor (alg={}, mech=0x{}, keyHandle=0x{}).",
+                    signatureAlgorithm, Long.toHexString(mechanism.getMechanismCode()),
+                    Long.toHexString(privateKeyHandle));
+                try {
+                    token.closeAllSessions();
+                } catch (Exception flushEx) {
+                    // Best-effort: flush başarısız olsa bile retry'ı denemekten kaybedeceğimiz
+                    // bir şey yok; sonraki borrowSession yeni session yaratır.
+                    LOGGER.warn("Session pool flush başarısız (best-effort, retry yine denenecek): {}",
+                        flushEx.getMessage());
+                }
+                try {
+                    byte[] signature = invokeSign(mechanism, privateKeyHandle, inputData,
+                        signatureAlgorithm, dataToSign.length);
+                    LOGGER.info("Sign retry başarılı (corrupt session flush sonrası); "
+                        + "xipki opInit swallow-bug'dan kurtarıldı.");
+                    return signature;
+                } catch (PKCS11Exception retryEx) {
+                    // İkinci denemede de PKCS11 hatası — kalıcı bir sorun var.
+                    throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                        "HSM imza başarısız (session pool flush + retry sonrası da): "
+                            + retryEx.getMessage(), retryEx);
+                } catch (Exception retryEx) {
+                    throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                        "HSM imza başarısız (retry sırasında beklenmedik hata)", retryEx);
+                }
+            }
             throw new io.mersel.dss.signer.api.exceptions.SignatureException(
                 "HSM imza başarısız: " + ckEx.getMessage(), ckEx);
         } catch (Exception e) {
             throw new io.mersel.dss.signer.api.exceptions.SignatureException(
                 "HSM imza başarısız", e);
         }
+    }
+
+    /**
+     * Tek bir {@code token.sign} çağrısını sarmalar (logging + EC/DSA normalize
+     * dahil). {@link #signOnSession}'daki retry yolundan da çağrılabilsin diye
+     * extract edildi — aynı log/normalize davranışı her iki yolda da aynı.
+     */
+    private byte[] invokeSign(Mechanism mechanism,
+                              long privateKeyHandle,
+                              byte[] inputData,
+                              SignatureAlgorithm signatureAlgorithm,
+                              int originalDataLen) throws TokenException {
+        byte[] signature = token.sign(mechanism, privateKeyHandle, inputData);
+        LOGGER.debug("HSM imza tamamlandı: mech=0x{}, dataLen={}, sigLen={}",
+            Long.toHexString(mechanism.getMechanismCode()),
+            originalDataLen, signature.length);
+        return normalizeIfEcOrDsa(signature, signatureAlgorithm);
     }
 
     private byte[] signWithRawFallback(long privateKeyHandle,

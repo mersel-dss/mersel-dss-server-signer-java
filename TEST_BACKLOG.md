@@ -1042,6 +1042,12 @@ veya UI: `Settings → Pages → Source → GitHub Actions`.
 
 İlk push sonrası site `https://mersel-dss.github.io/mersel-dss-server-signer-java/` üzerinde canlı olur. Custom domain (örn. `evidence.mersel.io`) DNS setup gerektirir; şu an default subdomain kullanılıyor.
 
+### Known upstream issues (workaround'lar — yeni release bekleniyor)
+
+| # | Bağımlılık | Sürüm | Issue | Bizim workaround | Kaldırılma şartı |
+|---|------------|-------|-------|-------------------|-------------------|
+| 1 | `org.xipki:ipkcs11wrapper` | `1.0.9` (2024-07-20, Maven Central'daki son release) | `PKCS11Token.opInit()` yalnızca `CKR_USER_NOT_LOGGED_IN` için re-init yapıyor; diğer tüm `PKCS11Exception`'ları sessizce yutuyor. Sonuçta alttaki `session.sign(data)` `C_SignInit` yapılmamış bir session'da koşar ve `CKR_OPERATION_NOT_INITIALIZED` döner; bozuk session pool'a geri eklendiği için sonraki imzalar cascade fail eder. **CI'da gözlenen pattern**: `XadesSoftHsmVerifierE2ETest` 31 testten 19'u başarılı + 12 ardarda `CKR_OPERATION_NOT_INITIALIZED` ([run 26120184561](https://github.com/mersel-dss/mersel-dss-server-signer-java/actions/runs/26120184561)). Master branch'te `else { throw ex; }` ile düzeltildi ancak yeni release yok. | `IaikPkcs11Module.signOnSession` — `CKR_OPERATION_NOT_INITIALIZED` yakaladığında `token.closeAllSessions()` ile pool'u flush eder ve sign'ı bir kez daha dener; ikinci deneme de fail ediyorsa gerçek hatayı yukarı bırakır. Tetiklendiğinde `WARN` log basar (operatör görsün). | `org.xipki:ipkcs11wrapper > 1.0.9` Maven Central'da publish edildiğinde: (a) `pom.xml`'de sürümü yükselt, (b) `signOnSession`'daki `CKR_OPERATION_NOT_INITIALIZED` defensive bloğunu kaldır (workaround comment'inde lokasyon notu var), (c) bu satırı backlog'tan sil. |
+
 ### Mali yorum (neden bu yatırım önemli)
 
 - **e-Belge ekosisteminde "imzaladım" demek yetmez** — VUK 230, e-Belge tebliği 509 ve teknik kılavuzlar imzanın `INDETERMINATE` / `REVOKED` / `EXPIRED` dönmesini fatura reddine bağlar. Auditor "düzenleyici signer'ı validate ettin mi?" diye sorduğunda → tek URL → 290 satır, hepsi PASSED, her satırın altında verifier response → 30 saniyede ikna.

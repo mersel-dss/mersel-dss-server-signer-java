@@ -7,7 +7,54 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Fixed
+- **HSM (PKCS#11) imza akışında upstream xipki 1.0.9 bug workaround'u**
+  (`IaikPkcs11Module.signOnSession`).
+  - **Semptom (CI'da gözlenen)**: `XadesSoftHsmVerifierE2ETest` ve
+    `SoftHsm2Pkcs11IntegrationTest` testleri `Tests run: 31, Errors: 12`
+    deseniyle patlıyordu — N başarılı imza sonrası ardarda
+    `CKR_OPERATION_NOT_INITIALIZED` (cascade failure).
+  - **Root cause**: `org.xipki:ipkcs11wrapper:1.0.9`
+    [`PKCS11Token.opInit()`](https://github.com/xipki/ipkcs11wrapper/blob/v1.0.9/src/main/java/org/xipki/pkcs11/wrapper/PKCS11Token.java)
+    yalnızca `CKR_USER_NOT_LOGGED_IN` için re-init yapıyor; diğer tüm
+    `PKCS11Exception`'ları **sessizce yutuyor** (`else` dalı yok). Sonuçta
+    alttaki `session.sign(data)` çağrısı `C_SignInit` yapılmamış bir
+    session üzerinde koşar ve `CKR_OPERATION_NOT_INITIALIZED` döner. Bozuk
+    session pool'a geri eklendiği için sonraki sign'lar da aynı şekilde
+    fail eder.
+  - **Master'da düzeltildi** (`else { throw ex; }`) ama 2024-07-20 sonrası
+    yeni release yok; Maven Central'da hâlâ 1.0.9. Upgrade yolu kapalı.
+  - **Bizim defensive katman**: `signOnSession` `CKR_OPERATION_NOT_INITIALIZED`
+    yakaladığında `token.closeAllSessions()` ile pool'u flush eder (corrupt
+    session'lar atılır) ve sign'ı bir kez daha dener. İkinci deneme de
+    fail ediyorsa kalıcı bir HSM/driver sorunu var demektir — gerçek hata
+    yukarı bırakılır (sessiz başarısızlık üretilmez). Detaylı `WARN` log
+    operatöre upstream bug'ı tanıtır.
+  - Upstream takip notu `TEST_BACKLOG.md` "Known upstream issues" bölümüne
+    eklendi; xipki > 1.0.9 publish edildiğinde workaround kaldırılabilir.
+
 ### Added
+- **`scripts/run-integration-tests-locally.sh` — Integration testleri yerelde
+  CI parite modunda koşturucu** (`.github/workflows/integration-tests.yml`
+  iki job'unun yerel karşılığı).
+  - **`--pkcs11`** (default): SoftHSM2 modül auto-detect (macOS Apple Silicon
+    `/opt/homebrew/lib/softhsm/libsofthsm2.{so,dylib}`, Intel `/usr/local/`,
+    Linux `/usr/lib/`) → `mvn validate` → `mvn test -Dgroups=pkcs11-integration`
+    → workflow'un test-count guardrail'leri (6 + 25 iterasyon).
+  - **`--verifier-e2e`**: Docker daemon check → GHCR `:main` pull (veya
+    `--build-verifier` ile sibling `mersel-dss-verifier-api-java` repo'sundan
+    source build) → `mvn test -Dgroups=verifier-e2e -DverifierImage=...`
+    → 277 iterasyon guard.
+  - **`--all`**: ikisini sırayla; **`--quick`**: count assertion'larını atla
+    (hızlı feedback); **`--skip-pull`**: offline koşum.
+  - **CI parite**: Workflow'daki `Verify SoftHsm2Pkcs11IntegrationTest`,
+    `Verify XadesSoftHsmVerifierE2ETest` ve `Verify expected verifier-e2e
+    test count` step'lerinin assertion'larını birebir uygular — yerelde
+    "yeşil ama aslında skip" sessiz başarısızlığı CI'la aynı katılıkta
+    yakalanır.
+  - **macOS prereq**: `brew install softhsm opensc` + Docker Desktop.
+    Linux prereq: `sudo apt-get install -y softhsm2 opensc` + Docker.
+
 - **Run/Debug profilleri — IntelliJ, Cursor, VS Code ve CLI tek-tıkla**
   ([docs/RUN_PROFILES.md](docs/RUN_PROFILES.md)).
   - **Spring profile katmanları**: `local` (ortak ortam ayarları — network off,
