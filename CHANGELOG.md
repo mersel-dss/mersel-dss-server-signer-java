@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-05-20
+
 ### Added
 - **Profesyonel & immutable release hattı — otomatik JAR derleme, semver
   versioning, CHANGELOG-driven release notes**
