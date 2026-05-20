@@ -2,19 +2,29 @@
   <!--
     TÜBİTAK Mali Mühür AKİS (Windows) ile çalıştırır.
 
-    ÖN KOŞUL: AKİS Windows kurulu (SCardSvr çalışır durumda) + kart takılı.
-    Default path C:/Windows/System32/akisp11.dll; farklı kurulumlar için
-    PKCS11_LIBRARY env'iyle override edilir.
+    ÖN KOŞUL: AKİS Windows kurulu (SCardSvr çalışır durumda) + kart takılı +
+    repo kökünde `local-secrets.properties` dosyası mevcut.
+
+    CREDENTIAL YÖNETİMİ:
+      CERTIFICATE_PIN / CERTIFICATE_ALIAS / CERTIFICATE_SERIAL_NUMBER bu run
+      config XML'inde TAŞINMAZ — kart-bağımlı, geliştirici-bağımlı ve gizli.
+      Onun yerine `application-mali-muhur-akis-windows.properties`,
+      `spring.config.import=optional:file:./local-secrets.properties` ile
+      gitignored bir dosyadan yükler:
+        1) copy local-secrets.properties.example local-secrets.properties
+        2) PIN/ALIAS/SERIAL'i kendi kartına göre doldur
+        3) Run'a bas — bu XML hiç değişmez, commit'e sızmaz.
+
+    Default DLL yolu C:/Windows/System32/akisp11.dll; farklı kurulumlar için
+    `local-secrets.properties` veya OS env ile PKCS11_LIBRARY override edilir.
   -->
-  <configuration default="false" name="Signer · Mali Mühür AKİS (Windows)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
-    <envs>
-      <env name="CERTIFICATE_PIN" value="REPLACE_WITH_YOUR_PIN" />
-    </envs>
+  <configuration default="false" name="Signer - Mali Mühür AKİS (Windows)" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot">
+    <option name="ACTIVE_PROFILES" value="local,mali-muhur-akis-windows" />
+    <option name="ALTERNATIVE_JRE_PATH" value="1.8" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <module name="mersel-dss-signer-api" />
     <option name="SPRING_BOOT_MAIN_CLASS" value="io.mersel.dss.signer.api.SignatureApplication" />
-    <option name="ACTIVE_PROFILES" value="local,mali-muhur-akis-windows" />
-    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="false" />
-    <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="WORKING_DIRECTORY" value="file://$PROJECT_DIR$" />
     <method v="2">
       <option name="Make" enabled="true" />
     </method>

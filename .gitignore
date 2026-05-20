@@ -76,3 +76,11 @@ openapi-snapshot/
 .allure/
 
 .vscode
+
+# ─── Geliştirici lokali credential override (AKİS kart PIN/ALIAS/SERIAL) ───
+# `application-mali-muhur-akis-{linux,windows,mac}.properties` dosyaları bu
+# dosyayı `spring.config.import=optional:file:` ile yükler. Repo'ya hiçbir
+# zaman commit edilmez — kart bağımlı sırlar burada yaşar, run config XML'leri
+# (.run/) tertemiz/değişmez kalır.
+# Şablon: `local-secrets.properties.example` (commitlenir).
+/local-secrets.properties

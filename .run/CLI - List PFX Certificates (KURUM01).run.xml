@@ -9,6 +9,8 @@
     explicit verilmiş.
   -->
   <configuration default="false" name="CLI · List PFX Certificates (KURUM01)" type="Application" factoryName="Application">
+    <option name="ALTERNATIVE_JRE_PATH" value="1.8" />
+    <option name="ALTERNATIVE_JRE_PATH_ENABLED" value="true" />
     <envs>
       <env name="PFX_PATH" value="resources/test-certs/testkurum01_rsa2048@test.com.tr_614573.pfx" />
       <env name="CERTIFICATE_PIN" value="614573" />
