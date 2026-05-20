@@ -77,6 +77,12 @@ openapi-snapshot/
 
 .vscode
 
+# .NET istemci paketi (src/Client) build artifactleri
+src/Client/bin/
+src/Client/obj/
+*.nupkg
+*.snupkg
+
 # ─── Geliştirici lokali credential override (AKİS kart PIN/ALIAS/SERIAL) ───
 # `application-mali-muhur-akis-{linux,windows,mac}.properties` dosyaları bu
 # dosyayı `spring.config.import=optional:file:` ile yükler. Repo'ya hiçbir
