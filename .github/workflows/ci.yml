@@ -1,10 +1,24 @@
 name: CI
 
+# =============================================================================
+# Continuous Integration — her push ve PR'da test + build + JAR artifact.
+#
+# Production release degil (o tag bazli release.yml'de): bu workflow her
+# branch'ten gelen JAR'i 14 gun boyunca artifact olarak saklar; QA'in
+# develop branch'inden son build'i indirip test edebilmesi icin.
+#
+# JAR'a release.yml'nin embed ettigi metadata'nin BENZERINI burada da
+# embed ediyoruz (build-revision = commit SHA, build-time = git author
+# date), boylece develop build'lerini de "hangi commit'ten geldi" diye
+# audit edebilirsiniz. Sadece tag yok; isim ornegin
+# 'mersel-dss-signer-api-0.4.0.jar' (pom'daki version) seklinde kalir.
+# =============================================================================
+
 on:
   push:
     branches: [ develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build-and-test:
@@ -14,6 +28,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0   # build-info icin git commit timestamp gerekli
 
     - name: Set up JDK 8
       uses: actions/setup-java@v4
@@ -25,8 +41,25 @@ jobs:
     - name: Install local dependencies
       run: mvn validate -B
 
-    - name: Build and test
-      run: mvn clean verify -B
+    - name: Determine reproducible build timestamp
+      id: ts
+      run: |
+        BUILD_TS=$(git log -1 --format=%cI HEAD)
+        echo "BUILD_TS=${BUILD_TS}" >> "$GITHUB_OUTPUT"
+
+    - name: Build and test (with embedded build-info)
+      env:
+        BUILD_REV:  ${{ github.sha }}
+        BUILD_NUM:  ${{ github.run_number }}
+        BUILD_TS:   ${{ steps.ts.outputs.BUILD_TS }}
+        BUILD_HOST: ${{ runner.os }}-${{ runner.arch }}
+      run: |
+        mvn -B verify \
+          -Dmersel.build.revision="${BUILD_REV}" \
+          -Dmersel.build.number="${BUILD_NUM}" \
+          -Dmersel.build.timestamp="${BUILD_TS}" \
+          -Dmersel.build.host="${BUILD_HOST}" \
+          -Dproject.build.outputTimestamp="${BUILD_TS}"
 
     - name: Upload test reports
       if: always()
@@ -34,6 +67,19 @@ jobs:
       with:
         name: test-reports
         path: target/surefire-reports/
+        retention-days: 14
+
+    - name: Upload build artifact (JAR + SBOM)
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifact-${{ github.sha }}
+        path: |
+          target/*.jar
+          target/bom.json
+          target/bom.xml
+          !target/*-sources.jar
+          !target/*.original
         retention-days: 14
 
   code-quality:

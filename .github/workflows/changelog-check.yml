@@ -1,0 +1,64 @@
+name: CHANGELOG Check
+
+# =============================================================================
+# PR'larda CHANGELOG.md guncelligini kontrol eder.
+#
+# Kural: src/main/, src/test/, pom.xml, devops/, scripts/ (generate-* haric),
+# .github/workflows/ icinden bir dosya degisiyorsa, CHANGELOG.md'nin
+# [Unreleased] bolumu de mutlaka guncellenmis olmali.
+#
+# Bypass: PR title veya commit message'da '[skip changelog]' / '[no-changelog]'
+# / '[skip-changelog]' string'i varsa kontrol atlanir.
+#
+# Bu kontrol release.yml workflow'unun ön koşuludur: CHANGELOG'da [Unreleased]
+# bolumu birikmis degisiklikleri saglikli bir sekilde tasimazsa, release.sh'nin
+# finalize adimi gerek goruntu acisindan gerek otomatik release notes acisindan
+# zayif kalir. PR-time'da yakalamak en ucuz zaman.
+# =============================================================================
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  check:
+    name: Verify CHANGELOG.md is updated
+    runs-on: ubuntu-latest
+    # Draft PR'larda calistirma — geliştirici hala WIP'te
+    if: github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # PR'ın tüm commit'lerini görebilmek için tam history gerekli
+          fetch-depth: 0
+
+      - name: Run changelog check script
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: ./scripts/check-changelog-updated.sh
+
+      - name: Post status summary
+        if: always()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # CHANGELOG Check
+
+          - **Sonuç**: ${{ job.status }}
+          - **PR**: #${{ github.event.pull_request.number }} — ${{ github.event.pull_request.title }}
+          - **Base**: \`${{ github.event.pull_request.base.ref }}\` @ \`${{ github.event.pull_request.base.sha }}\`
+          - **Head**: \`${{ github.event.pull_request.head.ref }}\` @ \`${{ github.event.pull_request.head.sha }}\`
+
+          PR significant kod dosyalari degistiriyorsa CHANGELOG.md'nin
+          [Unreleased] bolumu de guncellenmis olmalidir.
+
+          Bypass icin (sadece trivial degisiklikler icin): PR title veya
+          commit message'a \`[skip changelog]\` ekleyin.
+          EOF

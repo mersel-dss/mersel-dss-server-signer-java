@@ -7,6 +7,56 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+- **Profesyonel & immutable release hattı — otomatik JAR derleme, semver
+  versioning, CHANGELOG-driven release notes**
+  ([docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md)).
+  - **Yeni workflow `.github/workflows/release.yml`**: `v*` tag push'unda
+    veya `workflow_dispatch` ile tetiklenir. Üç aşamalı:
+    `validate` (tag↔pom version eşleşmesi, `-SNAPSHOT` reddi, CHANGELOG
+    `## [VERSION]` başlık doğrulaması, mevcut release idempotent skip) →
+    `build` (`mvn package` + reproducible build timestamp + manifest + SBOM)
+    → `publish` (GitHub Release, asset upload, CHANGELOG-extracted notes).
+  - **Yeni workflow `.github/workflows/changelog-check.yml`**: PR'larda
+    significant kod değişikliği (src/, pom.xml, devops/, scripts/,
+    workflows/) varsa `CHANGELOG.md`'nin `[Unreleased]` bölümünün de
+    güncellenmiş olduğunu doğrular. Bypass için PR title veya commit
+    message'a `[skip changelog]`.
+  - **Build-info JAR'a embed**: `pom.xml` `maven-jar-plugin`'e
+    manifestEntries (`Implementation-Version`, `Build-Revision`,
+    `Build-Time`, `Build-Number`, `Built-By` vb.) + `spring-boot-maven-plugin`
+    `build-info` execution (`META-INF/build-info.properties` → `/actuator/info`
+    endpoint'i). Production'da çalışan instance'ın hangi commit'ten geldiği
+    tek HTTP çağrısıyla doğrulanabilir.
+  - **CycloneDX SBOM** (`cyclonedx-maven-plugin` 2.8.0, Java 8 uyumlu):
+    `mvn package` çıktısı olarak `target/bom.json` + `target/bom.xml`
+    (CycloneDX 1.5 spec). Her release'de asset olarak yayınlanır.
+    NIST SSDF, EU CRA, SLSA Level 3 gereksinimlerine altyapı sağlar.
+  - **SHA-256 checksum** her release artifact için (`*.jar.sha256`,
+    `*-sbom.json.sha256` vb.) — immutability anchor.
+  - **Reproducible build**: `project.build.outputTimestamp` commit author
+    date'inden türetilir; aynı commit'ten build edilen JAR aynı bytes'ları üretir.
+  - **`scripts/release.sh`**: lokal release hazırlayıcı (clean tree check,
+    pom bump, CHANGELOG finalize `[Unreleased]` → `[X.Y.Z] - YYYY-MM-DD`,
+    `mvn test+package`, release commit, annotated/signed tag).
+    `--dry-run`, `--yes`, `--no-build`, `--no-test`, `--skip-clean` flag'leri.
+    Push'u kullanıcıya bırakır; REMOTE'a otomatik bir şey gitmez.
+  - **`scripts/bump-version.sh`**: `pom.xml` proje-level `<version>` bumper.
+    `major`/`minor`/`patch`/`rc` ya da explicit SemVer geçilir. Parent
+    block'a dokunmaz (Spring Boot `2.7.18` korunur). SemVer 2.0.0 validation.
+  - **`scripts/extract-release-notes.sh`**: CHANGELOG.md'den ilgili
+    `## [X.Y.Z]` bölümünü çıkartır. Release workflow `gh release create
+    --notes-file` ile bu çıktıyı kullanır.
+  - **`scripts/check-changelog-updated.sh`**: PR-time CHANGELOG güncellik
+    kontrolü. `[Unreleased]` bölümüne diff'te `+` satırı eklenmiş mi?
+  - **Immutability politikası**: tag bir kere oluşturulduktan sonra
+    silinmemeli/taşınmamalı. Bozuk release için yeni PATCH sürümü çıkarılır,
+    eski tag GitHub UI'da "deprecated" notuyla işaretlenir. Detay:
+    [docs/RELEASE_PROCESS.md](docs/RELEASE_PROCESS.md) "Hotfix & Rollback".
+  - **CI build artifact retention**: `ci.yml` her başarılı build'in JAR'ını
+    ve SBOM'unu 14 gün saklar (`build-artifact-<sha>`). QA develop branch
+    binary'sini doğrudan indirebilir.
+
 ### Fixed
 - **HSM (PKCS#11) imza akışında upstream xipki 1.0.9 bug workaround'u**
   (`IaikPkcs11Module.signOnSession`).

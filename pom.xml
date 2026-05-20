@@ -23,6 +23,48 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jcifs.version>1.3.1</jcifs.version>
         <sqlite.jdbc.version>3.7.2</sqlite.jdbc.version>
+
+        <!--
+            Reproducible build + immutable release metadata
+            ================================================
+            Bu property'ler, üretilen JAR'ın MANIFEST.MF ve Spring Boot
+            META-INF/build-info.properties (→ /actuator/info) dosyalarına
+            gömülür. Lokal build'te literal "local"/"local-build" default'u
+            devrede; CI/CD release akışında -D ile override edilir.
+            Override edilen property'ler:
+              mersel.build.revision   = git commit SHA (örn. GITHUB_SHA)
+              mersel.build.number     = CI run number (örn. GITHUB_RUN_NUMBER)
+              mersel.build.timestamp  = ISO-8601 UTC timestamp (son commit author date)
+              mersel.build.host       = runner OS+arch
+              project.build.outputTimestamp = aynı timestamp (jar mtime sabitler)
+
+            ÖNEMLI #1: Property adlarını 'mersel.build.*' prefix'i ile tuttuk
+            (sade 'build.timestamp' DEĞİL). Çünkü Spring Boot starter-parent'in
+            pluginManagement block'undaki maven-jar-plugin config'i 'build.*'
+            namespace altında implicit special-cased değişkenler kullanıyor;
+            'build.timestamp' adlı bir property maven-archiver'ın manifest
+            interpolation katmanında ÖZELDIR ve her zaman ${maven.build.timestamp}
+            built-in'ine fallback eder. 'mersel.build.timestamp' ise tamamen
+            user-defined namespace, -D override sessiz drop edilmez.
+
+            ÖNEMLI #2: Default'lar literal ('local-build' vb.) — Maven
+            ${maven.build.timestamp} referansını POM-read aşamasında eager
+            evaluate eder ve CLI -D override'ı sessizce gözardı edilebilir
+            (MNG-7314 türevi davranış). Literal default lokal geliştirici
+            JAR'ında "Build-Time: local-build" gösterir (bu CI'dan değil
+            sinyali), CI'da -D ile explicit ISO-8601 timestamp override.
+
+            'project.build.outputTimestamp' Maven 3.6.1+ "Reproducible
+            Builds" sinyalidir (jar/zip entry mtime'larını sabitler).
+            Default 2025-01-01 epoch; release workflow'unda son commit
+            tarihiyle override edilir.
+        -->
+        <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ss'Z'</maven.build.timestamp.format>
+        <mersel.build.revision>local</mersel.build.revision>
+        <mersel.build.number>0</mersel.build.number>
+        <mersel.build.timestamp>local-build</mersel.build.timestamp>
+        <mersel.build.host>local</mersel.build.host>
+        <project.build.outputTimestamp>2025-01-01T00:00:00Z</project.build.outputTimestamp>
         <!--
             JUnit 5 tag-based test exclusion default'u.
             'verifier-e2e' tag'i Docker gerektiren E2E testleri işaretler.
@@ -438,7 +480,149 @@
                             <mainClass>io.mersel.dss.signer.api.SignatureApplication</mainClass>
                         </configuration>
                     </execution>
+                    <!--
+                        build-info goal — Spring Boot'a özgü release metadata.
+                        ===========================================================
+                        Çıktı: target/classes/META-INF/build-info.properties
+                        Runtime erişim:
+                          - /actuator/info endpoint'i (management.info.build.enabled=true,
+                            default açık)
+                          - Spring DI: @Autowired BuildProperties
+                          - Logback `%X{...}` MDC veya app içi audit log
+
+                        Property'ler:
+                          build.artifact, build.group, build.name, build.version
+                          (otomatik POM'dan)
+                          + additionalProperties:
+                              revision      → git commit SHA (full veya abbrev)
+                              buildNumber   → CI run number (örn. GITHUB_RUN_NUMBER)
+                              buildTime     → ISO-8601 UTC timestamp
+                              buildHost     → CI runner adı (örn. ubuntu-latest)
+
+                        Bu sayede production'da çalışan instance'ın "tam olarak
+                        hangi commit'ten ve hangi CI run'undan çıktığı" tek
+                        HTTP çağrısıyla doğrulanabilir. Auditor için kanıt
+                        zinciri tamamlanır.
+                    -->
+                    <execution>
+                        <id>build-info</id>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                        <configuration>
+                            <additionalProperties>
+                                <revision>${mersel.build.revision}</revision>
+                                <buildNumber>${mersel.build.number}</buildNumber>
+                                <buildTime>${mersel.build.timestamp}</buildTime>
+                                <buildHost>${mersel.build.host}</buildHost>
+                                <buildJdk>${java.version}</buildJdk>
+                                <buildOs>${os.name} ${os.arch}</buildOs>
+                            </additionalProperties>
+                        </configuration>
+                    </execution>
                 </executions>
+            </plugin>
+
+            <!--
+                maven-jar-plugin — Standart MANIFEST.MF entry'leri.
+                ==========================================================
+                Spring Boot'un repackage goal'u alttaki "thin" JAR'ın
+                manifestini fat JAR'a propagate eder; dolayısıyla buraya
+                koyduğumuz entry'ler son `mersel-dss-signer-api-X.Y.Z.jar`
+                içinde de görünür.
+
+                Standart erişim:
+                  unzip -p target/*.jar META-INF/MANIFEST.MF
+                Veya:
+                  java -jar target/*.jar  → Spring Boot startup banner'ında
+                                              Implementation-Version basılır.
+
+                Entry'ler 'Reproducible JAR' rehberinde önerilen alanlar:
+                - Implementation-Vendor / Implementation-Title /
+                  Implementation-Version → JEP-238 multi-release JAR /
+                  Java Package Versioning spec'ine uyum.
+                - Build-Revision (git SHA) ve Build-Time → SLSA Level 2
+                  provenance şartını JAR-side karşılar (Release workflow
+                  tarafında SLSA attestation üretilir).
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <!--
+                    combine.self="override" — Spring Boot starter-parent
+                    pluginManagement bloğu maven-jar-plugin'e kendi
+                    <archive><manifestEntries><Build-Time>${maven.build.timestamp}
+                    </Build-Time></manifestEntries> entry'sini ekler.
+                    Default Maven plugin-merge davranışında effective POM'da
+                    iki Build-Time entry'si oluşur ve parent'inki kazanır;
+                    bizim -Dbuild.timestamp= override'ımız sessizce gözardı
+                    edilir. combine.self="override" ile parent'taki entry'leri
+                    tamamen değiştirip kendi setimizi koyuyoruz.
+                -->
+                <configuration>
+                    <archive>
+                        <manifestEntries combine.self="override">
+                            <Implementation-Title>${project.name}</Implementation-Title>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                            <Implementation-Vendor>Mersel DSS</Implementation-Vendor>
+                            <Specification-Title>Mersel DSS Server Signer API</Specification-Title>
+                            <Specification-Version>${project.version}</Specification-Version>
+                            <Build-Time>${mersel.build.timestamp}</Build-Time>
+                            <Build-Revision>${mersel.build.revision}</Build-Revision>
+                            <Build-Number>${mersel.build.number}</Build-Number>
+                            <Build-Host>${mersel.build.host}</Build-Host>
+                            <Build-Jdk>${java.version}</Build-Jdk>
+                            <Built-By>mersel-dss-ci</Built-By>
+                            <X-Mersel-Project>${project.groupId}:${project.artifactId}</X-Mersel-Project>
+                        </manifestEntries>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!--
+                CycloneDX SBOM Plugin — Software Bill of Materials.
+                ==========================================================
+                Çıktı: target/bom.json (CycloneDX 1.5 spec, JSON)
+                       target/bom.xml  (CycloneDX 1.5 spec, XML)
+
+                SBOM, supply-chain transparency için artık endüstri standardı:
+                - NIST SSDF (SP 800-218) önerisi
+                - EU Cyber Resilience Act (CRA) zorunluluğu (2027 itibariyle)
+                - SLSA Level 3 build provenance şartı
+
+                Her release'de GitHub Release asset olarak yayınlanır;
+                downstream consumer'lar `cyclonedx-cli` veya OWASP
+                Dependency-Track ile CVE tarama yapabilir.
+
+                'package' phase'ine bind ettik — `mvn package` koştuğunda
+                otomatik üretilir. 2.8.0 sürümü Java 8 baseline ile uyumlu.
+            -->
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <version>2.8.0</version>
+                <executions>
+                    <execution>
+                        <id>make-sbom</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>makeAggregateBom</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <projectType>application</projectType>
+                    <schemaVersion>1.5</schemaVersion>
+                    <includeBomSerialNumber>true</includeBomSerialNumber>
+                    <includeCompileScope>true</includeCompileScope>
+                    <includeProvidedScope>true</includeProvidedScope>
+                    <includeRuntimeScope>true</includeRuntimeScope>
+                    <includeSystemScope>false</includeSystemScope>
+                    <includeTestScope>false</includeTestScope>
+                    <includeLicenseText>false</includeLicenseText>
+                    <outputFormat>all</outputFormat>
+                    <outputName>bom</outputName>
+                </configuration>
             </plugin>
 
             <!--
