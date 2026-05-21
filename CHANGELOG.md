@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-05-21
+
 ### Fixed
 - **İmza digest algoritmasının CA imza algoritmasına sürüklenmesi** —
   `DigestAlgorithmResolverService` ve `CryptoUtils.getSignatureAlgorithm(PrivateKey, X509Certificate)`
