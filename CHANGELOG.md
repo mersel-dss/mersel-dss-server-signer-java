@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-05-21
+
 ### Fixed
 - **UBL/XAdES — `xmlns:ext` namespace asimetrisi yüzünden geçersiz
   çıkan imzalar düzeltildi** (ApplicationResponse-tipi minimal UBL
