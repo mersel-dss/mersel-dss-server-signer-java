@@ -7,7 +7,20 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
-## [0.5.1] - 2026-05-21
+### Fixed
+- **PKCS#11 `CKR_OPERATION_NOT_INITIALIZED` artık mechanism-rejected
+  fallback yolunu tetikliyor** — `IaikPkcs11Module.signWithToken(...)`
+  içindeki "ECDSA için raw `CKM_ECDSA` + dış SHA-*" fallback mantığı,
+  `xipki` PKCS#11 wrapper'ının `opInit()` çağrısının hatasını yutması
+  sonucu sürücünün `C_Sign`'da geri attığı `CKR_OPERATION_NOT_INITIALIZED`
+  kodunu da artık "mekanizma reddedildi" olarak yorumluyor.
+  - **Belirti**: Bazı AKİS/SoftHSM2 sürüm kombinasyonlarında ECDSA
+    imzalama, `CKR_MECHANISM_INVALID` yerine `CKR_OPERATION_NOT_INITIALIZED`
+    döndüğü için fallback path'i devreye girmiyordu; istek üst katmana
+    `SignatureException` olarak çıkıyordu.
+  - **Kapsam**: Sadece fallback eligibility — RSASSA-PSS için zaten
+    fırlatılan açıklayıcı hata davranışı korundu (PSS bu yolda
+    desteklenmediği için).
 
 ### Fixed
 - **İmza digest algoritmasının CA imza algoritmasına sürüklenmesi** —

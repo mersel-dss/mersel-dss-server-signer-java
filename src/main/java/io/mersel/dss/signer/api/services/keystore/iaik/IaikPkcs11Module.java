@@ -437,7 +437,8 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             boolean mechanismRejected =
                 errorCode == PKCS11Constants.CKR_MECHANISM_INVALID
                 || errorCode == PKCS11Constants.CKR_FUNCTION_NOT_SUPPORTED
-                || errorCode == PKCS11Constants.CKR_KEY_TYPE_INCONSISTENT;
+                || errorCode == PKCS11Constants.CKR_KEY_TYPE_INCONSISTENT
+                || errorCode == PKCS11Constants.CKR_OPERATION_NOT_INITIALIZED;
             if (mechanismRejected) {
                 if (signatureAlgorithm.getEncryptionAlgorithm() == EncryptionAlgorithm.RSASSA_PSS) {
                     throw new io.mersel.dss.signer.api.exceptions.SignatureException(
