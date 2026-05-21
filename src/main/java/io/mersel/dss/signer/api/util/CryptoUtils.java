@@ -8,7 +8,6 @@ import java.security.interfaces.ECPrivateKey;
 import java.security.interfaces.ECPublicKey;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
-import java.util.Locale;
 
 /**
  * Kriptografik ve encoding işlemleri için yardımcı metodlar.
@@ -99,42 +98,62 @@ public final class CryptoUtils {
 
     /**
      * Sertifika ve key tipine göre uygun signature algoritmasını döndürür.
-     * Sertifikanın kendi sigAlgName bilgisini kullanarak doğru hash boyutunu belirler.
+     *
+     * <p><b>Önemli:</b> <code>certificate.getSigAlgName()</code> &mdash; bu
+     * sertifikayı imzalayan CA'nın kullandığı algoritma &mdash; kasıtlı olarak
+     * dikkate alınmaz. Son kullanıcının imza algoritması yalnızca <b>public
+     * key parametresinden</b> türetilir:</p>
+     * <ul>
+     *   <li>RSA public key → <code>SHA256withRSA</code> (e-Fatura/KamuSM konvansiyonu)</li>
+     *   <li>EC public key → curve büyüklüğüne göre <code>SHA{256,384,512}withECDSA</code></li>
+     *   <li>Diğerleri → private key tabanlı fallback</li>
+     * </ul>
+     *
+     * <p>Detaylı gerekçe için
+     * {@link io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService}
+     * sınıf javadoc'una bakın.</p>
      */
-    public static String getSignatureAlgorithm(PrivateKey privateKey, 
+    public static String getSignatureAlgorithm(PrivateKey privateKey,
                                                 java.security.cert.X509Certificate certificate) {
         if (certificate != null) {
             java.security.PublicKey publicKey = certificate.getPublicKey();
-            String certSigAlg = certificate.getSigAlgName();
-            
+
             if (publicKey instanceof RSAPublicKey) {
-                // Açık anahtar RSA ise, sertifika algoritmasından SHA kısmını al ve RSA ile birleştir
-                if (certSigAlg != null && !certSigAlg.isEmpty()) {
-                    String shaPrefix = extractShaPrefix(certSigAlg);
-                    String result = shaPrefix + "withRSA";
-                    LOGGER.debug("Sertifika RSA açık anahtara sahip, algoritma düzeltildi: {} -> {}", certSigAlg, result);
-                    return result;
-                }
+                LOGGER.debug("Sertifika RSA açık anahtara sahip; SHA256withRSA kullanılacak " +
+                        "(CA'nın sigAlgName'i kasıtlı olarak yok sayıldı).");
                 return "SHA256withRSA";
             } else if (publicKey instanceof ECPublicKey) {
-                if (certSigAlg != null && !certSigAlg.isEmpty()) {
-                    LOGGER.debug("Sertifika EC açık anahtara sahip, sertifika algoritması kullanılacak: {}", certSigAlg);
-                    return certSigAlg;
-                }
+                ECPublicKey ecPublicKey = (ECPublicKey) publicKey;
+                String ecAlgorithm = resolveECSignatureAlgorithmFromPublicKey(ecPublicKey);
+                LOGGER.debug("Sertifika EC açık anahtara sahip; curve büyüklüğüne göre {} kullanılacak.",
+                        ecAlgorithm);
+                return ecAlgorithm;
             }
         }
         return getSignatureAlgorithm(privateKey);
     }
 
-    private static String extractShaPrefix(String sigAlgorithm) {
-        String upper = sigAlgorithm.toUpperCase(Locale.ENGLISH);
-        if (upper.startsWith("SHA")) {
-            int idx = upper.indexOf("WITH");
-            if (idx > 0) {
-                return upper.substring(0, idx);
+    /**
+     * EC public key boyutuna göre uygun hash algoritmasını seçer
+     * (NIST SP 800-57). P-256 → SHA256, P-384 → SHA384, P-521 → SHA512.
+     */
+    private static String resolveECSignatureAlgorithmFromPublicKey(ECPublicKey ecPublicKey) {
+        try {
+            java.security.spec.ECParameterSpec params = ecPublicKey.getParams();
+            if (params != null && params.getOrder() != null) {
+                int fieldSize = params.getOrder().bitLength();
+                if (fieldSize <= 256) {
+                    return "SHA256withECDSA";
+                } else if (fieldSize <= 384) {
+                    return "SHA384withECDSA";
+                } else {
+                    return "SHA512withECDSA";
+                }
             }
+        } catch (Exception e) {
+            LOGGER.debug("EC public key parametresi okunamadı, SHA256withECDSA kullanılacak", e);
         }
-        return "SHA256";
+        return "SHA256withECDSA";
     }
     /**
      * EC key boyutuna göre uygun hash algoritmasını seçer.

@@ -135,9 +135,12 @@ public class PAdESSignatureService {
      * SigningCertificateV2 özniteliği ile sertifikaya uygun hash algoritması kullanır.
      *
      * <p>Digest algoritması seçimi {@link DigestAlgorithmResolverService}'e
-     * delege edilir — CAdES/XAdES ile <b>aynı</b> mantık (sertifika sigAlg
-     * adı + EC anahtar boyu, NIST SP 800-57). Bu sayede aynı sertifikayla
-     * farklı imza formatlarında tutarlı digest kullanılır.</p>
+     * delege edilir — CAdES/XAdES ile <b>aynı</b> mantık: yalnızca sertifikanın
+     * <b>public key</b> parametresine bakılır (EC için curve büyüklüğü
+     * NIST SP 800-57, RSA için SHA-256 default). CA'nın sertifikayı imzalarken
+     * kullandığı algoritma (<code>cert.getSigAlgName()</code>) <b>kasıtlı
+     * olarak yok sayılır</b>. Bu sayede aynı sertifikayla farklı imza
+     * formatlarında tutarlı digest kullanılır.</p>
      */
     private byte[] createCMSSignature(PdfSignatureAppearance appearance,
                                      SigningMaterial material) throws Exception {

@@ -7,6 +7,36 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Fixed
+- **İmza digest algoritmasının CA imza algoritmasına sürüklenmesi** —
+  `DigestAlgorithmResolverService` ve `CryptoUtils.getSignatureAlgorithm(PrivateKey, X509Certificate)`
+  artık digest seçimini **yalnızca sertifikanın public key parametresinden**
+  türetir. CA'nın bu sertifikayı imzalarken kullandığı algoritma
+  (`cert.getSigAlgName()`, ör. `SHA384withRSA`) kasıtlı olarak yok sayılır.
+  - **Belirti**: Aynı RSA-2048 son-kullanıcı sertifikasıyla üretilen
+    imzalar, ara-CA'nın SHA-384'e geçişiyle birlikte `rsa-sha256` yerine
+    `rsa-sha384` (ve digest `sha-256` yerine `sha-384`) dönmeye başlamıştı.
+    GİB ve KamuSM tarafındaki yerleşik verifier'lar SHA-256 bekledikleri
+    için bu durum üretim ortamında uyumluluk riski oluşturuyordu.
+  - **Kök neden**: X.509 `Signature Algorithm` alanı, "CA bu sertifikayı
+    imzalarken hangi algoritmayı kullandı" bilgisini taşır; **son
+    kullanıcının imzalama algoritmasıyla hiçbir ilgisi yoktur**. Doğru
+    sinyal `Public Key` parametresidir (RSA → SHA-256 default, EC → curve
+    büyüklüğüne göre NIST SP 800-57).
+  - **Etki**: Tüm imza yolları — XAdES (`XAdESParametersBuilderService`),
+    CAdES (`CAdESSignatureService`), PAdES (`PAdESSignatureService`),
+    WS-Security (`WsSecuritySignatureService`).
+  - **Tespit**: İZİBİZ test ortamı, `Hasan Yıldız` (20.05.2026). Teşekkürler.
+- **Opsiyonel global override**: Operatörler artık
+  `SIGNING_DIGEST_ALGORITHM` env değişkeniyle (veya
+  `signing.digest.algorithm` property'siyle) belirli bir digest'i tüm
+  imzalama yollarında zorlayabilir. Kabul edilen değerler: `SHA256`,
+  `SHA384`, `SHA512`, `SHA224`, `SHA1` (tire/altçizgi varyantları da kabul).
+- **Test**: `DigestAlgorithmResolverServiceTest` ve
+  `CryptoUtilsSignatureAlgorithmTest` regresyon vakalarıyla güncellendi —
+  "CA cert'i SHA-384 ile imzalamış olsa bile RSA public key → SHA-256"
+  varsayımı artık explicit test ile korunuyor.
+
 ## [0.5.0] - 2026-05-20
 
 ### Added
