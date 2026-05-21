@@ -188,6 +188,8 @@ class XAdESDocumentPlacementServiceTest {
     @Nested
     class UblDocumentPlacement {
 
+        private static final String XMLNS_URI = "http://www.w3.org/2000/xmlns/";
+
         @Test
         void shouldEnsureUblExtensionContentExists() throws Exception {
             String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
@@ -211,6 +213,78 @@ class XAdESDocumentPlacementServiceTest {
             NodeList signatures = ((Element) extContent.item(0))
                     .getElementsByTagNameNS("http://www.w3.org/2000/09/xmldsig#", "Signature");
             assertEquals(1, signatures.getLength());
+        }
+
+        // Bu test ApplicationResponse-tipi minimal UBL XML'lerde yaşanan
+        // "namespace asimetrisi -> SignedProperties digest mismatch" regresyonunu
+        // kilitler. Kök elemanda xmlns:ext yokken UBLExtensions iskeletini eklemek
+        // ext namespace'ini SADECE UBLExtensions üzerine bırakıyordu; DSS Signature
+        // root altına basıp c14n hesabını orada yapınca xmlns:ext SignedProperties
+        // subtree scope'unda yoktu; sonradan Signature ExtensionContent içine
+        // taşınınca scope'a giriyordu -> c14n bytes değişiyor -> imza geçersiz.
+        @Test
+        void shouldDeclareExtNamespaceOnRootWhenExtensionsCreated() throws Exception {
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                    "<urn:ApplicationResponse" +
+                    " xmlns:urn=\"urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2\">" +
+                    "<urn:UBLVersionID>2.1</urn:UBLVersionID>" +
+                    "</urn:ApplicationResponse>";
+
+            Document document = parseXml(xml);
+
+            boolean added = service.ensureUblExtensionContentExists(document);
+
+            assertTrue(added, "UBLExtensions iskeleti eklenmeliydi");
+            Element root = document.getDocumentElement();
+            assertEquals(XmlConstants.NS_UBL_EXTENSION, root.getAttributeNS(XMLNS_URI, "ext"),
+                    "xmlns:ext kök element üzerinde declare edilmiş olmalı");
+        }
+
+        @Test
+        void shouldDeclareExtNamespaceOnRootEvenWhenExtensionContentAlreadyExists() throws Exception {
+            // UBLExtensions zaten var (xmlns:ext UBLExtensions seviyesinde),
+            // ama kök elemanda xmlns:ext declare edilmemiş. Bu, c14n asimetrisi
+            // riski taşır; method yine de root'a xmlns:ext eklemeli.
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                    "<urn:ApplicationResponse" +
+                    " xmlns:urn=\"urn:oasis:names:specification:ubl:schema:xsd:ApplicationResponse-2\">" +
+                    "<ext:UBLExtensions xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
+                    "<ext:UBLExtension><ext:ExtensionContent/></ext:UBLExtension>" +
+                    "</ext:UBLExtensions>" +
+                    "</urn:ApplicationResponse>";
+
+            Document document = parseXml(xml);
+
+            boolean added = service.ensureUblExtensionContentExists(document);
+
+            assertFalse(added, "ExtensionContent zaten vardı, ekleme yapılmamalı");
+            Element root = document.getDocumentElement();
+            assertEquals(XmlConstants.NS_UBL_EXTENSION, root.getAttributeNS(XMLNS_URI, "ext"),
+                    "xmlns:ext kök element üzerinde declare edilmiş olmalı");
+        }
+
+        @Test
+        void shouldBeIdempotentWhenExtNamespaceAlreadyOnRoot() throws Exception {
+            // Kök zaten xmlns:ext declare ediyor (e-Fatura tarzı). Method
+            // duplicate eklememeli, davranış no-op olmalı.
+            String xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+                    "<Invoice" +
+                    " xmlns=\"urn:oasis:names:specification:ubl:schema:xsd:Invoice-2\"" +
+                    " xmlns:ext=\"" + XmlConstants.NS_UBL_EXTENSION + "\">" +
+                    "<ext:UBLExtensions>" +
+                    "<ext:UBLExtension><ext:ExtensionContent/></ext:UBLExtension>" +
+                    "</ext:UBLExtensions>" +
+                    "</Invoice>";
+
+            Document document = parseXml(xml);
+            Element root = document.getDocumentElement();
+            int attrsBefore = root.getAttributes().getLength();
+
+            service.ensureUblExtensionContentExists(document);
+
+            assertEquals(attrsBefore, root.getAttributes().getLength(),
+                    "Root üzerine duplicate xmlns:ext eklenmemeli");
+            assertEquals(XmlConstants.NS_UBL_EXTENSION, root.getAttributeNS(XMLNS_URI, "ext"));
         }
     }
 }

@@ -8,6 +8,68 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 ## [Unreleased]
 
 ### Fixed
+- **UBL/XAdES — `xmlns:ext` namespace asimetrisi yüzünden geçersiz
+  çıkan imzalar düzeltildi** (ApplicationResponse-tipi minimal UBL
+  belgeleri).
+  - **Belirti**: `Invoice` / `DespatchAdvice` gibi kök elemanda
+    `xmlns:ext` declare edilmiş şablonlarda imza geçerli, ama
+    `ApplicationResponse` (ve UBLExtensions iskeletini bizim
+    eklediğimiz tüm "minimal" UBL'lerde) imza GİB/TÜBİTAK
+    doğrulayıcılarında **digest mismatch** ile reddediliyordu.
+  - **Kök neden**: DSS, ENVELOPED packaging'de `Signature` elementini
+    önce kök altına yerleştirip `SignedProperties` referansının
+    digest'ini bu konumda hesaplar; sonra biz Signature'ı
+    `UBLExtensions/UBLExtension/ExtensionContent` içine taşırız.
+    Inclusive C14N (XML-C14N 1.0) kuralı gereği subtree tepe elementine
+    "scope'ta olan tüm in-scope namespace declaration'ları" yazılır.
+    `xmlns:ext` sadece `UBLExtensions` üzerinde declare edilmişse,
+    SignedProperties subtree'sinin scope'u kök altındayken `xmlns:ext`
+    içermez, ExtensionContent altındayken içerir → c14n bytes farkı
+    → digest karşılaştırması fail.
+  - **Çözüm**: `XAdESDocumentPlacementService.ensureUblExtensionContentExists(...)`
+    artık her zaman `xmlns:ext`'i kök elemana da declare ediyor
+    (idempotent — zaten varsa dokunmuyor). Aynı namespace URI'sini
+    birden fazla yerde declare etmek XML semantiğini değiştirmez;
+    sadece c14n çıktısını imzalama–doğrulama arasında **simetrik**
+    yapar. Bu davranış UBL-TR e-Fatura/e-İrsaliye şablonlarının
+    yerleşik konvansiyonuyla uyumludur.
+  - **Test güvencesi**:
+    `XAdESNamespaceCanonicalizationSymmetryTest` regresyonu kilitler:
+    fix YOKKEN root-altı vs ExtensionContent-içi SignedProperties
+    c14n bytes'ları **farklı**, fix VARKEN **aynı** olduğunu kanıtlar.
+    Ek olarak `XAdESDocumentPlacementServiceTest` üç yeni unit case
+    ile kapsama: yeni iskelet eklerken, hazır iskelet üzerine
+    eklerken ve idempotency.
+- **`signatureId` artık XML NCName / RFC 3986 fragment kurallarına
+  zorla uyum sağlıyor** (yeni `SignatureIdNormalizer`).
+  - **Belirti**: Kullanıcı `signatureId="#Signature_Attach_1"` (URI
+    fragment formunda) veya boşluk içeren bir değer gönderdiğinde,
+    DSS bunu olduğu gibi `<ds:Signature Id=...>`,
+    `<xades:QualifyingProperties Target="#...">`,
+    `<xades:SignedProperties Id="xades-...">` ve buna işaret eden
+    `<ds:Reference URI="#xades-...">` alanlarına basıyordu. Sonuç:
+    `URI="#xades-Signature_#Signature_Attach_1"` gibi RFC 3986
+    fragment kuralını ihlal eden bir referans, ki TÜBİTAK/GİB
+    doğrulayıcısı SignedProperties node'unu çözemediği için imza
+    geçersiz işaretliyordu.
+  - **Çözüm**: `XAdESParametersBuilderService` artık `signatureId`'yi
+    doğrudan `setDeterministicId(...)`'ya basmadan önce
+    `SignatureIdNormalizer.normalize(...)` üzerinden geçiriyor:
+    leading `#` karakterleri temizlenir, çift `Signature_` prefix
+    önlenir (idempotent), trim yapılır, son kontrol XML 1.0 NCName
+    regex'idir. NCName kurallarını ihlal eden girdiler 400 üreten
+    `SignatureException(errorCode=INVALID_SIGNATURE_ID)` ile
+    erkenden reddedilir — sessiz kırılma yerine açık hata.
+  - **Kapsanan davranışlar**:
+    - `"Attach_1"` → `"Signature_Attach_1"` (prefix eklenir)
+    - `"Signature_Attach_1"` → `"Signature_Attach_1"` (çift prefix yok)
+    - `"#Signature_Attach_1"` → `"Signature_Attach_1"` (URI fragment
+      temizlenir)
+    - `"##Signature_x"` → `"Signature_x"` (peş peşe `#` temizlenir)
+    - `"abc#def"`, `"a/b"`, `"ns:local"`, `"a@b"`, boşluk içerenler
+      → `INVALID_SIGNATURE_ID` ile reddedilir.
+  - **Test güvencesi**: 18 case'lik `SignatureIdNormalizerTest`
+    (happy path / fallback / negatif).
 - **PKCS#11 `CKR_OPERATION_NOT_INITIALIZED` artık mechanism-rejected
   fallback yolunu tetikliyor** — `IaikPkcs11Module.signWithToken(...)`
   içindeki "ECDSA için raw `CKM_ECDSA` + dış SHA-*" fallback mantığı,

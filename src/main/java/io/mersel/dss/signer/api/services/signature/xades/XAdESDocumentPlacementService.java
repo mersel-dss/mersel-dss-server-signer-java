@@ -97,6 +97,11 @@ public class XAdESDocumentPlacementService {
      * <li>UBLExtension var ama ExtensionContent yoksa -> sadece ExtensionContent
      * ekler</li>
      * </ul>
+     * <p>
+     * Ek olarak: çağrı her durumda kök elemana {@code xmlns:ext} declaration'unu
+     * yansıtır. Bu, c14n digest'lerinin imzalama ve doğrulama arasında stabilite
+     * kazanması için zorunludur (aşağıdaki not'a bakınız).
+     * <p>
      * İmza, belgenin canonical formu üzerinden hesaplanır; bu yüzden yapı imzalama
      * öncesinde eklenmelidir.
      *
@@ -104,11 +109,71 @@ public class XAdESDocumentPlacementService {
      * @return ExtensionContent zaten varsa false, yeni eklendiyse true
      */
     public boolean ensureUblExtensionContentExists(Document document) {
+        boolean addedStructure;
         if (getFirstElementByTagNameNS(document, XmlConstants.NS_UBL_EXTENSION, "ExtensionContent") != null) {
-            return false;
+            addedStructure = false;
+        } else {
+            ensureUblExtensionStructure(document);
+            addedStructure = true;
         }
-        ensureUblExtensionStructure(document);
-        return true;
+
+        // UBL/XAdES imzasının "neden bazen geçersiz çıkıyor?" bilmecesinin
+        // çözümü burada. Detaylı açıklama için ensureExtensionNamespaceOnRoot'a
+        // bakınız.
+        ensureExtensionNamespaceOnRoot(document);
+
+        return addedStructure;
+    }
+
+    /**
+     * {@code xmlns:ext} declaration'unu kök elemana garantiler (zaten varsa
+     * dokunmaz). Bu method UBL/XAdES imzasının tutarlılığı için kritiktir.
+     *
+     * <h3>Neden bu adım var?</h3>
+     * <p>DSS, ENVELOPED packaging'de Signature elementini varsayılan olarak
+     * {@code documentDom}'un (kök elemanın) altına yerleştirir ve SignedProperties
+     * referansının digest'ini bu konumda hesaplar. Bizim akışımız daha sonra
+     * Signature'ı kök altından alıp UBLExtensions/UBLExtension/ExtensionContent
+     * içine taşır. Doğrulayıcı imzayı kontrol ederken SignedProperties'in
+     * subtree'sini bu YENİ konumda (ExtensionContent içinde) c14n eder.
+     * <p>
+     * Inclusive C14N (XML-C14N 1.0), subtree'nin tepe elementine "scope'ta olan
+     * tüm namespace declaration'larını" yazar. Kök altındayken SignedProperties'in
+     * ancestor zinciri root → Signature → Object → QualifyingProperties iken,
+     * ExtensionContent altında zincire UBLExtensions ve UBLExtension da eklenir.
+     * Eğer {@code xmlns:ext} sadece UBLExtensions üzerinde declare edilmişse,
+     * doğrulayıcının gördüğü c14n çıktısına imzalama anında olmayan fazladan bir
+     * {@code xmlns:ext} declaration'ı katılır → digest karşılaştırması FAIL eder.
+     * <p>
+     * Çözüm: {@code xmlns:ext}'i ROOT'A da declare etmek. Aynı namespace URI'sini
+     * birden fazla yerde declare etmek XML semantiğini değiştirmez; sadece c14n
+     * çıktısının deterministic ve imzalama/doğrulama arasında simetrik olmasını
+     * sağlar.
+     * <p>
+     * Bu davranışın gerçek dünya kanıtı: e-Fatura/e-İrsaliye gibi UBL-TR
+     * belgelerinin XML şablonları zaten kök elemanda {@code xmlns:ext}'i declare
+     * eder (TÜBİTAK MA3 referans çıktıları da öyle); o yüzden o belgelerde
+     * imzalama sorunsuz çalışır. ApplicationResponse gibi minimal şablonlarda
+     * kök elemanda {@code xmlns:ext} yoktur — biz UBLExtensions'ı eklerken
+     * sadece UBLExtensions üzerinde declare ederiz ve fix olmadan imza geçersiz
+     * çıkar. Bu method o asimetriyi kapatır.
+     *
+     * @param document UBL belgesi
+     */
+    private void ensureExtensionNamespaceOnRoot(Document document) {
+        Element root = document.getDocumentElement();
+        if (root == null) {
+            return;
+        }
+        // DOM Level 2: xmlns:* attribute'ları "http://www.w3.org/2000/xmlns/"
+        // namespace'inde yaşar. getAttributeNS(xmlnsNS, "ext") root'taki
+        // xmlns:ext'in value'sini döner; yoksa boş string.
+        final String XMLNS_URI = "http://www.w3.org/2000/xmlns/";
+        String existing = root.getAttributeNS(XMLNS_URI, "ext");
+        if (XmlConstants.NS_UBL_EXTENSION.equals(existing)) {
+            return;
+        }
+        root.setAttributeNS(XMLNS_URI, "xmlns:ext", XmlConstants.NS_UBL_EXTENSION);
     }
 
     /**

@@ -12,7 +12,6 @@ import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 import org.w3c.dom.Document;
 
 import java.util.ArrayList;
@@ -89,9 +88,21 @@ public class XAdESParametersBuilderService {
             params.bLevel().setClaimedSignerRoles(Collections.singletonList("Supplier"));
         }
 
-        // Deterministik ID (signatureId verilmişse kullan)
-        if (StringUtils.hasText(signatureId)) {
-            params.getContext().setDeterministicId("Signature_" + signatureId);
+        // Deterministik ID (signatureId verilmişse kullan).
+        // SignatureIdNormalizer hem '#' temizler, hem çift "Signature_" prefix'i
+        // önler, hem de sonucun XML NCName kuralına uyduğunu doğrular. Bu
+        // doğrulama önemlidir çünkü deterministicId aşağıdaki ID/URI'lerin
+        // hepsine doğrudan basılır:
+        //   <ds:Signature Id="{id}">
+        //   <ds:Reference URI="#xades-{id}">
+        //   <xades:SignedProperties Id="xades-{id}">
+        //   <xades:QualifyingProperties Target="#{id}">
+        // İçinde '#' olan bir id, RFC 3986 fragment kurallarını ihlal eder
+        // (URI'da iki '#' arda arda yasaktır) ve TÜBİTAK/GİB doğrulayıcısı
+        // SignedProperties node'unu çözemediği için imzayı geçersiz işaretler.
+        String normalizedId = SignatureIdNormalizer.normalize(signatureId);
+        if (normalizedId != null) {
+            params.getContext().setDeterministicId(normalizedId);
         }
 
         // Referanslar
