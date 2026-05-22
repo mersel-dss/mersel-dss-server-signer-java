@@ -170,6 +170,17 @@ PFX yolu **repo-relatif** (`resources/test-certs/...`). IDE Run Configuration `W
 2. `PKCS11_LIBRARY` env'i doğru yolu gösteriyor mu? Profile dosyasındaki default'lar OS-spesifik ama operatör farklı kurulum yaptıysa env override gerekir.
 3. macOS'ta AKİS sürücüsü `CKR_ARGUMENTS_BAD` veriyorsa `PKCS11_NULL_INIT_ARGS=true` zaten `application-mali-muhur-akis-mac.properties`'te aktif.
 
+### SafeNet HSM — `CKR_NO_SESSION_KEYS` (`0x80000387`) idle hatası
+
+SafeNet Luna / ProtectServer / ProtectToolkit'te uzun idle sonrası ilk imza isteği vendor hata kodu `CKR_NO_SESSION_KEYS` ile patlıyorsa secure messaging session-key'i HSM tarafında reap edilmiştir. Eskiden dışarıdan periyodik "boş XML imza" cron'u ile çözülen senaryo; artık in-process scheduler ile yönetilir:
+
+```bash
+export HSM_HEARTBEAT_ENABLED=true
+export HSM_HEARTBEAT_INTERVAL_SECONDS=60   # Luna Network için 30-45sn önerilir
+```
+
+Detay: README'deki [HSM Heartbeat](../README.md#hsm-heartbeat-safenet-ckr_no_session_keys-workaround) bölümü.
+
 ### "Active Profiles ekranda görünmüyor"
 
 IntelliJ Spring Boot run config'inde "Active Profiles" alanı boşsa, "Edit Configurations…" → ilgili config'i seç → "Active Profiles" alanını kontrol et. Bu repo'daki configs `local,pfx-kurum01-rsa2048` formatında (virgülle ayrılmış) bekler.

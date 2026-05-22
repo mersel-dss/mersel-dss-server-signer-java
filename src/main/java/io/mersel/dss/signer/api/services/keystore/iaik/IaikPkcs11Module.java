@@ -408,6 +408,39 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      * bu metoda eş zamanlı çağrı sağlanır; üst sınır
      * {@code signatureSemaphore} ile kontrol edilir.</p>
      */
+    /**
+     * Heartbeat amaçlı tek-shot imza. SafeNet HSM ailesinde idle kalan
+     * secure messaging session-key'i HSM tarafında reap edilir
+     * ({@code CKR_NO_SESSION_KEYS = 0x80000387}); periyodik bir gerçek
+     * {@code C_Sign} round-trip'i secure channel'ı sıcak tutar.
+     *
+     * <p>Tasarım: mevcut {@link #signOnSession} yolunu olduğu gibi kullanır
+     * (mekanizma çözümleme, fallback, normalize tüm pipeline reused) ve
+     * çıkan imzayı drop eder — heartbeat'in görevi sadece HSM tarafında
+     * secure messaging context'in canlı kalması.</p>
+     *
+     * <p>Çağıran ({@code HsmHeartbeatScheduler}) exception yakalamadan
+     * sorumludur; modül başarısızlığı sessiz yutmaz.</p>
+     */
+    public void heartbeatSign(long privateKeyHandle, SignatureAlgorithm signatureAlgorithm) {
+        byte[] payload = HEARTBEAT_PAYLOAD;
+        byte[] signature = signOnSession(privateKeyHandle, payload, signatureAlgorithm);
+        // İmza byte'larını okumadan drop ediyoruz; sadece HSM round-trip'in
+        // başarısı önemli. signOnSession patladıysa zaten exception fırlattı.
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("HSM heartbeat sign tamamlandı: sigLen={}", signature.length);
+        }
+    }
+
+    /**
+     * Heartbeat round-trip'inde HSM'e gönderilen sabit payload. RSA için
+     * combined mekanizma kendi içinde digest alır, ECDSA için
+     * {@link #signOnSession} dış digest çağırır — yani byte uzunluğu önemli
+     * değil. ASCII, sabit, kolay tanınabilir bir marker seçildi.
+     */
+    private static final byte[] HEARTBEAT_PAYLOAD =
+        "mersel-hsm-heartbeat-ping-v1".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+
     byte[] signOnSession(long privateKeyHandle,
                          byte[] dataToSign,
                          SignatureAlgorithm signatureAlgorithm) {

@@ -43,4 +43,14 @@ final class IaikPkcs11Signer implements Pkcs11Signer {
     public byte[] sign(byte[] dataToSign, SignatureAlgorithm signatureAlgorithm) {
         return module.signOnSession(resolvedKey.privateKeyHandle, dataToSign, signatureAlgorithm);
     }
+
+    /**
+     * HSM heartbeat scheduler için package-private erişim. Aynı paketteki
+     * {@link HsmHeartbeatScheduler} sabit interval'de {@link IaikPkcs11Module#heartbeatSign}
+     * çağırırken bu handle'a ihtiyaç duyar; public {@link Pkcs11Signer}
+     * sözleşmesini handle ile kirletmemek için package-private bırakıldı.
+     */
+    long getPrivateKeyHandle() {
+        return resolvedKey.privateKeyHandle;
+    }
 }

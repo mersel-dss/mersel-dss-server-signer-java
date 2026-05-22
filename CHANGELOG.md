@@ -7,6 +7,36 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+- **SafeNet HSM idle-time `CKR_NO_SESSION_KEYS` workaround: in-process heartbeat
+  scheduler.**
+  - **Belirti**: SafeNet Luna / ProtectServer / ProtectToolkit HSM'lerde uzun
+    idle sonrası ilk imza isteği vendor hata kodu `CKR_0x80000387`
+    (= `CKR_NO_SESSION_KEYS`) ile patlıyor; stack `PKCS11Token.borrowSession` →
+    `Session.login(...)` üzerinde.
+  - **Kök neden**: HSM-side secure messaging session-key idle reap olduktan
+    sonra xipki `PKCS11Token` cached session handle'ı veriyor; üstüne login
+    çağrılınca secure channel key türetimi başarısız.
+  - **Tarihsel çözüm**: Operasyon ekipleri dışarıdan periyodik "boş XML imza"
+    cron'u ile secure channel'ı sıcak tutuyordu — bus-factor riski + sahte
+    audit gürültüsü.
+  - **Yeni çözüm**: `HsmHeartbeatScheduler` (`@Component` +
+    `@ConditionalOnExpression`), opt-in `HSM_HEARTBEAT_ENABLED=true` ile
+    aktive olur ve `HSM_HEARTBEAT_INTERVAL_SECONDS` (default `60`) saniye
+    aralıkla gerçek bir `C_Sign` round-trip atar; sonuç drop edilir, secure
+    channel canlı kalır. Mevcut `signOnSession` pipeline'ı yeniden kullanılır
+    (mekanizma çözümleme + fallback + EC/DSA normalize). Üst üste 5 başarısız
+    heartbeat ERROR seviyesine yükseltilir (alerting hook).
+  - **Geçiş notu**: Mevcut dış cron'lar bayrak aktif edildikten sonra
+    kapatılabilir. PFX modunda no-op.
+  - **Test güvencesi**: `HsmHeartbeatSchedulerTest` happy path + exception
+    swallow + consecutive failure threshold + algoritma türetme (RSA/ECDSA) +
+    PFX SigningMaterial guard senaryolarını kapsar.
+  - **Yeni env var'lar**: `HSM_HEARTBEAT_ENABLED` (default `false`),
+    `HSM_HEARTBEAT_INTERVAL_SECONDS` (default `60`). Detay: README'deki
+    [HSM Heartbeat](README.md#hsm-heartbeat-safenet-ckr_no_session_keys-workaround)
+    bölümü.
+
 ## [0.5.3] - 2026-05-22
 
 JMeter Stres testi eklendi.

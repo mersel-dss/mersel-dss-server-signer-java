@@ -343,6 +343,25 @@ export TRUSTED_ROOT_CERT_FOLDER_PATH=file:/path/to/certificates
 
 **Not:** Klasördeki tüm geçerli sertifika dosyaları otomatik olarak yüklenir. Alt klasörler taranmaz.
 
+### HSM Heartbeat (SafeNet `CKR_NO_SESSION_KEYS` workaround)
+
+SafeNet Luna / ProtectServer / ProtectToolkit ailesinde idle kalan secure messaging session-key'leri HSM tarafında reap edilir; sonraki ilk imza isteği vendor hata kodu `CKR_NO_SESSION_KEYS` (`0x80000387`) ile patlayabilir. Operasyon ekipleri tarihsel olarak dışarıdan bir cron ile periyodik "boş XML imza" atarak bu sorunu çözüyordu. Uygulama bu davranışı artık in-process bir scheduler ile kendisi yönetir.
+
+```bash
+export HSM_HEARTBEAT_ENABLED=true
+export HSM_HEARTBEAT_INTERVAL_SECONDS=60   # default 60sn
+```
+
+- **Aktivasyon:** Yalnızca `PKCS11_LIBRARY` dolu + `HSM_HEARTBEAT_ENABLED=true` olduğunda bean yaratılır; PFX kullanıcıları için sıfır maliyet.
+- **Ne yapar:** Konfigüre edilen aralıkta gerçek bir `C_Sign` round-trip atar (sonucu drop edilir); secure channel sıcak kalır.
+- **Önerilen interval:**
+  - **Luna Network HSM** (NTLS/STC): `30-45 sn` (varsayılan NTLS idle reap eşiği 25-30 sn)
+  - **Luna PCIe / USB / ProtectServer**: `60 sn` yeterli
+- **HSM-side komplementer ayar (opsiyonel):** `Chrystoki.conf` üzerinden `Misc → NetworkTimeOut` artırma veya `Chrystoki2 → ReceiveTimeout` ayarlaması; bu, operatörün HSM tarafı sorumluluğudur, kod ile çözülmez.
+- **Geçiş notu:** Daha önce kurulu olan periyodik imzalama cron'unu/script'ini bu bayrak aktif olduğunda kapatabilirsiniz.
+
+Heartbeat başarısızlıkları WARN seviyesinde loglanır; üst üste 5 başarısız çağrıdan sonra ERROR seviyesine yükseltilir (monitoring/alert hook'u için).
+
 ---
 
 ## 🔗 Önemli Bağlantılar

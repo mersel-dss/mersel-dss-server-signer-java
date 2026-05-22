@@ -77,6 +77,31 @@ public class SignatureServiceConfiguration {
     @Value("${MAX_SESSION_COUNT:5}")
     private int maxSessionCount;
 
+    /**
+     * SafeNet HSM ailesinde gözlenen idle-time secure channel teardown
+     * davranışını (vendor hata kodu {@code CKR_NO_SESSION_KEYS = 0x80000387})
+     * önlemek için periyodik gerçek {@code C_Sign} heartbeat'i aktive eder.
+     *
+     * <p>Default {@code false} (opt-in). PFX modunda bayrak aktif edilse bile
+     * ilgili scheduler bean'i Spring container'da yaratılmaz — etkisizdir.
+     * SafeNet Luna / ProtectServer kullanıcıları için tipik üretim ayarı:
+     * {@code HSM_HEARTBEAT_ENABLED=true}.</p>
+     */
+    @Value("${HSM_HEARTBEAT_ENABLED:false}")
+    private boolean hsmHeartbeatEnabled;
+
+    /**
+     * Heartbeat sign çağrıları arasındaki saniye cinsinden bekleme süresi.
+     * Default 60 sn — SafeNet Luna Network HSM'in tipik NTLS idle reap
+     * eşiğinin (25-30 sn) iki katından kısa, ancak gereksiz HSM yükü
+     * yaratmayacak kadar büyük.
+     *
+     * <p>Luna Network HSM yapılandırmaları için 30-45 sn aralığına çekmek
+     * uygundur; PCIe / USB / ProtectServer kart için 60 sn yeterlidir.</p>
+     */
+    @Value("${HSM_HEARTBEAT_INTERVAL_SECONDS:60}")
+    private int hsmHeartbeatIntervalSeconds;
+
 
     @Value("${CERTSTORE_PATH:SertifikaDeposu.svt}")
     private String certStorePath;
@@ -170,6 +195,14 @@ public class SignatureServiceConfiguration {
 
     public int getMaxSessionCount() {
         return maxSessionCount;
+    }
+
+    public boolean isHsmHeartbeatEnabled() {
+        return hsmHeartbeatEnabled;
+    }
+
+    public int getHsmHeartbeatIntervalSeconds() {
+        return hsmHeartbeatIntervalSeconds;
     }
 
     /**
