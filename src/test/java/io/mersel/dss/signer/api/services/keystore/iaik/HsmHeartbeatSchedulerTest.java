@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -80,7 +80,7 @@ class HsmHeartbeatSchedulerTest {
         @DisplayName("heartbeat() module.heartbeatSign'\u0131 do\u011fru handle + algoritma ile \u00e7a\u011f\u0131r\u0131r")
         void heartbeat_invokesModule_withResolvedHandleAndAlgorithm() {
             IaikPkcs11Module module = mock(IaikPkcs11Module.class);
-            doNothing().when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
+            doReturn(256).when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
 
             HsmHeartbeatScheduler scheduler = newScheduler(module);
             scheduler.heartbeat();
@@ -96,7 +96,7 @@ class HsmHeartbeatSchedulerTest {
         @DisplayName("Birden fazla heartbeat() ba\u015far\u0131l\u0131 say\u0131lar\u0131 artt\u0131r\u0131r")
         void multipleHeartbeats_incrementSuccessCount() {
             IaikPkcs11Module module = mock(IaikPkcs11Module.class);
-            doNothing().when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
+            doReturn(256).when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
 
             HsmHeartbeatScheduler scheduler = newScheduler(module);
             scheduler.heartbeat();
@@ -162,7 +162,7 @@ class HsmHeartbeatSchedulerTest {
             assertEquals(3L, scheduler.getConsecutiveFailureCount());
 
             Mockito.reset(module);
-            doNothing().when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
+            doReturn(256).when(module).heartbeatSign(anyLong(), any(SignatureAlgorithm.class));
             scheduler.heartbeat();
 
             assertEquals(0L, scheduler.getConsecutiveFailureCount(),

@@ -138,7 +138,7 @@ public class HsmHeartbeatScheduler {
     public void heartbeat() {
         long t0 = System.currentTimeMillis();
         try {
-            module.heartbeatSign(privateKeyHandle, signatureAlgorithm);
+            int sigLen = module.heartbeatSign(privateKeyHandle, signatureAlgorithm);
             long elapsed = System.currentTimeMillis() - t0;
             long s = successCount.incrementAndGet();
             long priorConsecutiveFailures = consecutiveFailures.getAndSet(0);
@@ -146,13 +146,15 @@ public class HsmHeartbeatScheduler {
             if (priorConsecutiveFailures > 0) {
                 // Failure -> success state change: operatör için kritik bir
                 // sinyaller (HSM secure channel kendini iyileştirdi).
-                LOGGER.info("HSM heartbeat RECOVERED: alias='{}', alg={}, elapsed={}ms, "
-                    + "öncesindeki ardışık başarısızlık={}, totalSuccess={}, totalFail={}",
-                    alias, signatureAlgorithm, elapsed,
+                LOGGER.info("HSM heartbeat imzası RECOVERED: alias='{}', alg={}, "
+                    + "sigLen={}, elapsed={}ms, öncesindeki ardışık başarısızlık={}, "
+                    + "totalSuccess={}, totalFail={}",
+                    alias, signatureAlgorithm, sigLen, elapsed,
                     priorConsecutiveFailures, s, failureCount.get());
             } else {
-                LOGGER.info("HSM heartbeat OK: alias='{}', alg={}, elapsed={}ms, totalSuccess={}",
-                    alias, signatureAlgorithm, elapsed, s);
+                LOGGER.info("HSM heartbeat imzası atıldı: alias='{}', alg={}, "
+                    + "sigLen={}, elapsed={}ms, totalSuccess={}",
+                    alias, signatureAlgorithm, sigLen, elapsed, s);
             }
         } catch (Exception e) {
             long f = failureCount.incrementAndGet();

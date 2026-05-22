@@ -422,14 +422,14 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      * <p>Çağıran ({@code HsmHeartbeatScheduler}) exception yakalamadan
      * sorumludur; modül başarısızlığı sessiz yutmaz.</p>
      */
-    public void heartbeatSign(long privateKeyHandle, SignatureAlgorithm signatureAlgorithm) {
+    public int heartbeatSign(long privateKeyHandle, SignatureAlgorithm signatureAlgorithm) {
         byte[] payload = HEARTBEAT_PAYLOAD;
         byte[] signature = signOnSession(privateKeyHandle, payload, signatureAlgorithm);
         // İmza byte'larını okumadan drop ediyoruz; sadece HSM round-trip'in
         // başarısı önemli. signOnSession patladıysa zaten exception fırlattı.
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("HSM heartbeat sign tamamlandı: sigLen={}", signature.length);
-        }
+        // sigLen'i çağırana döndürüyoruz ki scheduler tek bir INFO satırında
+        // 'gerçekten bir imza atıldı' kanıtını gösterebilsin.
+        return signature.length;
     }
 
     /**

@@ -360,10 +360,13 @@ export HSM_HEARTBEAT_INTERVAL_SECONDS=60   # default 60sn
 - **HSM-side komplementer ayar (opsiyonel):** `Chrystoki.conf` üzerinden `Misc → NetworkTimeOut` artırma veya `Chrystoki2 → ReceiveTimeout` ayarlaması; bu, operatörün HSM tarafı sorumluluğudur, kod ile çözülmez.
 - **Geçiş notu:** Daha önce kurulu olan periyodik imzalama cron'unu/script'ini bu bayrak aktif olduğunda kapatabilirsiniz.
 
-Loglama:
-- **Her başarılı heartbeat:** `INFO` — `alias`, algoritma, elapsed_ms ve toplam başarı sayacı dahil (operatör scheduler'ın canlı olduğunu görür).
-- **Başarısızlık → başarı geçişi:** `INFO RECOVERED` — kaç ardışık başarısızlıktan sonra düzeldiği belirtilir (HSM kendini iyileştirdiği anın net sinyali).
-- **Başarısızlık:** `WARN` — denenecek; üst üste **5 başarısız** olursa `ERROR` seviyesine yükseltilir (monitoring/alert hook'u için).
+Loglama (her tetikleme bir satır):
+
+- **Her başarılı yalancı imza:** `INFO HSM heartbeat yalancı imzası atıldı: alias=..., alg=..., sigLen=..., elapsed=...ms, totalSuccess=N` — `sigLen` HSM'in döndürdüğü byte uzunluğu (gerçek C_Sign round-trip kanıtı), `elapsed` HSM gidiş-dönüş süresi.
+- **Başarısızlık → başarı geçişi:** `INFO HSM heartbeat yalancı imzası RECOVERED: ... öncesindeki ardışık başarısızlık=N, ...` — HSM kendini iyileştirdiği anın net sinyali (alerting kuralları için kıymetli).
+- **Başarısızlık:** `WARN HSM heartbeat başarısız (denenenecek): ...` — bir sonraki interval'da tekrar denenir; üst üste **5 başarısız** olursa `ERROR` seviyesine yükseltilir (monitoring/alert hook'u için).
+
+Bu loglar production'da scheduler'ın canlı olduğunun ve HSM secure channel'ının sıcak tutulduğunun anlık kanıtıdır. 60sn interval'de günde ~1440 INFO satırı oluşur — modern log toplama altyapıları için ihmal edilebilir hacim; çok agresif sessizlik isteyen operatör `logback-spring.xml`'de `io.mersel.dss.signer.api.services.keystore.iaik.HsmHeartbeatScheduler` kategorisini `WARN`'a çekebilir (failure görünürlüğü kaybolmaz).
 
 ---
 
