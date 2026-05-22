@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-05-22
+
 ### Added
 - **SafeNet HSM idle-time `CKR_NO_SESSION_KEYS` workaround: in-process heartbeat
   scheduler.**
