@@ -141,10 +141,18 @@ public class HsmHeartbeatScheduler {
             module.heartbeatSign(privateKeyHandle, signatureAlgorithm);
             long elapsed = System.currentTimeMillis() - t0;
             long s = successCount.incrementAndGet();
-            consecutiveFailures.set(0);
+            long priorConsecutiveFailures = consecutiveFailures.getAndSet(0);
             lastSuccessAtMillis = System.currentTimeMillis();
-            if (LOGGER.isDebugEnabled()) {
-                LOGGER.debug("HSM heartbeat OK: elapsed={}ms, totalSuccess={}", elapsed, s);
+            if (priorConsecutiveFailures > 0) {
+                // Failure -> success state change: operatör için kritik bir
+                // sinyaller (HSM secure channel kendini iyileştirdi).
+                LOGGER.info("HSM heartbeat RECOVERED: alias='{}', alg={}, elapsed={}ms, "
+                    + "öncesindeki ardışık başarısızlık={}, totalSuccess={}, totalFail={}",
+                    alias, signatureAlgorithm, elapsed,
+                    priorConsecutiveFailures, s, failureCount.get());
+            } else {
+                LOGGER.info("HSM heartbeat OK: alias='{}', alg={}, elapsed={}ms, totalSuccess={}",
+                    alias, signatureAlgorithm, elapsed, s);
             }
         } catch (Exception e) {
             long f = failureCount.incrementAndGet();

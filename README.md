@@ -360,7 +360,10 @@ export HSM_HEARTBEAT_INTERVAL_SECONDS=60   # default 60sn
 - **HSM-side komplementer ayar (opsiyonel):** `Chrystoki.conf` üzerinden `Misc → NetworkTimeOut` artırma veya `Chrystoki2 → ReceiveTimeout` ayarlaması; bu, operatörün HSM tarafı sorumluluğudur, kod ile çözülmez.
 - **Geçiş notu:** Daha önce kurulu olan periyodik imzalama cron'unu/script'ini bu bayrak aktif olduğunda kapatabilirsiniz.
 
-Heartbeat başarısızlıkları WARN seviyesinde loglanır; üst üste 5 başarısız çağrıdan sonra ERROR seviyesine yükseltilir (monitoring/alert hook'u için).
+Loglama:
+- **Her başarılı heartbeat:** `INFO` — `alias`, algoritma, elapsed_ms ve toplam başarı sayacı dahil (operatör scheduler'ın canlı olduğunu görür).
+- **Başarısızlık → başarı geçişi:** `INFO RECOVERED` — kaç ardışık başarısızlıktan sonra düzeldiği belirtilir (HSM kendini iyileştirdiği anın net sinyali).
+- **Başarısızlık:** `WARN` — denenecek; üst üste **5 başarısız** olursa `ERROR` seviyesine yükseltilir (monitoring/alert hook'u için).
 
 ---
 
