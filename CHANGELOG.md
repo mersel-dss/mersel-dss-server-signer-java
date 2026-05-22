@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-05-22
+
 ### Added
 - **EC P-384 + e-Fatura UBL roundtrip için odaklı E2E verifier testi**
   (`XAdESEcdsaP384EfaturaE2ETest`).
