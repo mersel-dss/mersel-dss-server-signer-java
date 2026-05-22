@@ -7,6 +7,59 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Changed
+- **PKCS#11 session pool tavanı artık `MAX_SESSION_COUNT`'tan beslenir →
+  ipkcs11wrapper'ın sessiz 32-cap'i by-pass edildi.**
+  - **Belirti**: Yüksek concurrency yük testlerinde (100+ Tomcat thread,
+    rack HSM) `MAX_SESSION_COUNT=256` set edilmesine rağmen throughput
+    ~15 req/s'de sıkışıp kalıyor; `pct95ResTime / pct50ResTime` oranı
+    5-6× tail latency üretiyor, `maxResTime` 8sn'ye dayanıyor.
+  - **Kök neden**: `xipki/ipkcs11wrapper 1.0.9` `PKCS11Token` ctor'unda
+    `numSessions=null` verilirse defansif olarak `Math.min(32,
+    tokenMaxSessionCount)` uyguluyor. Önceki kodumuz 3-arg ctor
+    (`new PKCS11Token(token, true, pin)`) çağırıyordu ve bu overload
+    internally `numSessions=null` ile delegate ettiği için pool **her zaman
+    32'de hard-cap**'leniyordu. Spring katmanındaki semaphore (`MAX_SESSION_COUNT=256`)
+    256 thread'i pipeline'a sokuyordu ama bunlar `borrowSession()`
+    kuyruğunda 10sn timeout ile bekliyor → tail latency.
+  - **Çözüm**: `IaikPkcs11Module` ctor'una yeni `sessionPoolSize`
+    parametresi (6-arg overload). `> 0` ise wrapper'ın 4-arg ctor'u
+    (`numSessions` explicit) kullanılır, defansif 32-cap dalı hiç
+    değerlendirilmez. `SignatureConfiguration` bean factory
+    `MAX_SESSION_COUNT` değerini hem Spring semaphore'a hem IAIK
+    pool'a aynı anda besler — **tek-slider model**; iki ayrı property
+    olmadığı için operatör tarafında mismatch riski yok.
+  - **HSM-tarafı tavan korunur**: Wrapper hâlâ `Math.min(numSessions,
+    tokenMaxSessionCount)` alır. HSM `htl-cb` quota'sını veya firmware
+    limitini ezmeyiz; örn. `MAX_SESSION_COUNT=200` set edilse bile HSM
+    `tokenMaxSessionCount=50` raporluyorsa effective pool 50'de kalır
+    (doğru davranış; startup'ta xipki `tokenMaxSessionCount={..},
+    maxSessionCount={..}` log satırından teyit edilebilir).
+  - **AKİS güvenlik önceliği korunur**: `PKCS11_NULL_INIT_ARGS=true`
+    yolunda (TÜBİTAK BİLGEM macOS/Linux sürücüsü) `numSessions=1` zorla
+    uygulanır ve `MAX_SESSION_COUNT` değeri **yoksayılır**. PKCS#11 v2.40
+    §5.4: NULL-init-args modunda kütüphane thread-unsafe sayılır;
+    paralel session yaratmak SIGSEGV / sessiz data corruption riski.
+    Karar modül içinde verilir, log'a açıkça yansıtılır:
+    `AKİS uyumluluk modu aktif: ... MAX_SESSION_COUNT={N} değeri yoksayıldı`.
+  - **Önerilen değerler (HSM tipine göre)**:
+    - Akıllı kart / AKİS USB mali mühür: `1` (driver zaten zorla 1)
+    - SoftHSM2 (yük testi): `64`
+    - SafeNet Luna Network HSM: `64-128`
+    - Thales ProtectServer / Utimaco: `32-64`
+  - **Geriye uyumluluk**: Mevcut 4-arg ve 5-arg ctor'lar korundu, yeni
+    6-arg ctor'a `sessionPoolSize=0` ile delegate ediyorlar; testler
+    (`IaikPkcs11ModuleContractTest`, `IaikPkcs11ModuleKeyBindingTest`,
+    `SoftHsm2TestSupport`) ve `SignatureApplication` CLI listing yolu
+    aynen wrapper default davranışına (cap 32) düşer. Operatör tarafında
+    sıfır kırılma; var olan `MAX_SESSION_COUNT` değerleri otomatik
+    devreye girer.
+  - **Test güvencesi**: Mevcut 81 test (IAIK kontrat + key binding +
+    XAdES + signing time + ECDSA format + namespace) yeşil, regresyon
+    yok. Yeni davranış için entegrasyon testi gerekmedi — yol değişimi
+    `if (sessionPoolSize > 0)` branch'inde ve mevcut `PKCS11Token` ctor
+    overload'ı zaten kütüphane tarafından kapsamlı test edilmiş.
+
 ## [0.6.1] - 2026-05-22
 
 ### Changed

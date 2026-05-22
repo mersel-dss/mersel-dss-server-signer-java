@@ -64,9 +64,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * <h2>Thread-safety</h2>
  * <p>{@link PKCS11Token} kendi içinde session pool ve lock yönetir; imzalama
  * ({@link #signOnSession}) ve nesne okuma ({@link #collectAllRelevantObjects})
- * akışları paralel yürür. Eş zamanlı imza üst sınırı
- * {@link io.mersel.dss.signer.api.config.SignatureConfiguration} semaphore'u
- * tarafından belirlenir. Yalnızca {@link #destroy()} ve cache yazma
+ * akışları paralel yürür. Eş zamanlı imza üst sınırı <b>tek bir kavramdır</b>
+ * ({@code MAX_SESSION_COUNT}) ve iki katmana aynı değer beslenir:</p>
+ * <ol>
+ *   <li><b>Spring semaphore</b> — uygulama-seviyesi soft cap.
+ *       {@link io.mersel.dss.signer.api.config.SignatureConfiguration#signatureSemaphore()}.
+ *       Pipeline'a giriş bileti; PFX ve HSM yollarının ikisinde de geçerli.</li>
+ *   <li><b>PKCS11Token internal pool</b> — wrapper-seviyesi hard cap. Ctor'un
+ *       {@code numSessions} parametresinden okur. {@code null} verilirse
+ *       wrapper {@code Math.min(32, tokenMaxSessionCount)} uygular —
+ *       <b>sessiz 32-cap</b>. Bu sınıf, {@code sessionPoolSize > 0} olduğunda
+ *       wrapper'a explicit değer geçerek by-pass eder; aksi halde geriye uyumlu
+ *       default davranış geçerlidir.</li>
+ * </ol>
+ * <p>Üretimde {@link io.mersel.dss.signer.api.config.SignatureConfiguration}
+ * her iki katmana da {@code MAX_SESSION_COUNT} değerini besler — tek-slider
+ * model, mismatch riski yok. Test/CLI yolları kısa ctor'ları kullanır ve
+ * wrapper default'una (cap 32) düşer.</p>
+ * <p>Yalnızca {@link #destroy()} ve cache yazma
  * ({@link ConcurrentHashMap#computeIfAbsent}) koruma altında.</p>
  *
  * <h2>Acknowledgment</h2>
@@ -136,22 +151,69 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     private volatile boolean singleThreadedMode = false;
 
     /**
+     * {@link PKCS11Token} ctor'una geçilecek {@code numSessions} değeri.
+     * Üretimde {@link io.mersel.dss.signer.api.config.SignatureConfiguration}
+     * tarafından {@code MAX_SESSION_COUNT} property'sinden beslenir; test
+     * ve CLI listing yollarında kısa ctor üzerinden {@code 0} geçer.
+     *
+     * <p><b>Anlamlar:</b></p>
+     * <ul>
+     *   <li>{@code <= 0} → wrapper default'u uygula
+     *       ({@code Math.min(32, tokenMaxSessionCount)}); geriye uyumlu davranış.</li>
+     *   <li>{@code > 0}  → explicit pool boyutu; wrapper yine HSM'in raporladığı
+     *       {@code tokenMaxSessionCount} ile {@code min} alır, yani işletim
+     *       sisteminin tanıdığı tavanın üstüne çıkamayız (sessizce capped).</li>
+     * </ul>
+     *
+     * <p>{@link #singleThreadedMode} aktifken bu değer <b>yoksayılır</b>;
+     * AKİS güvenlik kuralı her zaman önceliklidir (bkz. {@link #afterPropertiesSet()}).</p>
+     */
+    private final int sessionPoolSize;
+
+    /**
      * İmza ataçımı için bulunan ilk private key + cert eşleşmesi cache'i.
      * Concurrent: {@link ConcurrentHashMap#computeIfAbsent} ile lock-free okuma.
      */
     private final Map<String, ResolvedKey> resolvedKeyCache = new ConcurrentHashMap<>();
 
+    /**
+     * Geriye uyumlu kısa ctor: {@code forceNullInitArgs=false} ve
+     * {@code sessionPoolSize=0} (wrapper default cap=32). Testler ve
+     * CLI listing yolu bu formu kullanır.
+     */
     public IaikPkcs11Module(String libraryPath, Long slot, Long slotIndex, char[] pin) {
-        this(libraryPath, slot, slotIndex, pin, false);
+        this(libraryPath, slot, slotIndex, pin, false, 0);
     }
 
+    /**
+     * Geriye uyumlu 5-arg ctor: {@code sessionPoolSize=0} (wrapper default).
+     * {@code SignatureApplication} CLI listing yolu ve {@code AKİS}
+     * uyumluluk testleri bu formu kullanır.
+     */
     public IaikPkcs11Module(String libraryPath, Long slot, Long slotIndex, char[] pin,
                             boolean forceNullInitArgs) {
+        this(libraryPath, slot, slotIndex, pin, forceNullInitArgs, 0);
+    }
+
+    /**
+     * Tam ctor — session pool boyutunu dışarıdan kontrol etmek isteyen
+     * üretim yapılandırması ({@code SignatureConfiguration} bean factory)
+     * bu formu kullanır.
+     *
+     * @param sessionPoolSize {@link PKCS11Token} ctor'una geçilecek
+     *                        {@code numSessions} değeri. {@code <= 0} ise
+     *                        wrapper default'u (32) uygulanır. AKİS
+     *                        ({@code forceNullInitArgs=true}) yolunda
+     *                        bu değer yoksayılır ve 1 forced.
+     */
+    public IaikPkcs11Module(String libraryPath, Long slot, Long slotIndex, char[] pin,
+                            boolean forceNullInitArgs, int sessionPoolSize) {
         this.libraryPath = libraryPath;
         this.slot = slot;
         this.slotIndex = slotIndex;
         this.pin = pin == null ? null : pin.clone();
         this.forceNullInitArgs = forceNullInitArgs;
+        this.sessionPoolSize = sessionPoolSize;
     }
 
     // --------------------------------------------------------------------
@@ -182,15 +244,44 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
                 LOGGER.warn("PIN sağlanmadı; private key'lere erişim "
                     + "CKA_PRIVATE=true objeler için başarısız olacak.");
             }
-            // singleThreadedMode: PKCS#11 spec §5.4 NULL-init-args yolunda
-            // kütüphane thread güvencesi vermez → numSessions=1 ile pool'u
-            // sıkıştırırız; PKCS11Token kuyrukta seri kullandırır.
+            // ─────────────────────────────────────────────────────────────
+            // Session pool boyutu — üç katmanlı karar:
+            // ─────────────────────────────────────────────────────────────
+            //  1) singleThreadedMode (AKİS / NULL-init-args)
+            //       → her zaman 1; sessionPoolSize property'si yoksayılır.
+            //         PKCS#11 v2.40 §5.4 gereği kütüphane thread güvencesi
+            //         vermez; paralel session = SIGSEGV / sessiz data
+            //         corruption riski.
+            //
+            //  2) sessionPoolSize > 0  (operatör explicit set etti)
+            //       → wrapper'a {@code numSessions=sessionPoolSize} geç;
+            //         wrapper yine HSM'in {@code tokenMaxSessionCount}
+            //         raporuyla {@code min} alır (HSM-tarafı tavanı korunur).
+            //         Bu yol, default {@code Math.min(32, tokenMaxSessionCount)}
+            //         hard cap'ini by-pass etmek için tasarlandı —
+            //         Luna/ProtectServer/Utimaco gibi yüksek-paralel HSM'lerde
+            //         throughput'un 32'de sessizce tıkanmasını önler.
+            //
+            //  3) sessionPoolSize <= 0 (default / unset)
+            //       → wrapper default'u uygula; cap=32. Geriye uyumlu davranış.
+            // ─────────────────────────────────────────────────────────────
             if (singleThreadedMode) {
                 LOGGER.info("AKİS uyumluluk modu aktif: PKCS11Token tek session ile "
-                    + "yaratılıyor (kütüphane paralel session güvencesi vermiyor).");
+                    + "yaratılıyor (kütüphane paralel session güvencesi vermiyor; "
+                    + "MAX_SESSION_COUNT={} değeri yoksayıldı).", sessionPoolSize);
                 token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
                     Integer.valueOf(1));
+            } else if (sessionPoolSize > 0) {
+                LOGGER.info("PKCS11Token session havuzu explicit yapılandırıldı: "
+                    + "numSessions={} (wrapper, HSM tokenMaxSessionCount ile min "
+                    + "alacak; wrapper'ın default 32-cap'i by-pass edildi).", sessionPoolSize);
+                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
+                    Integer.valueOf(sessionPoolSize));
             } else {
+                LOGGER.info("PKCS11Token session havuzu default modda — wrapper "
+                    + "hard cap = min(32, tokenMaxSessionCount). Yüksek concurrency "
+                    + "için MAX_SESSION_COUNT env var'ı ile artırılabilir (üretim "
+                    + "yolu zaten bu değeri pool'a besler; bu mesaj test/CLI yolunda görülür).");
                 token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin);
             }
             if (effectivePin != null) {

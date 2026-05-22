@@ -74,6 +74,52 @@ public class SignatureServiceConfiguration {
     @Value("${MA3API_LICENSE_PATH:0}")
     private String ma3apiLicensePath;
 
+    /**
+     * Eş zamanlı imza tavanı — tek bir kavram, iki katmanda uygulanır:
+     *
+     * <ol>
+     *   <li><b>Spring semaphore</b> — pipeline'a giriş bileti
+     *       ({@link io.mersel.dss.signer.api.config.SignatureConfiguration#signatureSemaphore()}).
+     *       Hem PFX hem HSM yolunda geçerli.</li>
+     *   <li><b>IAIK PKCS11Token internal pool</b> — wrapper'ın
+     *       {@code numSessions} ctor parametresine geçirilir. Sadece HSM
+     *       yolunda anlamlı; PFX yolunda yoksayılır.</li>
+     * </ol>
+     *
+     * <p>Aynı değerin iki katmana da uygulanması <b>kasıtlı</b>: operatör
+     * için tek-slider model, mismatch riski yok. Spring semaphore + wrapper
+     * pool ayrı tutulsaydı küçük olan efektif tavanı belirlerdi, büyük olan
+     * için ya kuyruk bekleme (tail latency) ya da boşa kapasite olurdu.</p>
+     *
+     * <h3>Neden bu kadar kritik?</h3>
+     * <p>{@code ipkcs11wrapper 1.0.9} {@code PKCS11Token} ctor'unda
+     * {@code numSessions=null} verilirse <b>hard cap = 32</b> uygular
+     * ({@code Math.min(32, tokenMaxSessionCount)}). {@code MAX_SESSION_COUNT}
+     * değerinin {@link io.mersel.dss.signer.api.config.SignatureConfiguration}
+     * tarafından wrapper'a explicit geçirilmesi bu sessiz 32-cap'i by-pass
+     * eder; yoksa 256 set etseniz bile fiili throughput 32'de tıkanır.</p>
+     *
+     * <h3>HSM tipine göre önerilen değerler</h3>
+     * <ul>
+     *   <li><b>1</b> → akıllı kart / TÜBİTAK AKİS USB mali mühür. AKİS yolu
+     *       ({@code PKCS11_NULL_INIT_ARGS=true}) bu değeri zaten zorla 1
+     *       yapar; operatör 5 set etse bile güvenlik önceliği geçer.</li>
+     *   <li><b>5 (default)</b> → muhafazakar; küçük PFX yükü ve test ortamı.</li>
+     *   <li><b>32-64</b> → SoftHSM2 yük testi, ProtectServer.</li>
+     *   <li><b>64-128</b> → SafeNet Luna Network HSM (HSM-tarafı
+     *       {@code htl-cb} ve session quota'sına dikkat).</li>
+     *   <li><b>128+</b> → çok nadir; HSM'in raporladığı
+     *       {@code tokenMaxSessionCount} üst sınırı zaten kapatır.</li>
+     * </ul>
+     *
+     * <h3>AKİS güvenlik önceliği</h3>
+     * <p>{@code PKCS11_NULL_INIT_ARGS=true} aktifken
+     * {@link io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module}
+     * <b>her durumda</b> wrapper'a {@code numSessions=1} verir; operatör bu
+     * property'yi yüksek set etse bile yoksayılır. PKCS#11 v2.40 §5.4:
+     * NULL-init-args modunda kütüphane thread-unsafe sayılır, paralel
+     * session yaratmak SIGSEGV / sessiz data corruption riski taşır.</p>
+     */
     @Value("${MAX_SESSION_COUNT:5}")
     private int maxSessionCount;
 

@@ -136,12 +136,23 @@ public class SignatureConfiguration {
         char[] pin = config.getCertificatePin().toCharArray();
         Long slot = sanitizeSlotConfig(config.getPkcs11Slot());
         Long slotIndex = sanitizeSlotConfig(config.getPkcs11SlotIndex());
+
+        // MAX_SESSION_COUNT hem Spring semaphore'a hem de IAIK PKCS11Token
+        // internal pool'una aynı değeri besler. Tek-slider model: operatör
+        // için tek tavan kavramı, mismatch riski yok. Detaylı gerekçe için
+        // SignatureServiceConfiguration.maxSessionCount Javadoc'una bakın.
+        //
+        // AKİS yolunda (forceNullInitArgs=true) IaikPkcs11Module bu değeri
+        // yoksayıp her zaman numSessions=1 kullanır (PKCS#11 §5.4 güvenlik
+        // önceliği). Bu güvenlik kararı modül içinde verilir — burada özel
+        // bir branch'a gerek yok.
         return new IaikPkcs11Module(
             config.getPkcs11LibraryPath(),
             slot,
             slotIndex,
             pin,
-            config.isPkcs11NullInitArgs());
+            config.isPkcs11NullInitArgs(),
+            config.getMaxSessionCount());
     }
 
     /** {@code PKCS11_SLOT:-1} default convention'ını {@code null}'a normalize eder. */
