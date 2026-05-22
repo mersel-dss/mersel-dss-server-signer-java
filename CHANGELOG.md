@@ -7,6 +7,38 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Changed
+- **HSM heartbeat scheduler operasyonel görünürlüğü artırıldı.** Önceki sürümde
+  her başarılı yalancı imza `DEBUG` seviyesinde loglanıyordu — production'da
+  varsayılan `INFO+` log level'ı yüzünden operatör scheduler'ın canlı olup
+  olmadığını göremiyordu. Artık her tetikleme tek bir net `INFO` satırı
+  basar:
+
+  ```
+  INFO  HsmHeartbeatScheduler - HSM heartbeat yalancı imzası atıldı:
+    alias='efatura-2026', alg=RSA_SHA256, sigLen=256, elapsed=12ms,
+    totalSuccess=N
+  ```
+
+  - **`sigLen`** alanı eklendi: HSM'in döndürdüğü imza byte uzunluğu — yalancı
+    imza gerçekten bir `C_Sign` round-trip yaptığının kanıtı (RSA-2048 için
+    `256`, ECDSA-P256 DER için `64–72`).
+  - **"yalancı imza" terminolojisi**: production loglarında heartbeat'in
+    audit amaçlı gerçek imza olmadığı açıkça görülür; sahte imza arayan
+    forensic taramalarda karışıklık yok.
+  - **Failure → success geçişi (`RECOVERED`)**: ayrı bir `INFO` satırı,
+    önceki ardışık başarısızlık sayısını belirtir. Alerting kuralları için
+    kıymetli sinyal ("üst üste N hata sonra düzeldi" deseni).
+
+  60sn varsayılan interval'da ~1440 INFO satırı/gün; modern log altyapıları
+  için ihmal edilebilir. Sessizlik isteyen operatör
+  `logback-spring.xml`'de `io.mersel.dss.signer.api.services.keystore.iaik.HsmHeartbeatScheduler`
+  kategorisini `WARN`'a çekebilir; failure görünürlüğü kaybolmaz.
+
+  API değişikliği (minor, internal): `IaikPkcs11Module#heartbeatSign` artık
+  `void` yerine `int` (sigLen) döndürüyor. Public surface (`IaikPkcs11Module`)
+  zaten Spring-bean kapsamında, dış çağıran yok.
+
 ## [0.6.0] - 2026-05-22
 
 ### Added
