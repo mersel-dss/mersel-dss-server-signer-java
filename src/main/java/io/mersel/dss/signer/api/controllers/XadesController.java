@@ -100,7 +100,10 @@ public class XadesController {
             LOGGER.info("XAdES imzası başarıyla oluşturuldu. Belge tipi: {}", 
                 dto.getDocumentType());
 
+            // Content-Type açıkça application/xml — Spring default'ta byte[] body için
+            // application/octet-stream üretir; client tarafında XML parser tetiklenmez.
             return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_XML)
                 .header("x-signature-value", result.getSignatureValue())
                 .header("Content-Disposition", 
                     "attachment; filename=\"signed-" + UUID.randomUUID() + ".xml\"")
@@ -157,7 +160,10 @@ public class XadesController {
 
             LOGGER.info("WS-Security imzası başarıyla oluşturuldu (SOAP {})", useSoap12 ? "1.2" : "1.1");
 
+            // SOAP envelope → text/xml (SOAP 1.1 standardı) / application/soap+xml (1.2).
+            // Çoğu SOAP client ikisini de kabul eder; en yaygın uyumluluk için text/xml.
             return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_XML)
                 .header("x-signature-value", result.getSignatureValue())
                 .header("Content-Disposition", 
                     "attachment; filename=\"signed-soap-" + UUID.randomUUID() + ".xml\"")

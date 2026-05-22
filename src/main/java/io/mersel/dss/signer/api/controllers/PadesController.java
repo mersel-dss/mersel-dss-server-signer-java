@@ -87,7 +87,11 @@ public class PadesController {
 
             LOGGER.info("PAdES imzası başarıyla oluşturuldu (ekleme modu: {})", appendMode);
 
+            // Content-Type açıkça set ediliyor — Spring default'ta byte[] body için
+            // application/octet-stream üretir; bu PDF'i browser'ın inline gösterememesine
+            // ve client tarafında "binary blob" sanılmasına yol açıyor.
             return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
                 .header("Content-Disposition",
                     "attachment; filename=\"signed-" + UUID.randomUUID() + ".pdf\"")
                 .body(result.getSignedDocument());

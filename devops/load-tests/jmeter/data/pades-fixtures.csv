@@ -1,0 +1,5 @@
+filePath,mimeType
+resources/test-fixtures/pades/efatura-pdf.pdf,application/pdf
+resources/test-fixtures/pades/turkish-chars.pdf,application/pdf
+resources/test-fixtures/pades/large-50pages.pdf,application/pdf
+resources/test-fixtures/pades/landscape-a3.pdf,application/pdf

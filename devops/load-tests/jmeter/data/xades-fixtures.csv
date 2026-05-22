@@ -1,0 +1,10 @@
+filePath,documentType,mimeType
+resources/test-fixtures/xades/efatura.xml,UblDocument,application/xml
+resources/test-fixtures/xades/efatura-large.xml,UblDocument,application/xml
+resources/test-fixtures/xades/eirsaliye.xml,UblDocument,application/xml
+resources/test-fixtures/xades/emustahsil.xml,UblDocument,application/xml
+resources/test-fixtures/xades/hrxml.xml,HrXml,application/xml
+resources/test-fixtures/xades/xml-with-cdata.xml,OtherXmlDocument,application/xml
+resources/test-fixtures/xades/xml-with-comments.xml,OtherXmlDocument,application/xml
+resources/test-fixtures/xades/efatura-with-bom.xml,UblDocument,application/xml
+resources/test-fixtures/xades/efatura-mixed-newlines.xml,UblDocument,application/xml

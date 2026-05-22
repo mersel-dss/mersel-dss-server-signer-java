@@ -1,0 +1,257 @@
+name: NuGet Publish
+
+# =============================================================================
+# Mersel DSS Signer .NET Client SDK — Otomatik nuget.org yayını
+# =============================================================================
+#
+# Tetiklenme:
+#   - 'v*' formatında bir tag push edildiğinde (release.yml ve docker.yml ile
+#     aynı tag'de paralel koşar — üç workflow birbirinden bağımsızdır)
+#   - Manuel: workflow_dispatch
+#       * dry_run=true (default) → sadece pack üretir, NuGet'e push etmez
+#       * dry_run=false          → pack + push (NUGET_API_KEY gerekli)
+#
+# Çıktılar:
+#   - MERSEL.Services.DssSigner.Client.<VERSION>.nupkg  (multi-target net6/7/8/9)
+#   - MERSEL.Services.DssSigner.Client.<VERSION>.snupkg (symbols + SourceLink)
+#   - GitHub Actions artifact (90 gün saklanır)
+#   - nuget.org'a push (--skip-duplicate ile idempotent; aynı tag re-run'da hata
+#     vermez, sadece skip eder)
+#
+# Versiyon kaynağı:
+#   Git tag'i SemVer 2.0.0 olarak parse edilir (v0.5.1 → 0.5.1) ve
+#   'dotnet pack -p:Version=…' ile csproj'daki "0.0.0-dev" placeholder'ı
+#   override edilir. Böylece NuGet paketi her zaman server release tag'iyle
+#   senkron çıkar — kullanıcı 'dotnet add package MERSEL.Services.DssSigner.Client
+#   --version 0.5.1' dediğinde aynı sürüme ait Docker imajını + GitHub
+#   Release JAR'ını birebir eşleştirebilir.
+#
+# Coordination:
+#   - release.yml: GitHub Release oluşturur (JAR + SBOM + checksum)
+#   - docker.yml:  ghcr.io/.../mersel-dss-server-signer-java:VERSION imajı
+#   - nuget.yml :  MERSEL.Services.DssSigner.Client.VERSION nupkg
+#   Üç workflow aynı 'v*' tag'inden paralel başlar, biri diğerini beklemez.
+# =============================================================================
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'         # v0.5.0
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'       # v1.0.0-rc.1, v0.5.0-beta.2
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Sadece pack üret, NuGet.org''a push etme'
+        required: false
+        type: boolean
+        default: true
+      version_override:
+        description: 'Manuel versiyon (boş bırakılırsa "0.0.0-dispatch.<run_number>")'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: 'true'
+  DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
+  DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+  CLIENT_CSPROJ: src/Client/Client.csproj
+  NUGET_FEED: https://api.nuget.org/v3/index.json
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: pack — Tag'i parse et, pack üret, artifact olarak yükle
+  # ---------------------------------------------------------------------------
+  pack:
+    name: Pack NuGet package
+    runs-on: ubuntu-latest
+    outputs:
+      version:        ${{ steps.parse.outputs.version }}
+      is_prerelease:  ${{ steps.parse.outputs.is_prerelease }}
+      package_name:   ${{ steps.parse.outputs.package_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # SourceLink commit metadata için
+
+      - name: Parse version from tag
+        id: parse
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            OVERRIDE='${{ inputs.version_override }}'
+            if [[ -n "$OVERRIDE" ]]; then
+              VERSION="$OVERRIDE"
+            else
+              VERSION="0.0.0-dispatch.${{ github.run_number }}"
+            fi
+            IS_PRE="true"
+            echo "Manual dispatch → synthetic version: ${VERSION}"
+          else
+            TAG="${GITHUB_REF##refs/tags/}"
+            VERSION="${TAG#v}"
+
+            # SemVer 2.0.0 doğrulaması (release.yml ile aynı regex)
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.\-]+)?$ ]]; then
+              echo "::error::Tag '$TAG' SemVer 2.0.0 formatına uymuyor."
+              exit 1
+            fi
+
+            # -SNAPSHOT yasak (server release.yml ile tutarlı)
+            if [[ "$VERSION" == *SNAPSHOT* ]]; then
+              echo "::error::Release sürümü -SNAPSHOT içeremez: $VERSION"
+              exit 1
+            fi
+
+            if [[ "$VERSION" == *-* ]]; then
+              IS_PRE="true"
+            else
+              IS_PRE="false"
+            fi
+            echo "Tag push → version: ${VERSION} (prerelease=${IS_PRE})"
+          fi
+
+          PACKAGE_NAME="MERSEL.Services.DssSigner.Client.${VERSION}.nupkg"
+
+          echo "version=${VERSION}"             >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=${IS_PRE}"        >> "$GITHUB_OUTPUT"
+          echo "package_name=${PACKAGE_NAME}"   >> "$GITHUB_OUTPUT"
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            7.0.x
+            8.0.x
+            9.0.x
+
+      - name: Show dotnet info
+        run: dotnet --info
+
+      - name: Restore
+        run: dotnet restore "${{ env.CLIENT_CSPROJ }}"
+
+      - name: Build (Release)
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          dotnet build "${{ env.CLIENT_CSPROJ }}" \
+            -c Release \
+            --no-restore \
+            -p:Version="${VERSION}" \
+            -p:ContinuousIntegrationBuild=true \
+            -p:RepositoryCommit="${{ github.sha }}"
+
+      - name: Pack (.nupkg + .snupkg)
+        env:
+          VERSION: ${{ steps.parse.outputs.version }}
+        run: |
+          dotnet pack "${{ env.CLIENT_CSPROJ }}" \
+            -c Release \
+            --no-build \
+            -p:Version="${VERSION}" \
+            -p:ContinuousIntegrationBuild=true \
+            -p:RepositoryCommit="${{ github.sha }}" \
+            -o nupkgs
+
+      - name: Verify pack output
+        env:
+          EXPECTED: ${{ steps.parse.outputs.package_name }}
+        run: |
+          set -euo pipefail
+          echo "=== nupkgs/ ==="
+          ls -lah nupkgs/
+
+          if [[ ! -f "nupkgs/${EXPECTED}" ]]; then
+            echo "::error::Beklenen paket bulunamadı: nupkgs/${EXPECTED}"
+            ls -lah nupkgs/
+            exit 1
+          fi
+          echo "✓ Paket üretildi: nupkgs/${EXPECTED}"
+
+      - name: Upload nupkg artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-${{ steps.parse.outputs.version }}
+          path: nupkgs/
+          retention-days: 90
+
+  # ---------------------------------------------------------------------------
+  # Job 2: publish — nuget.org'a push (yalnızca tag push veya dry_run=false)
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to nuget.org
+    needs: pack
+    if: github.event_name == 'push' || inputs.dry_run == false
+    runs-on: ubuntu-latest
+    environment:
+      name: nuget
+      url: https://www.nuget.org/packages/MERSEL.Services.DssSigner.Client/${{ needs.pack.outputs.version }}
+    steps:
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x   # push için tek SDK yeterli
+
+      - name: Download nupkg artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-${{ needs.pack.outputs.version }}
+          path: nupkgs/
+
+      - name: List packages to push
+        run: ls -lah nupkgs/
+
+      - name: Push to nuget.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${NUGET_API_KEY:-}" ]]; then
+            echo "::error::NUGET_API_KEY secret tanımlı değil — repo Settings → Secrets → Actions altından ekleyin."
+            exit 1
+          fi
+
+          # --skip-duplicate: aynı tag'in re-run'unda 409'u hata değil skip
+          # olarak işle (release.yml'deki immutability prensibi ile aynı).
+          dotnet nuget push 'nupkgs/*.nupkg' \
+            --api-key "$NUGET_API_KEY" \
+            --source "${{ env.NUGET_FEED }}" \
+            --skip-duplicate
+
+          echo ""
+          echo "✓ NuGet'e push tamamlandı: MERSEL.Services.DssSigner.Client ${{ needs.pack.outputs.version }}"
+
+  # ---------------------------------------------------------------------------
+  # Job 3: summary — Workflow summary için özet rapor
+  # ---------------------------------------------------------------------------
+  summary:
+    name: NuGet publish summary
+    needs: [pack, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          # NuGet Publish — ${{ needs.pack.outputs.version }}
+
+          | Adım | Durum |
+          |---|---|
+          | Pack    | ${{ needs.pack.result }} |
+          | Publish | ${{ needs.publish.result }} |
+
+          - **Package**: \`MERSEL.Services.DssSigner.Client\`
+          - **Version**: \`${{ needs.pack.outputs.version }}\`
+          - **Pre-release**: \`${{ needs.pack.outputs.is_prerelease }}\`
+          - **Commit**: \`${{ github.sha }}\`
+          - **Workflow Run**: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+          ${{ needs.publish.result == 'success' && format('[**→ nuget.org''da görüntüle**](https://www.nuget.org/packages/MERSEL.Services.DssSigner.Client/{0})', needs.pack.outputs.version) || '' }}
+          EOF

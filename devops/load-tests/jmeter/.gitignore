@@ -1,0 +1,5 @@
+# JMeter çıktıları — sadece plan + scriptler commit edilir
+results/
+*.jtl
+jmeter.log
+report/

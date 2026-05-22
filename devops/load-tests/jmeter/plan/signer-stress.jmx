@@ -1,0 +1,760 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Mersel DSS Signer — Stress Test">
+      <stringProp name="TestPlan.comments">XAdES sustained load + PAdES sporadic load. Tüm parametreler User Defined Variables altından override edilir (CLI: -J&lt;name&gt;=value).</stringProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <Arguments guiclass="ArgumentsPanel" testclass="Arguments" testname="Stress Test Variables">
+        <collectionProp name="Arguments.arguments">
+          <elementProp name="HOST" elementType="Argument">
+            <stringProp name="Argument.name">HOST</stringProp>
+            <stringProp name="Argument.value">${__P(host,localhost)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PORT" elementType="Argument">
+            <stringProp name="Argument.name">PORT</stringProp>
+            <stringProp name="Argument.value">${__P(port,8085)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PROTOCOL" elementType="Argument">
+            <stringProp name="Argument.name">PROTOCOL</stringProp>
+            <stringProp name="Argument.value">${__P(protocol,http)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="DURATION_SEC" elementType="Argument">
+            <stringProp name="Argument.name">DURATION_SEC</stringProp>
+            <stringProp name="Argument.value">${__P(duration,300)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="XADES_THREADS" elementType="Argument">
+            <stringProp name="Argument.name">XADES_THREADS</stringProp>
+            <stringProp name="Argument.value">${__P(xadesThreads,50)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="XADES_RAMPUP_SEC" elementType="Argument">
+            <stringProp name="Argument.name">XADES_RAMPUP_SEC</stringProp>
+            <stringProp name="Argument.value">${__P(xadesRampup,30)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PADES_THREADS" elementType="Argument">
+            <stringProp name="Argument.name">PADES_THREADS</stringProp>
+            <stringProp name="Argument.value">${__P(padesThreads,2)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PADES_RAMPUP_SEC" elementType="Argument">
+            <stringProp name="Argument.name">PADES_RAMPUP_SEC</stringProp>
+            <stringProp name="Argument.value">${__P(padesRampup,5)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="PADES_RPM" elementType="Argument">
+            <stringProp name="Argument.name">PADES_RPM</stringProp>
+            <stringProp name="Argument.value">${__P(padesRpm,6)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="CONNECT_TIMEOUT_MS" elementType="Argument">
+            <stringProp name="Argument.name">CONNECT_TIMEOUT_MS</stringProp>
+            <stringProp name="Argument.value">${__P(connectTimeout,5000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="RESPONSE_TIMEOUT_MS" elementType="Argument">
+            <stringProp name="Argument.name">RESPONSE_TIMEOUT_MS</stringProp>
+            <stringProp name="Argument.value">${__P(responseTimeout,60000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <!-- ============================================================ -->
+          <!-- PATH RESOLUTION — Aşağıdaki path'ler CWD-bağımsız ve           -->
+          <!-- layout-aware (repo / bundle) şekilde "setUp — Resolve Paths"  -->
+          <!-- thread group'unda doldurulur. Test boyunca her referans       -->
+          <!-- ${__P(propName,)} ile lazy okunur (UDV intermediary YOK,      -->
+          <!-- çünkü JMeter UDV'leri setUp'tan ÖNCE evaluate eder).          -->
+          <!--                                                                -->
+          <!-- Property → Default kaynağı:                                   -->
+          <!--   fixtureBaseDir → repo root / bundle root                    -->
+          <!--   xadesCsv       → <fixture base>/.../xades-fixtures.csv      -->
+          <!--   padesCsv       → <fixture base>/.../pades-fixtures.csv      -->
+          <!--   verifierScript → BOŞ (script JMX'in PostProcessor CDATA'sın- -->
+          <!--                   da INLINE; harici dosyayla override için    -->
+          <!--                   -JverifierScript=/abs/path.groovy)          -->
+          <!--                                                                -->
+          <!-- Hepsi -Jxxx=... ile her zaman override edilebilir.            -->
+          <!-- ============================================================ -->
+          <elementProp name="AUTH_HEADER" elementType="Argument">
+            <stringProp name="Argument.name">AUTH_HEADER</stringProp>
+            <stringProp name="Argument.value">${__P(authHeader,)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="VERIFIER_ENABLED" elementType="Argument">
+            <stringProp name="Argument.name">VERIFIER_ENABLED</stringProp>
+            <stringProp name="Argument.value">${__P(verifierEnabled,false)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="VERIFIER_URL" elementType="Argument">
+            <stringProp name="Argument.name">VERIFIER_URL</stringProp>
+            <stringProp name="Argument.value">${__P(verifierUrl,)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="VERIFIER_LEVEL" elementType="Argument">
+            <stringProp name="Argument.name">VERIFIER_LEVEL</stringProp>
+            <stringProp name="Argument.value">${__P(verifierLevel,SIMPLE)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+          <elementProp name="VERIFIER_TIMEOUT_MS" elementType="Argument">
+            <stringProp name="Argument.name">VERIFIER_TIMEOUT_MS</stringProp>
+            <stringProp name="Argument.value">${__P(verifierTimeout,30000)}</stringProp>
+            <stringProp name="Argument.metadata">=</stringProp>
+          </elementProp>
+        </collectionProp>
+      </Arguments>
+      <hashTree/>
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP Request Defaults">
+        <stringProp name="HTTPSampler.connect_timeout">${CONNECT_TIMEOUT_MS}</stringProp>
+        <stringProp name="HTTPSampler.response_timeout">${RESPONSE_TIMEOUT_MS}</stringProp>
+        <stringProp name="HTTPSampler.domain">${HOST}</stringProp>
+        <stringProp name="HTTPSampler.port">${PORT}</stringProp>
+        <stringProp name="HTTPSampler.protocol">${PROTOCOL}</stringProp>
+        <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+          <collectionProp name="Arguments.arguments"/>
+        </elementProp>
+        <stringProp name="HTTPSampler.implementation">HttpClient4</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+
+      <!-- ============================================================ -->
+      <!-- setUp Thread Group — Path Resolution                          -->
+      <!--                                                                -->
+      <!-- Normal Thread Group'lardan ÖNCE çalışır. Tüm path'leri         -->
+      <!-- layout-aware şekilde çözer ve properties'e yazar:              -->
+      <!--   - JMeter test plan'ın bulunduğu dizini baz alır              -->
+      <!--     (org.apache.jmeter.services.FileServer.getBaseDir)         -->
+      <!--   - "Repo layout" (plan/ klasörü) ve "Bundle layout"           -->
+      <!--     (CSV'ler plan ile aynı klasörde) otomatik algılanır        -->
+      <!--   - GUI'den herhangi bir CWD'den açılsa da doğru çalışır       -->
+      <!--                                                                -->
+      <!-- CLI'da -Jxxx=... ile dışarıdan verilenler korunur, sadece      -->
+      <!-- verilmemiş olanlar default'a düşer (override-safe).            -->
+      <!-- ============================================================ -->
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="setUp — Resolve Paths">
+        <stringProp name="ThreadGroup.num_threads">1</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">1</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">stoptest</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </SetupThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Resolve Paths">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="script"><![CDATA[
+import org.apache.jmeter.services.FileServer
+
+// JMeter, .jmx dosyasinin bulundugu dizini "base dir" olarak set eder.
+// Bu CWD'den BAGIMSIZDIR — GUI'den acsan da CLI'dan kossan da ayni.
+def planDir = FileServer.getFileServer().getBaseDir()
+
+// Layout tespiti:
+//   - BUNDLE: prepare-bundle.sh ile uretilen self-contained paket.
+//     CSV'ler ve fixture klasorleri (xades/, pades/) plan ile ayni dizinde.
+//   - REPO:   Gelistirme reposu. Plan devops/load-tests/jmeter/plan/'da,
+//             CSV'ler devops/load-tests/jmeter/data/'da, fixture'lar repo
+//             kokunden resources/test-fixtures/ altinda.
+def bundleMarker = new File(planDir, "xades-fixtures.csv")
+def isBundle = bundleMarker.exists()
+
+String fixtureBaseDir, xadesCsv, padesCsv
+if (isBundle) {
+    fixtureBaseDir = new File(planDir).canonicalPath
+    xadesCsv = new File(planDir, "xades-fixtures.csv").canonicalPath
+    padesCsv = new File(planDir, "pades-fixtures.csv").canonicalPath
+} else {
+    // plan/ -> ../../../.. = repo root
+    fixtureBaseDir = new File(planDir, "../../../..").canonicalPath
+    xadesCsv = new File(planDir, "../data/xades-fixtures.csv").canonicalPath
+    padesCsv = new File(planDir, "../data/pades-fixtures.csv").canonicalPath
+}
+
+// Verifier script: ARTIK INLINE (PostProcessor'in <script> CDATA'sinda).
+// Sadece kullanici --verifier-script ile DISARIDAN bir dosya verirse o
+// kullanilir; verilmezse property bos kalir, JMeter inline script'e duser.
+// Burada default doldurmuyoruz — eski default-resolve davranisi compile
+// time'da dosya yoksa patliyordu, bu davranisi devre disi birakiyoruz.
+
+// Override-safe: -J ile verilen deger varsa dokunma, yoksa default'u set et.
+def setIfMissing = { String key, String val ->
+    def existing = props.get(key)
+    if (existing == null || existing.toString().trim().isEmpty()) {
+        props.put(key, val)
+    }
+}
+setIfMissing("fixtureBaseDir", fixtureBaseDir)
+setIfMissing("xadesCsv",       xadesCsv)
+setIfMissing("padesCsv",       padesCsv)
+
+log.info("===== Path resolution (layout=" + (isBundle ? "BUNDLE" : "REPO") + ", planDir=" + planDir + ") =====")
+log.info("  FIXTURE_BASE_DIR = " + props.get("fixtureBaseDir"))
+log.info("  XADES_CSV        = " + props.get("xadesCsv"))
+log.info("  PADES_CSV        = " + props.get("padesCsv"))
+def vs = props.get("verifierScript")
+log.info("  VERIFIER_SCRIPT  = " + (vs ? vs.toString() : "(inline — JMX gomulu script)"))
+
+// Sanity: zorunlu CSV'ler var mi? (verifier-script INLINE oldugu icin kontrol gerekmez)
+def warnIfMissing = { String label, String path ->
+    if (!new File(path).exists()) log.warn("[setUp] " + label + " bulunamadi: " + path)
+}
+warnIfMissing("XADES_CSV", props.get("xadesCsv").toString())
+warnIfMissing("PADES_CSV", props.get("padesCsv").toString())
+if (vs) {
+    warnIfMissing("VERIFIER_SCRIPT (override)", vs.toString())
+}
+]]></stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="XAdES — Sustained Load">
+        <stringProp name="ThreadGroup.num_threads">${XADES_THREADS}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${XADES_RAMPUP_SEC}</stringProp>
+        <stringProp name="ThreadGroup.duration">${DURATION_SEC}</stringProp>
+        <longProp name="ThreadGroup.delay">0</longProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">false</boolProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <intProp name="LoopController.loops">-1</intProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="XAdES Fixture CSV">
+          <stringProp name="filename">${__P(xadesCsv,)}</stringProp>
+          <stringProp name="fileEncoding">UTF-8</stringProp>
+          <stringProp name="variableNames">filePath,documentType,mimeType</stringProp>
+          <stringProp name="delimiter">,</stringProp>
+          <boolProp name="ignoreFirstLine">true</boolProp>
+          <boolProp name="quotedData">false</boolProp>
+          <boolProp name="recycle">true</boolProp>
+          <boolProp name="stopThread">false</boolProp>
+          <stringProp name="shareMode">shareMode.all</stringProp>
+        </CSVDataSet>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /v1/xadessign">
+          <stringProp name="HTTPSampler.path">/v1/xadessign</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">true</boolProp>
+          <elementProp name="HTTPsampler.Files" elementType="HTTPFileArgs">
+            <collectionProp name="HTTPFileArgs.files">
+              <elementProp name="${filePath}" elementType="HTTPFileArg">
+                <stringProp name="File.path">${__P(fixtureBaseDir,)}/${filePath}</stringProp>
+                <stringProp name="File.paramname">Document</stringProp>
+                <stringProp name="File.mimetype">${mimeType}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="DocumentType" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.name">DocumentType</stringProp>
+                <stringProp name="Argument.value">${documentType}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200 OK">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">8</intProp>
+            <stringProp name="Assertion.custom_message">XAdES imza endpoint&apos;i 200 dönmedi</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="x-signature-value header var mı?">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="278979783">x-signature-value</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_headers</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="Assertion.custom_message">İmza header&apos;ı yok — gerçekten imzalanmamış olabilir</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <!-- Verifier PostProcessor — script INLINE.
+               filename boş bırakılırsa (default) inline script çalışır.
+               -JverifierScript=/abs/path.groovy ile dış dosya override edilebilir.
+               VERIFIER_ENABLED=false ise ilk satırda return → sıfır overhead. -->
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Verify XAdES (conditional)">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters">XAdES</stringProp>
+            <stringProp name="filename">${__P(verifierScript,)}</stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script"><![CDATA[
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.client.config.RequestConfig
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.entity.mime.MultipartEntityBuilder
+import org.apache.http.entity.ContentType
+import org.apache.http.util.EntityUtils
+import org.apache.jmeter.samplers.SampleResult
+
+// ── 1) Toggle kontrolu — VERIFIER_ENABLED!=true ise sifir overhead ────────
+def enabled = "true".equalsIgnoreCase((vars.get("VERIFIER_ENABLED") ?: "false").toString().trim())
+if (!enabled) { return }
+
+// Sign tarafi patladiysa verifier'i cagirmak gurultu; parent zaten fail.
+if (!prev.isSuccessful()) { return }
+
+def verifierUrl = (vars.get("VERIFIER_URL") ?: "").toString().trim()
+if (verifierUrl.isEmpty()) {
+    log.warn("VERIFIER_ENABLED=true ama VERIFIER_URL bos — bu iterasyonda dogrulama atlandi.")
+    return
+}
+while (verifierUrl.endsWith("/")) {
+    verifierUrl = verifierUrl.substring(0, verifierUrl.length() - 1)
+}
+
+// ── 2) Sampler kind (XAdES | PAdES) ──────────────────────────────────────
+def kind = (args ?: "XAdES").toString().trim()
+def isPades = kind.equalsIgnoreCase("PAdES")
+def fileName = isPades ? "signed.pdf" : "signed.xml"
+def contentType = isPades ? ContentType.create("application/pdf") : ContentType.create("application/xml")
+def verifyLabel = "VERIFY " + kind
+def level = (vars.get("VERIFIER_LEVEL") ?: "SIMPLE").toString().trim()
+def timeoutMs = Integer.parseInt((vars.get("VERIFIER_TIMEOUT_MS") ?: "30000").toString().trim())
+
+// ── 3) Lazy-init shared HttpClient (connection pool) ─────────────────────
+def client = props.get("__jm_verifier_client")
+if (client == null) {
+    synchronized (props) {
+        client = props.get("__jm_verifier_client")
+        if (client == null) {
+            def reqConfig = RequestConfig.custom()
+                .setConnectTimeout(5000)
+                .setSocketTimeout(timeoutMs)
+                .setConnectionRequestTimeout(5000)
+                .build()
+            client = HttpClients.custom()
+                .setMaxConnPerRoute(500)
+                .setMaxConnTotal(1000)
+                .setDefaultRequestConfig(reqConfig)
+                .disableAutomaticRetries()
+                .build()
+            props.put("__jm_verifier_client", client)
+            log.info("Verifier HttpClient lazy-init OK -> " + verifierUrl)
+        }
+    }
+}
+
+// ── 4) Imzali belge bytes ────────────────────────────────────────────────
+def signedBytes = prev.getResponseData()
+if (signedBytes == null || signedBytes.length == 0) {
+    log.warn("Verifier: prev response body bos, dogrulama atlandi (label=" + prev.getSampleLabel() + ")")
+    return
+}
+
+// ── 5) SubResult kur ─────────────────────────────────────────────────────
+def subResult = new SampleResult()
+subResult.setSampleLabel(verifyLabel)
+subResult.setURL(new java.net.URL(verifierUrl + "/api/v1/verify/signature"))
+subResult.sampleStart()
+
+try {
+    def post = new HttpPost(verifierUrl + "/api/v1/verify/signature")
+    post.addHeader("Accept", "application/json")
+    def auth = (vars.get("AUTH_HEADER") ?: "").toString().trim()
+    if (!auth.isEmpty()) { post.addHeader("Authorization", auth) }
+
+    def entity = MultipartEntityBuilder.create()
+        .addBinaryBody("signedDocument", signedBytes, contentType, fileName)
+        .addTextBody("level", level)
+        .build()
+    post.setEntity(entity)
+
+    def resp = client.execute(post)
+    try {
+        def code = resp.getStatusLine().getStatusCode()
+        def bodyEntity = resp.getEntity()
+        def body = bodyEntity != null ? EntityUtils.toString(bodyEntity, "UTF-8") : ""
+
+        subResult.setResponseCode(String.valueOf(code))
+        subResult.setResponseData(body, "UTF-8")
+        subResult.setDataType(SampleResult.TEXT)
+        subResult.setBytes((long) (body != null ? body.length() : 0))
+        subResult.setSentBytes((long) signedBytes.length)
+
+        // Hafif "valid":true substring kontrolu; whitespace toleransli.
+        // Jackson parse hot-path'te GC pressure -> gereksiz. Schema sabit.
+        def looksValid = (code == 200) && body.replaceAll("\\s+", "").contains('"valid":true')
+        subResult.setSuccessful(looksValid)
+
+        if (!looksValid) {
+            def snippet = body != null && body.length() > 400 ? body.substring(0, 400) + "..." : body
+            subResult.setResponseMessage("Verifier rejected: HTTP " + code)
+            prev.setSuccessful(false)
+            prev.appendResponseMessage("\n[Verifier] INVALID signature: code=" + code + ", body=" + snippet)
+        }
+    } finally {
+        resp.close()
+    }
+} catch (Throwable t) {
+    subResult.setSuccessful(false)
+    subResult.setResponseCode("VERIFY_ERROR")
+    subResult.setResponseMessage(t.getClass().getSimpleName() + ": " + (t.getMessage() ?: ""))
+    subResult.setResponseData(t.toString(), "UTF-8")
+    prev.setSuccessful(false)
+    prev.appendResponseMessage("\n[Verifier] request failed: " + t.toString())
+} finally {
+    subResult.sampleEnd()
+    prev.addSubResult(subResult)
+}
+]]></stringProp>
+          </JSR223PostProcessor>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="PAdES — Sporadic Load">
+        <stringProp name="ThreadGroup.num_threads">${PADES_THREADS}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${PADES_RAMPUP_SEC}</stringProp>
+        <stringProp name="ThreadGroup.duration">${DURATION_SEC}</stringProp>
+        <longProp name="ThreadGroup.delay">0</longProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">false</boolProp>
+        <boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <intProp name="LoopController.loops">-1</intProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="PAdES Fixture CSV">
+          <stringProp name="filename">${__P(padesCsv,)}</stringProp>
+          <stringProp name="fileEncoding">UTF-8</stringProp>
+          <stringProp name="variableNames">padesFilePath,padesMimeType</stringProp>
+          <stringProp name="delimiter">,</stringProp>
+          <boolProp name="ignoreFirstLine">true</boolProp>
+          <boolProp name="quotedData">false</boolProp>
+          <boolProp name="recycle">true</boolProp>
+          <boolProp name="stopThread">false</boolProp>
+          <stringProp name="shareMode">shareMode.all</stringProp>
+        </CSVDataSet>
+        <hashTree/>
+        <ConstantThroughputTimer guiclass="TestBeanGUI" testclass="ConstantThroughputTimer" testname="PAdES Throughput Limiter">
+          <intProp name="calcMode">2</intProp>
+          <stringProp name="throughput">${PADES_RPM}</stringProp>
+        </ConstantThroughputTimer>
+        <hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /v1/padessign">
+          <stringProp name="HTTPSampler.path">/v1/padessign</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.DO_MULTIPART_POST">true</boolProp>
+          <elementProp name="HTTPsampler.Files" elementType="HTTPFileArgs">
+            <collectionProp name="HTTPFileArgs.files">
+              <elementProp name="${padesFilePath}" elementType="HTTPFileArg">
+                <stringProp name="File.path">${__P(fixtureBaseDir,)}/${padesFilePath}</stringProp>
+                <stringProp name="File.paramname">Document</stringProp>
+                <stringProp name="File.mimetype">${padesMimeType}</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200 OK" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">8</intProp>
+            <stringProp name="Assertion.custom_message">PAdES imza endpoint&apos;i 200 dönmedi</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <!--
+            Body'de PDF magic number (%PDF-) ara. Bu, Content-Type header'ından
+            bağımsız olarak gerçek PDF dönüp dönmediğini kanıtlar:
+              - Servis Content-Type set etmese bile (Spring default = octet-stream)
+                veya mock servis farklı CT döndürse bile assertion çalışır.
+              - Error response'lar (JSON / HTML) bu magic'i içermez → doğru fail.
+            Substring (type=16) — case-sensitive, response_data alanında arar.
+          -->
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="PDF magic number (%PDF-)" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-1808623106">%PDF-</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="Assertion.custom_message">İmzalı PDF dönmedi (response body PDF magic number içermiyor)</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <!-- Verifier PostProcessor — script INLINE (XAdES ile aynı, kind=PAdES). -->
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Verify PAdES (conditional)" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="parameters">PAdES</stringProp>
+            <stringProp name="filename">${__P(verifierScript,)}</stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="script"><![CDATA[
+import org.apache.http.impl.client.HttpClients
+import org.apache.http.client.config.RequestConfig
+import org.apache.http.client.methods.HttpPost
+import org.apache.http.entity.mime.MultipartEntityBuilder
+import org.apache.http.entity.ContentType
+import org.apache.http.util.EntityUtils
+import org.apache.jmeter.samplers.SampleResult
+
+def enabled = "true".equalsIgnoreCase((vars.get("VERIFIER_ENABLED") ?: "false").toString().trim())
+if (!enabled) { return }
+if (!prev.isSuccessful()) { return }
+
+def verifierUrl = (vars.get("VERIFIER_URL") ?: "").toString().trim()
+if (verifierUrl.isEmpty()) {
+    log.warn("VERIFIER_ENABLED=true ama VERIFIER_URL bos — bu iterasyonda dogrulama atlandi.")
+    return
+}
+while (verifierUrl.endsWith("/")) {
+    verifierUrl = verifierUrl.substring(0, verifierUrl.length() - 1)
+}
+
+def kind = (args ?: "PAdES").toString().trim()
+def isPades = kind.equalsIgnoreCase("PAdES")
+def fileName = isPades ? "signed.pdf" : "signed.xml"
+def contentType = isPades ? ContentType.create("application/pdf") : ContentType.create("application/xml")
+def verifyLabel = "VERIFY " + kind
+def level = (vars.get("VERIFIER_LEVEL") ?: "SIMPLE").toString().trim()
+def timeoutMs = Integer.parseInt((vars.get("VERIFIER_TIMEOUT_MS") ?: "30000").toString().trim())
+
+def client = props.get("__jm_verifier_client")
+if (client == null) {
+    synchronized (props) {
+        client = props.get("__jm_verifier_client")
+        if (client == null) {
+            def reqConfig = RequestConfig.custom()
+                .setConnectTimeout(5000)
+                .setSocketTimeout(timeoutMs)
+                .setConnectionRequestTimeout(5000)
+                .build()
+            client = HttpClients.custom()
+                .setMaxConnPerRoute(500)
+                .setMaxConnTotal(1000)
+                .setDefaultRequestConfig(reqConfig)
+                .disableAutomaticRetries()
+                .build()
+            props.put("__jm_verifier_client", client)
+            log.info("Verifier HttpClient lazy-init OK -> " + verifierUrl)
+        }
+    }
+}
+
+def signedBytes = prev.getResponseData()
+if (signedBytes == null || signedBytes.length == 0) {
+    log.warn("Verifier: prev response body bos, dogrulama atlandi (label=" + prev.getSampleLabel() + ")")
+    return
+}
+
+def subResult = new SampleResult()
+subResult.setSampleLabel(verifyLabel)
+subResult.setURL(new java.net.URL(verifierUrl + "/api/v1/verify/signature"))
+subResult.sampleStart()
+
+try {
+    def post = new HttpPost(verifierUrl + "/api/v1/verify/signature")
+    post.addHeader("Accept", "application/json")
+    def auth = (vars.get("AUTH_HEADER") ?: "").toString().trim()
+    if (!auth.isEmpty()) { post.addHeader("Authorization", auth) }
+
+    def entity = MultipartEntityBuilder.create()
+        .addBinaryBody("signedDocument", signedBytes, contentType, fileName)
+        .addTextBody("level", level)
+        .build()
+    post.setEntity(entity)
+
+    def resp = client.execute(post)
+    try {
+        def code = resp.getStatusLine().getStatusCode()
+        def bodyEntity = resp.getEntity()
+        def body = bodyEntity != null ? EntityUtils.toString(bodyEntity, "UTF-8") : ""
+
+        subResult.setResponseCode(String.valueOf(code))
+        subResult.setResponseData(body, "UTF-8")
+        subResult.setDataType(SampleResult.TEXT)
+        subResult.setBytes((long) (body != null ? body.length() : 0))
+        subResult.setSentBytes((long) signedBytes.length)
+
+        def looksValid = (code == 200) && body.replaceAll("\\s+", "").contains('"valid":true')
+        subResult.setSuccessful(looksValid)
+
+        if (!looksValid) {
+            def snippet = body != null && body.length() > 400 ? body.substring(0, 400) + "..." : body
+            subResult.setResponseMessage("Verifier rejected: HTTP " + code)
+            prev.setSuccessful(false)
+            prev.appendResponseMessage("\n[Verifier] INVALID signature: code=" + code + ", body=" + snippet)
+        }
+    } finally {
+        resp.close()
+    }
+} catch (Throwable t) {
+    subResult.setSuccessful(false)
+    subResult.setResponseCode("VERIFY_ERROR")
+    subResult.setResponseMessage(t.getClass().getSimpleName() + ": " + (t.getMessage() ?: ""))
+    subResult.setResponseData(t.toString(), "UTF-8")
+    prev.setSuccessful(false)
+    prev.appendResponseMessage("\n[Verifier] request failed: " + t.toString())
+} finally {
+    subResult.sampleEnd()
+    prev.addSubResult(subResult)
+}
+]]></stringProp>
+          </JSR223PostProcessor>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <!-- ============================================================ -->
+      <!-- LISTENERS — GUI'de kullanışlı, CLI'da performans için disabled -->
+      <!--                                                                -->
+      <!-- CLI'da JMeter zaten:                                           -->
+      <!--   • -l result.jtl ile her sample'ı JTL'ye yazar                -->
+      <!--   • -e -o report/ ile HTML dashboard üretir                    -->
+      <!--   • summariser ile terminale "summary + ..." progress basar    -->
+      <!-- Bu yüzden listener'lar default'ta DISABLED. GUI'de kullanıcı   -->
+      <!-- sağ tık → Enable ile bir tıkta açar.                            -->
+      <!-- ============================================================ -->
+
+      <!-- 1) View Results Tree — debug: her request/response (GUI-only) -->
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree (debug — GUI'de Enable et)" enabled="false">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>true</responseHeaders>
+            <requestHeaders>true</requestHeaders>
+            <responseDataOnError>true</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <!-- 2) Aggregate Report — koşum özet metrikleri (Avg/Min/Max/p90/p95/p99/RPS) -->
+      <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="Aggregate Report (özet — GUI'de Enable et)" enabled="false">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>true</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+      <!-- 3) Summary Report — basit tablo (sample/avg/min/max/error%/throughput) -->
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report (GUI'de Enable et)" enabled="false">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>true</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename"></stringProp>
+      </ResultCollector>
+      <hashTree/>
+
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
