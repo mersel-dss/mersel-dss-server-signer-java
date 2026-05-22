@@ -7,23 +7,25 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-05-22
+
 ### Changed
 - **HSM heartbeat scheduler operasyonel görünürlüğü artırıldı.** Önceki sürümde
-  her başarılı yalancı imza `DEBUG` seviyesinde loglanıyordu — production'da
+  her başarılı test imza `DEBUG` seviyesinde loglanıyordu — production'da
   varsayılan `INFO+` log level'ı yüzünden operatör scheduler'ın canlı olup
   olmadığını göremiyordu. Artık her tetikleme tek bir net `INFO` satırı
   basar:
 
   ```
-  INFO  HsmHeartbeatScheduler - HSM heartbeat yalancı imzası atıldı:
+  INFO  HsmHeartbeatScheduler - HSM heartbeat test imzası atıldı:
     alias='efatura-2026', alg=RSA_SHA256, sigLen=256, elapsed=12ms,
     totalSuccess=N
   ```
 
-  - **`sigLen`** alanı eklendi: HSM'in döndürdüğü imza byte uzunluğu — yalancı
+  - **`sigLen`** alanı eklendi: HSM'in döndürdüğü imza byte uzunluğu — test
     imza gerçekten bir `C_Sign` round-trip yaptığının kanıtı (RSA-2048 için
     `256`, ECDSA-P256 DER için `64–72`).
-  - **"yalancı imza" terminolojisi**: production loglarında heartbeat'in
+  - **"test imza" terminolojisi**: production loglarında heartbeat'in
     audit amaçlı gerçek imza olmadığı açıkça görülür; sahte imza arayan
     forensic taramalarda karışıklık yok.
   - **Failure → success geçişi (`RECOVERED`)**: ayrı bir `INFO` satırı,
