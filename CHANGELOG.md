@@ -7,6 +7,10 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-05-22
+
+JMeter Stres testi eklendi.
+
 ## [0.5.2] - 2026-05-21
 
 ### Fixed
