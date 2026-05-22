@@ -7,6 +7,52 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+- **EC P-384 + e-Fatura UBL roundtrip için odaklı E2E verifier testi**
+  (`XAdESEcdsaP384EfaturaE2ETest`).
+  - **Niçin ayrı bir test sınıfı?** Mevcut `XAdESSignAndVerifyE2ETest`
+    matriksinde EC384 + e-Fatura zaten 130 senaryo arasında koşuyordu;
+    fakat bir failure debug'ı bu kadar geniş matrikste localize etmesi
+    zor. Yeni sınıf **sadece** ECDSA P-384 + UBL e-Fatura roundtrip'ine
+    odaklanır → 4 senaryo, Allure raporunda net görünür, regression
+    suspect olduğunda ilk bakılacak yer.
+  - **Senaryo matrisi (4 senaryo)**: 2 EC384 PFX
+    (`KURUM02_EC384`, `KURUM03_EC384`) × 2 backend (`PFX_JCA`,
+    `PFX_BACKED_PKCS11`).
+  - **Backend ayrımının kritikliği**: PKCS#11 yolu ECDSA imzayı raw
+    `r || s` formatında üretir (PKCS#11 v2.40 §5.13), XML-DSig ise DER
+    `SEQUENCE { INTEGER r, INTEGER s }` ister.
+    `XAdESSignatureService#ensureXadesSignatureValueFormat` bu dönüşümü
+    `Pkcs11EcdsaSignatureEncoder.normalizeToDer` üzerinden uygular; bu
+    test o dönüşümü siyah-kutu olarak doğrular. Verifier
+    `cryptographicVerificationSuccessful=false` dönerse format
+    regresyonunu doğrudan işaret eder.
+  - **Pre-flight cryptographic sanity check**: PFX'in gerçekten EC P-384
+    taşıdığı `ECPublicKey.getParams().getCurve().getField().getFieldSize() == 384`
+    ile imza akışı başlamadan önce doğrulanır → yanlış fixture seçiminde
+    erken/net hata, "alg neydi ki?" debug turunu eler.
+  - **Diagnostic logging**: imza süresi, verify süresi, subject DN,
+    `sigAlgName`, field bits hepsi `INFO` seviyesinde log'lanır;
+    failure'da diag string `(XADES / KURUM02_EC384 / PFX_BACKED_PKCS11
+    /ECDSA-P384/EFATURA) details=intact:X,cryptoOk:Y,trustAnchor:Z,…`
+    formunda root cause yön gösterir.
+  - **Strict assertion kontratı**: `CAdESSignAndVerifyE2ETest.assertVerificationPassed`
+    helper'ı paylaşılır (5-katmanlı kontrol: `result.isValid()` +
+    `indication=TOTAL_PASSED` + `cryptographicVerificationSuccessful` +
+    `trustAnchorReached` + `certificateNotExpired`). XAdES'e özel ek
+    olarak `signatureFormat XAdES*` ile başlamalı assertion'ı eklendi
+    (verifier kontrat regresyonu için).
+  - **Failure-mode okuma kılavuzu** Javadoc içinde: hangi flag `false`
+    dönerse hangi kod yolunun (Pkcs11EcdsaSignatureEncoder vs DSS LOTL
+    trust vs AIA fetch vs PFX rotasyonu) suçlu olduğu eşlemesi.
+  - **Çalıştırma doğrulaması**: Lokal Docker Desktop açıkken tam
+    verifier-e2e suite'i koşturuldu — **307 test, 0 failure, 4/4 EC384
+    senaryosu yeşil** (`Tests run: 4, Failures: 0, Errors: 0, Skipped:
+    0, Time elapsed: 1.933 s`). Tek environmental error
+    (`XadesSoftHsmVerifierE2ETest`) macOS arm64 / Rosetta JVM
+    x86_64 native lib mimari uyumsuzluğundan kaynaklanıyor, kod
+    değişikliğiyle alakası yok; CI/Linux'ta zaten görünmez.
+
 ### Changed
 - **PKCS#11 session pool tavanı artık `MAX_SESSION_COUNT`'tan beslenir →
   ipkcs11wrapper'ın sessiz 32-cap'i by-pass edildi.**
