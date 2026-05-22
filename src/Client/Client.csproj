@@ -13,7 +13,13 @@
     <AssemblyName>MERSEL.Services.DssSigner.Client</AssemblyName>
 
     <PackageId>MERSEL.Services.DssSigner.Client</PackageId>
-    <Version>0.1.0</Version>
+    <!--
+      Lokal pack için placeholder "0.0.0-dev" tutuluyor. Gerçek yayın
+      versiyonunu nuget.yml workflow'u Git tag'inden (v0.5.1 → 0.5.1)
+      'dotnet pack -p:Version=…' ile override eder; böylece NuGet'e push
+      edilen paket her zaman server release tag'iyle senkron çıkar.
+    -->
+    <Version>0.0.0-dev</Version>
     <Authors>MERSEL</Authors>
     <Company>MERSEL</Company>
     <Product>MERSEL DSS Server Signer</Product>

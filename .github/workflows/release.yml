@@ -30,9 +30,13 @@ name: Release
 #   - RELEASE_NOTES.md  (CHANGELOG'tan çıkartılan ilgili bölüm)
 #
 # Coordination:
-#   docker.yml workflow'u aynı 'v*' tag'inde paralel olarak tetiklenir; o da
-#   ghcr.io/.../mersel-dss-server-signer-java:VERSION imajını yayınlar. İki
-#   workflow birbirinden bağımsızdır (tag çekmeyi paylaşırlar).
+#   Aynı 'v*' tag'inde üç workflow paralel tetiklenir (birbirini beklemez):
+#     - release.yml: GitHub Release + JAR + SBOM + checksum
+#     - docker.yml : ghcr.io/.../mersel-dss-server-signer-java:VERSION imajı
+#     - nuget.yml  : MERSEL.Services.DssSigner.Client.VERSION nupkg (.NET SDK)
+#   Üç artefakt da aynı VERSION etiketiyle çıkar; tüketici tek tag'den hangi
+#   server + Docker imajı + client paketinin uyumlu olduğunu tek seferde
+#   eşleştirebilir.
 # =============================================================================
 
 on:

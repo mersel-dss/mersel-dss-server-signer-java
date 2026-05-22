@@ -70,6 +70,14 @@
     
     <!-- Logger for DSS library - reduce noise -->
     <logger name="eu.europa.esig.dss" level="WARN"/>
+
+    <!--
+        ipkcs11wrapper startup banner ve runtime INFO log'ları.
+        WARN'a çekiyoruz; license attribution META-INF/licenses/NOTICE ve
+        source header'larında korunduğu için bu suppress yasal sınırlar içinde.
+        Debug gerektiğinde INFO/DEBUG'a yükselt.
+    -->
+    <logger name="org.xipki.pkcs11.wrapper" level="WARN"/>
     
     <!-- Logger for Spring -->
     <logger name="org.springframework" level="INFO"/>

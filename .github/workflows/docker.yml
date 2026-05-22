@@ -69,13 +69,21 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
+            # Branch push (main / develop) -> :main, :develop
             type=ref,event=branch
+            # Tag push (v0.5.1) -> :0.5.1 + :0.5
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # Default branch push (main) -> :latest
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix={{branch}}-
+            # Her event türü için commit-bazlı traceability tag'i (örn. :sha-b66b915).
+            # Önceki "prefix={{branch}}-" konfigürasyonu tag push'unda boş expand
+            # edildiğinden ":-b66b915" gibi geçersiz referans üretip buildx'i
+            # düşürüyordu — sabit "sha-" prefix'i tüm event'lerde geçerli.
+            type=sha,prefix=sha-,format=short
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -88,12 +96,19 @@ jobs:
           platforms: linux/amd64,linux/arm64
 
       - name: Smoke test
+        env:
+          # metadata-action'ın belirlediği "primary" tag-only kısmı: branch
+          # push'unda :main / :develop, tag push'unda :0.5.1, default-branch
+          # push'unda :latest. Sabit ":main" yerine bunu kullanarak smoke
+          # test'i her event'te otomatik doğru imaja yönlendiriyoruz.
+          SMOKE_IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+          echo "Smoke test image: $SMOKE_IMAGE"
+          docker pull "$SMOKE_IMAGE"
           docker run --rm -d \
             --name sign-api-smoke \
             -p 8085:8085 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main
+            "$SMOKE_IMAGE"
 
           echo "Waiting for application startup..."
           for i in $(seq 1 30); do
@@ -111,3 +126,8 @@ jobs:
           done
 
           docker stop sign-api-smoke
+
+  # ---------------------------------------------------------------------------
+  # NOT: NuGet client (.NET) yayını için bkz. nuget.yml — aynı 'v*' tag'inde
+  # paralel olarak tetiklenir. İki workflow birbirinden bağımsızdır.
+  # ---------------------------------------------------------------------------
