@@ -7,6 +7,97 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Changed
+- **.NET istemci SDK'sı `clients/dotnet-client/` altına taşındı + paket adıyla hizalı csproj.**
+  - **Belirti**: `.NET` istemci projesi `src/Client/` altında, Maven'ın `src/main`
+    ve `src/test` dizinleriyle aynı seviyede öksüz duruyordu. Yeni geliştirici
+    repo'yu açtığında "burada bir Maven kararsızlığı mı var?" diye bir saniye
+    duraksıyordu; ayrıca csproj dosyası generic `Client.csproj` adıyla
+    paket kimliğini yansıtmıyordu.
+  - **Çözüm**: Repo kökünde `clients/` namespace açıldı; .NET istemcisi
+    `clients/dotnet-client/` altına `git mv` ile **history korunarak**
+    taşındı (37 dosya, %100 similarity rename). `Client.csproj` →
+    `MERSEL.Services.DssSigner.Client.csproj` olarak yeniden adlandırıldı;
+    `PackageId`/`AssemblyName`/`RootNamespace` zaten bu değeri taşıyordu,
+    artık dosya adı da uyumlu. Bu kalıp `mersel-os` ekosisteminde
+    `ebelge-xslt-service/clients/dotnet-client/MERSEL.Services.XsltService.Client.csproj`
+    referansıyla aynı — geliştirici hangi repo'ya bakarsa baksın aynı
+    konuma aynı isimde dosya bulur.
+  - **Downstream uyumluluğu**: `AssemblyName` ve `PackageId` değişmediği için
+    üretilen `MERSEL.Services.DssSigner.Client.dll` ve
+    `MERSEL.Services.DssSigner.Client.<VER>.nupkg` adları aynen kaldı.
+    `dotnet add package MERSEL.Services.DssSigner.Client` deneyimi ve
+    tüketici tarafındaki `using MERSEL.Services.DssSigner.Client;` kullanımı
+    **sıfır kırılma** ile devam eder.
+  - **CI uyumu**: `.github/workflows/nuget.yml` içindeki `CLIENT_CSPROJ`
+    env değişkeni yeni path'e güncellendi. `.gitignore` içindeki bin/obj
+    artifact path'leri de yeni dizine taşındı. Pack output kontrat (regex
+    `MERSEL.Services.DssSigner.Client.<VERSION>.nupkg`) korunduğu için
+    `verify pack output` adımı break etmez.
+  - **Mimari kazanım**: `clients/` namespace artık açık — ileride Java
+    SDK (`clients/java-client/`), Python (`clients/python-client/`) veya
+    TypeScript istemcisi eklemek istendiğinde yer hazır. Mikroservis
+    çok dilli tüketici hedefliyor; monorepo'da server'la **versiyon-senkron**
+    SDK kardeşleri tutmak release pipeline'ını sade tutar (tek tag → JAR +
+    Docker imajı + NuGet paketi paralel fırlar; `release.yml` / `docker.yml`
+    / `nuget.yml` üçlüsünün koordinasyon prensibi korundu).
+
+- **`DssSignerClientOptions`'tan ölü `ApiKey` / `BasicAuth` surface'i kaldırıldı.**
+  - **Belirti**: Client `DssSignerClientOptions` üzerinde `ApiKey`,
+    `ApiKeyHeaderName`, `BasicAuthUsername`, `BasicAuthPassword` property'leri
+    yaşıyor; `DependencyInjection.ConfigureHttpClient` bu değerleri set
+    edildiğinde her isteğe `X-API-Key` veya `Authorization: Basic ...`
+    header'ı olarak ekliyordu. Ancak sunucu tarafında **hiçbir auth
+    mekanizması yok**: `SecurityConfiguration` yalnızca CORS yapıyor,
+    `pom.xml`'de `spring-security` dependency'si yok, tek bir controller'da
+    `@PreAuthorize`/`@Secured` annotation'ı yok, OpenAPI `Components`'ı boş
+    (`securitySchemes` tanımlanmamış). `SECURITY.md` zaten bunu açıkça beyan
+    ediyor: *"Bu API şu anda authentication olmadan çalışmaktadır. Internal
+    kullanım için tasarlanmıştır. Production ortamında API Gateway arkasında
+    çalıştırılmalı."*
+  - **Risk**: Kullanıcı `o.ApiKey = "secret"` set ettiğinde "güvenliği
+    ayarladım" yanılgısına düşüyordu; server hiçbir doğrulama yapmadığı için
+    bu sahte güvenlik hissiydi. SDK surface'i sunucu kontratını yansıtmıyordu.
+  - **Çözüm**: Dört property `DssSignerClientOptions`'tan çıkarıldı; ilgili
+    13 satırlık header injection bloğu `DependencyInjection`'dan söküldü;
+    `System.Text` import'u artık gereksiz olduğu için temizlendi; README ve
+    XML doc'lardaki `appsettings.json` örnekleri ile inline kod örneklerinden
+    auth alanları çıkarıldı. Çıkan property'ler **opsiyonel + nullable**
+    olduğu için tüketici tarafında set etmeyen kullanıcılar **sıfır kırılma**
+    yaşar; sadece bu alanları açıkça kullanan kullanıcılar (sunucu kontratı
+    gereği zaten etkisizdi) küçük bir compile hatası alır ve dış zincirden
+    eklemeye yönlendirilir.
+  - **Forward-compat (API Gateway senaryosu)**: SDK'yı Nginx/Kong/AWS API
+    Gateway arkasında çalıştırıp gateway'in talep ettiği header'ı geçmek
+    isteyen kullanıcılar için README'ye standart `IHttpClientFactory`
+    örüntüsü eklendi:
+    ```csharp
+    builder.Services.AddHttpClient(DssSignerClientOptions.HttpClientName)
+        .ConfigureHttpClient(http =>
+        {
+            http.DefaultRequestHeaders.Add("X-API-Key", "gateway-secret");
+        });
+    // veya: .AddHttpMessageHandler<MyAuthDelegatingHandler>();
+    ```
+    Bu .NET'in idiomatic yolu — SDK'nın opinionated yüzeyine sahte güvenlik
+    abstraction'ı çakmıyoruz, kullanıcının özgür alanına bırakıyoruz.
+    `AddDssSignerClient(...)` zaten `IHttpClientBuilder` zincirine bağlı bir
+    typed-client kaydı yapıyor; `ConfigureHttpClient` veya
+    `AddHttpMessageHandler` zinciri bozulmadan eklenir.
+  - **Endpoint parity korundu**: Bu temizlik yalnızca opsiyonel
+    config surface'ini hedefler; 10/10 server endpoint'i
+    (`/v1/xadessign`, `/v1/wssecuritysign`, `/v1/cadessign`, `/v1/padessign`,
+    `/api/timestamp/{get,validate,status}`, `/api/tubitak/credit`,
+    `/api/certificates/{list,info}`) ve tüm request/response header alanları
+    (`x-signature-value`, `X-Timestamp-{Time,TSA,Serial,Hash-Algorithm,Nonce}`)
+    aynen taşınmaya devam eder.
+  - **Test güvencesi**: `dotnet build -c Release` (net9.0) → **0 warning /
+    0 error**; `dotnet pack` çıktısı
+    `MERSEL.Services.DssSigner.Client.<VER>.{nupkg,snupkg}` adlandırması
+    değişmedi. Repo geneli `ApiKey|BasicAuth|AuthenticationHeaderValue`
+    araması C# kodunda sıfır referans döndürür; kalan tek geçiş README'deki
+    bilinçli "gateway senaryosu" not bloğudur.
+
 ## [0.6.2] - 2026-05-22
 
 ### Added
