@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-05-24
+
 ### Changed
 - **.NET istemci SDK'sı `clients/dotnet-client/` altına taşındı + paket adıyla hizalı csproj.**
   - **Belirti**: `.NET` istemci projesi `src/Client/` altında, Maven'ın `src/main`
