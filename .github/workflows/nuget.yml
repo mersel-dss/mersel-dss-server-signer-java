@@ -58,7 +58,7 @@ env:
   DOTNET_NOLOGO: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
   DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
-  CLIENT_CSPROJ: src/Client/Client.csproj
+  CLIENT_CSPROJ: clients/dotnet-client/MERSEL.Services.DssSigner.Client.csproj
   NUGET_FEED: https://api.nuget.org/v3/index.json
 
 jobs:

@@ -77,9 +77,9 @@ openapi-snapshot/
 
 .vscode
 
-# .NET istemci paketi (src/Client) build artifactleri
-src/Client/bin/
-src/Client/obj/
+# .NET istemci paketi (clients/dotnet-client) build artifactleri
+clients/dotnet-client/bin/
+clients/dotnet-client/obj/
 *.nupkg
 *.snupkg
 
