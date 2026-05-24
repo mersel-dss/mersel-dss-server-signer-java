@@ -24,26 +24,13 @@ public sealed class DssSignerClientOptions
     public TimeSpan Timeout { get; set; } = TimeSpan.FromMinutes(2);
 
     /// <summary>
-    /// İsteğe bağlı API anahtarı. Set edildiğinde her isteğe
-    /// <c>X-API-Key</c> header'ı olarak eklenir.
-    /// </summary>
-    public string? ApiKey { get; set; }
-
-    /// <summary>API key header adı (gereken durumlar için özelleştirilebilir).</summary>
-    public string ApiKeyHeaderName { get; set; } = "X-API-Key";
-
-    /// <summary>
-    /// İsteğe bağlı temel kimlik doğrulama (basic auth) kullanıcı adı.
-    /// <see cref="BasicAuthPassword"/> ile birlikte set edilirse
-    /// <c>Authorization: Basic ...</c> header'ı eklenir.
-    /// </summary>
-    public string? BasicAuthUsername { get; set; }
-
-    /// <summary>İsteğe bağlı basic auth parolası.</summary>
-    public string? BasicAuthPassword { get; set; }
-
-    /// <summary>
     /// Custom <c>User-Agent</c> başlığı. Varsayılan paket adı + sürümünden üretilir.
     /// </summary>
+    /// <remarks>
+    /// Sunucu authentication uygulamaz (bkz. <c>SECURITY.md</c>); herhangi bir ek
+    /// header (API gateway anahtarı, korelasyon kimliği vb.) eklemek için
+    /// <c>AddDssSignerClient(...)</c> sonrası <see cref="Microsoft.Extensions.DependencyInjection.IHttpClientBuilder"/>
+    /// üzerinden <c>ConfigureHttpClient</c> ya da <c>AddHttpMessageHandler</c> kullanın.
+    /// </remarks>
     public string? UserAgent { get; set; }
 }

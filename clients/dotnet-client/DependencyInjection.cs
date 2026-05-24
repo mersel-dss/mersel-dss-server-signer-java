@@ -1,6 +1,5 @@
 using System.Net.Http.Headers;
 using System.Reflection;
-using System.Text;
 using MERSEL.Services.DssSigner.Client.Clients;
 using MERSEL.Services.DssSigner.Client.Interfaces;
 using MERSEL.Services.DssSigner.Client.Models;
@@ -37,8 +36,7 @@ public static class DependencyInjection
     ///   "Services": {
     ///     "DssSigner": {
     ///       "BaseUrl": "http://dss-signer:8088",
-    ///       "Timeout": "00:02:00",
-    ///       "ApiKey": "..."
+    ///       "Timeout": "00:02:00"
     ///     }
     ///   }
     /// }
@@ -74,7 +72,6 @@ public static class DependencyInjection
     /// {
     ///     o.BaseUrl = "http://dss-signer:8088";
     ///     o.Timeout = TimeSpan.FromMinutes(5);
-    ///     o.ApiKey  = "secret-key";
     /// });
     /// </code>
     /// </example>
@@ -154,19 +151,9 @@ public static class DependencyInjection
             ? options.Timeout
             : TimeSpan.FromMinutes(2);
 
-        // Authentication header'ları (kullanıcı seçimine bağlı).
-        if (!string.IsNullOrEmpty(options.ApiKey) && !string.IsNullOrEmpty(options.ApiKeyHeaderName))
-        {
-            http.DefaultRequestHeaders.Remove(options.ApiKeyHeaderName);
-            http.DefaultRequestHeaders.Add(options.ApiKeyHeaderName, options.ApiKey);
-        }
-
-        if (!string.IsNullOrEmpty(options.BasicAuthUsername))
-        {
-            var raw = $"{options.BasicAuthUsername}:{options.BasicAuthPassword ?? string.Empty}";
-            var token = Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
-            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", token);
-        }
+        // Authentication: Sunucu auth yapmaz (SECURITY.md → "internal/gateway arkası" mimari).
+        // Kullanıcı API gateway arkasına koyduğunda ekstra header'ları kendi
+        // ConfigureHttpClient / AddHttpMessageHandler zincirinde ekler.
 
         // User-Agent: paket adı + sürüm.
         var userAgent = options.UserAgent ?? BuildDefaultUserAgent();

@@ -21,7 +21,6 @@ builder.Services.AddDssSignerClient(o =>
 {
     o.BaseUrl = "http://dss-signer:8088";
     o.Timeout = TimeSpan.FromMinutes(5);
-    o.ApiKey  = "secret-key";   // opsiyonel; X-API-Key header'ı olarak gider
 });
 
 // Seçenek 3: Sadece URL belirt
@@ -35,14 +34,22 @@ builder.Services.AddDssSignerClient("http://dss-signer:8088");
   "Services": {
     "DssSigner": {
       "BaseUrl": "http://dss-signer:8088",
-      "Timeout": "00:02:00",
-      "ApiKey": "...",
-      "BasicAuthUsername": null,
-      "BasicAuthPassword": null
+      "Timeout": "00:02:00"
     }
   }
 }
 ```
+
+> **Not — Authentication:** Sunucu kendisi authentication uygulamaz (bkz. [SECURITY.md](https://github.com/mersel-dss/mersel-dss-server-signer-java/blob/main/SECURITY.md) — "internal kullanım / API Gateway arkasında çalıştırın"). API Gateway, reverse proxy veya başka bir auth katmanı arkasında çalıştırıyorsanız ekstra header'ları (örn. `X-API-Key`, `Authorization`) standart `IHttpClientFactory` zincirinden ekleyin:
+>
+> ```csharp
+> builder.Services.AddHttpClient(DssSignerClientOptions.HttpClientName)
+>     .ConfigureHttpClient(http =>
+>     {
+>         http.DefaultRequestHeaders.Add("X-API-Key", "gateway-secret");
+>     });
+> // veya: .AddHttpMessageHandler<MyAuthDelegatingHandler>();
+> ```
 
 DI kaydı sonrası tüketicide:
 
