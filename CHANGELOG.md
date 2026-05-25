@@ -7,6 +7,62 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /api/certificates/signingCertificate` — aktif imzacı sertifikayı
+  base64 encoded biçimde de döndüren tek-shot endpoint.**
+  - **Motivasyon**: Manuel XAdES imza akışı (özellikle GİB UBL-TR 2.1
+    için özel namespace prefix gereksinimi olan senaryolar)
+    `<ds:Signature>` elementini elle kuruyor; bu sırada
+    `<ds:X509Certificate>` elementine basılacak base64 encoded
+    sertifika için server'a tekrar tekrar dosya okuma / `/list`
+    endpoint'i + alias-serial filtreleme döngüsü yapmak zorunda
+    kalıyordu. `/list` çağrı başına token'daki tüm entry'leri döner
+    ve büyük HSM'lerde (50+ sertifika) gereksiz payload üretir.
+  - **Mekanizma**: Yeni endpoint, Spring container'da başlangıçta
+    resolve edilmiş tek `SigningMaterial` singleton'ından beslenir.
+    Token'a fazladan istek atılmaz; sertifika materyali zaten
+    bootstrap'ta okunduğu için yanıt sub-millisecond düzeyde döner.
+  - **Yanıt sözleşmesi**: `CertificateInfoDto` formatında — listing
+    endpoint'iyle birebir aynı şema. İki ek alan: `publicKeyAlgorithm`
+    (örn. `RSA`, `EC`) ve `base64EncodedCertificate` (X.509 DER
+    encoding'in base64'lenmiş hali). `hasPrivateKey` her zaman
+    `true` döner; HSM (PKCS#11) yapılandırmasında JCA katmanı private
+    key handle'ı `null` yansıtsa bile imza materyali fiilen token'da
+    yaşadığı için bilgilendirme doğru.
+  - **Cache sözleşmesi**: `SigningMaterial` başlangıçta resolve
+    edildiği için içerik uygulama yaşam döngüsü boyunca **değişmez**.
+    Yanıt `Cache-Control: private, max-age=3600, immutable` header'ı
+    taşır; reverse-proxy ve client tarafı in-memory cache'ler tekrarlı
+    çağrılarda 0-RTT lookup yapabilir.
+  - **Listing endpoint hijenı**: `base64EncodedCertificate` alanı
+    `/list` yanıtında kasıtlı olarak `null` bırakılır — 50+ sertifika
+    içeren HSM'lerde payload'un 100 KB+'a şişmesini önler. Manuel
+    XAdES kullanan akışlar `/signingCertificate`'a yönlendirilir.
+
+### Fixed
+
+- **`CertificateInfoService` listing yolunda iki minör regresyon
+  kapatıldı.**
+  - **Belirti 1**: Helper'a çıkarılan `convertToCertificateInfoDto(...)`
+    sonrası `cert == null` durumu yalnızca NPE → catch → warn log
+    pattern'iyle yakalanıyordu; exception ile kontrol akışı.
+    **Çözüm**: Null sertifika explicit `continue` ile sessizce
+    atlanır, debug seviyesi log düşer.
+  - **Belirti 2**: Refactor sırasında `keyStore.isCertificateEntry()`
+    ve `keyStore.isKeyEntry()` çağrıları per-alias try-catch dışına
+    çıkmıştı; bu metotlar legacy/bozuk keystore entry'lerinde
+    `KeyStoreException` atabildiği için tek bir kötü alias tüm
+    listing'i patlatıyordu. **Çözüm**: Tüm alias-bazlı okuma adımları
+    tek try ile sarmalandı — eski "sessiz skip" davranışı korundu.
+
+- **`CertificateInfoDto.toString()` log satırı başına 1.5–2 KB
+  şişmesin diye base64 sertifika kasıtlı olarak değer yerine
+  uzunlukla loglanır.** Aksi halde DTO'nun debug seviyesinde
+  loglandığı yerlerde her satır devasa base64 string içerir; 0.7.0'da
+  gelen `LogHeadersFilter` ile birlikte log dosya boyutları görünür
+  şekilde patlardı.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added

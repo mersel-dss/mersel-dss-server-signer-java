@@ -57,7 +57,14 @@ public class CertificateInfoDto {
             example = "2.16.792.3.0.4.1.1.4")
     private String certificatePolicies;
 
+    @Schema(description = "Public key algoritması (örn. RSA, EC)",
+            example = "RSA")
     private String publicKeyAlgorithm;
+
+    @Schema(description = "Base64 encoded X.509 sertifika (DER kodlamanın base64'lenmiş hali). "
+            + "Yalnızca /signingCertificate endpoint'i bu alanı doldurur; /list yanıtında null kalır. "
+            + "Manuel XAdES <ds:X509Certificate> elementi doldurmak için kullanılır.",
+            example = "MIIDxzCCAq+gAwIBAgI...")
     private String base64EncodedCertificate;
 
     public CertificateInfoDto() {
@@ -183,6 +190,10 @@ public class CertificateInfoDto {
         this.base64EncodedCertificate = base64EncodedCertificate;
     }
 
+    /**
+     * Compact log-friendly toString. Base64 sertifika kasıtlı olarak değer
+     * yerine uzunlukla loglanır — DTO log satırı başına 1.5–2 KB şişmesin.
+     */
     @Override
     public String toString() {
         return "CertificateInfoDto{" +
@@ -200,7 +211,8 @@ public class CertificateInfoDto {
                 ", extendedKeyUsage='" + extendedKeyUsage + '\'' +
                 ", certificatePolicies='" + certificatePolicies + '\'' +
                 ", publicKeyAlgorithm='" + publicKeyAlgorithm + '\'' +
-                ", base64EncodedCertificate='" + base64EncodedCertificate + '\'' +
+                ", base64EncodedCertificateLength=" +
+                (base64EncodedCertificate != null ? base64EncodedCertificate.length() : 0) +
                 '}';
     }
 }

@@ -135,21 +135,42 @@ public class CertificateInfoController {
     }
 
     /**
-     * Keystore bilgilerini döndürür (hangi tip kullanılıyor, vs.)
+     * Aktif imza yapılandırmasındaki imzacı sertifikayı (tek entry) döner.
      *
-     * GET /api/certificates/info
+     * <p>Listing endpoint'inin aksine alias/serial filtrelemesi yapılmaz —
+     * server başlangıçta resolve ettiği {@code SigningMaterial} singleton'ından
+     * doğrudan beslenir. Yanıt, manuel XAdES {@code <ds:X509Certificate>}
+     * elementi için kullanılabilen {@code base64EncodedCertificate} alanını
+     * içerir; {@code hasPrivateKey} her zaman {@code true}'dur (HSM yolunda
+     * dahi, çünkü key handle token'da yaşar).</p>
+     *
+     * <p>{@code SigningMaterial} başlangıçta resolve edildiği için yanıt
+     * pratikte değişmez; client tarafı ve reverse-proxy katmanları cache
+     * için {@code Cache-Control: max-age=3600, immutable} header'ını
+     * kullanabilir.</p>
+     *
+     * GET /api/certificates/signingCertificate
      */
     @GetMapping(value = "/signingCertificate", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(
-            summary = "İmzalama için kullanılan sertifika bilgilerini döner",
-            description = "Yalnızca imza işleminde kullanılacak sertifika bilgilerini döner",
+            summary = "İmzacı sertifika bilgilerini döner",
+            description = "Aktif imza yapılandırmasındaki tek sertifikayı base64 encoded "
+                    + "biçimde de içerecek şekilde döner. Manuel XAdES <ds:X509Certificate> "
+                    + "doldurmak için tek-shot lookup.",
             responses = {
-                    @ApiResponse(responseCode = "200", description = "İmzacı sertifika başarıyla döndürüldü")
+                    @ApiResponse(
+                            responseCode = "200",
+                            description = "İmzacı sertifika başarıyla döndürüldü",
+                            content = @Content(schema = @Schema(implementation = CertificateInfoDto.class))
+                    ),
+                    @ApiResponse(responseCode = "500", description = "İmza materyali çözülemedi veya sertifika encoded edilemedi")
             }
     )
-    public ResponseEntity<?> getSigningCertificate() throws CertificateEncodingException {
+    public ResponseEntity<CertificateInfoDto> getSigningCertificate() throws CertificateEncodingException {
         CertificateInfoDto dto = certificateInfoService.getSigningCertificateInfo();
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok()
+                .header("Cache-Control", "private, max-age=3600, immutable")
+                .body(dto);
     }
 }
 
