@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
-    
+
+    <!--
+        Request başına gelen x-log-* header'larını her log satırına JSON olarak
+        ekleyen converter. LogHeadersFilter MDC'yi doldurur, converter pattern
+        içinden okur. Header yoksa boş string döner; mevcut log gürültüsünü
+        artırmaz. Detay: io.mersel.dss.signer.api.config.LogHeadersConverter.
+    -->
+    <conversionRule conversionWord="xLogHeaders"
+                    converterClass="io.mersel.dss.signer.api.config.LogHeadersConverter"/>
+
     <!-- Console appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg %xLogHeaders%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
@@ -14,7 +23,7 @@
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH:-./logs}/application.log</file>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg %xLogHeaders%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
@@ -32,7 +41,7 @@
             <level>ERROR</level>
         </filter>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg %xLogHeaders%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
@@ -47,7 +56,7 @@
     <appender name="SIGNATURE_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH:-./logs}/signature.log</file>
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} - %msg %xLogHeaders%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">

@@ -7,6 +7,48 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`x-log-*` request header'ları artık tüm log satırlarında JSON olarak
+otomatik görünür — opt-in correlation/trace observability sözleşmesi.**
+  - **Motivasyon**: Operatör, çağıran sistemden gelen takip metadatasını
+  (örn. `X-Log-Id: abc`, `X-Log-Kimlik: kajsdh`) controller / service
+  kodunda elle parametre olarak taşımadan, GİB submission ID'si veya
+  müşteri tarafı correlation key'lerini info/warn/error satırlarının
+  hepsinde gözleyebilmeli. Manuel `LOGGER.info("[{}]", traceId, ...)`
+  pattern'i 6 controller, ~40 servis ve `GlobalExceptionHandler`
+  arasında çoğaltılması anlamsız boilerplate.
+  - **Mekanizma**: Yeni `LogHeadersFilter`
+  (`Ordered.HIGHEST_PRECEDENCE + 50`) request başında `x-log-` prefix'li
+  tüm header'ları (case-insensitive) yakalayıp SLF4J `MDC`'ye
+  `xlog.<lower-case-name>` formunda yazar. Yeni `LogHeadersConverter`
+  Logback `ClassicConverter`'ı pattern içinde `%xLogHeaders` olarak
+  kayıtlı; her log event'inde `xlog.*` MDC entry'lerini alfabetik
+  sırada JSON nesnesine serialize eder. Hiç header yoksa boş string
+  döner — mevcut log gürültüsü artmaz.
+  - **Çıktı formatı**: `xlog={"x-log-id":"abc","x-log-kimlik":"kajsdh"}`.
+  Konum: standart pattern'in sonunda (`%msg` sonrası, `%n` öncesi).
+  CONSOLE / `application.log` / `error.log` / `signature.log`
+  appender'larının hepsi yeni pattern'i kullanır.
+  - **Güvenlik sertleştirmesi**: (a) request başına en fazla
+  20 `x-log-*` header işlenir — şişirilmiş header bombasına karşı
+  sınır; (b) her değer 512 karaktere kırpılır; (c) CR/LF + diğer
+  ASCII kontrol karakterleri boşluğa çevrilir — klasik CRLF log
+  injection vektörü kapatılır; (d) converter ikinci savunma hattı
+  olarak `<0x20` kontrol karakterlerini RFC 8259 JSON kaçışına
+  uğratır.
+  - **MDC sözleşmesi**: Filter sadece kendi koyduğu `xlog.*`
+  anahtarlarını `finally` bloğunda temizler — uygulamanın başka bir
+  yerinde MDC'ye konmuş tenant/trace anahtarları korunur.
+  - **Async sınırlama**: SLF4J MDC thread-local; `@Async` ya da
+  explicit executor dispatch'lerinde context propagate olmaz. Mevcut
+  imza pipeline'ları request thread'i üzerinde sync çalıştığı için
+  pratik sorun değil; ileride async eklenirse `MDC.getCopyOfContextMap()`
+  ile elle taşınmalı.
+  - **Migration**: Client'lar için davranış değişikliği yok — header
+  göndermeyenlerde log çıktısı aynı. Header gönderenler için
+  zero-effort observability kazanımı.
+
 ### Changed (BREAKING)
 
 - 🛑 `**XAdESLevelUpgradeService` artık `EArchiveReport` / `EBiletReport`
