@@ -583,6 +583,10 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(obj.cert));
             dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(obj.cert));
             dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(obj.cert));
+            dto.setPublicKeyAlgorithm(obj.cert.getPublicKey().getAlgorithm());
+            // base64EncodedCertificate kasıtlı olarak set edilmez — token'da
+            // onlarca sertifika varken /list payload'unu şişirmiyoruz; manuel
+            // XAdES için /signingCertificate endpoint'i kullanılmalı.
             byAlias.put(alias, dto);
         }
 

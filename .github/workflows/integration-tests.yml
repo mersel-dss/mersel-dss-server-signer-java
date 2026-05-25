@@ -70,8 +70,10 @@ name: Integration Tests
 #     birden koşturur (her ikisinin de @Tag("pkcs11-integration") etiketi var):
 #       1) SoftHsm2Pkcs11IntegrationTest        → 5 parametrize iterasyon
 #          (raw imza, her PfxTestKey için)
-#       2) XadesSoftHsmVerifierE2ETest          → 25 parametrize iterasyon
-#          (5 PFX × 5 XAdES fixture, gerçek HSM + DSS verifier API roundtrip)
+#       2) XadesSoftHsmVerifierE2ETest          → 20 parametrize iterasyon
+#          (5 PFX × 4 XAdES fixture, gerçek HSM + DSS verifier API roundtrip).
+#          NOT: 0.7.0'da EARSIV_RAPORU TSA bağımlılığı nedeniyle
+#          XadesDocumentFixture.standardFixtures()'tan çıkarıldı; 5 → 4.
 #     ubuntu-latest runner'da Docker zaten mevcut → Testcontainers ile
 #     verifier-api container'ı otomatik ayağa kalkar.
 
@@ -328,7 +330,7 @@ jobs:
           # Tag-based filter. İki test class'ı da @Tag("pkcs11-integration")
           # taşıdığı için tek mvn çağrısında her ikisi de koşar:
           #   - SoftHsm2Pkcs11IntegrationTest        (5 raw sign iterasyonu)
-          #   - XadesSoftHsmVerifierE2ETest          (25 E2E iterasyon)
+          #   - XadesSoftHsmVerifierE2ETest          (20 E2E iterasyon)
           # -Dtest filter parametrize testlerde Surefire 2.22.2 ile sorunlu.
           mvn test -B \
             -Dgroups=pkcs11-integration \
@@ -366,7 +368,7 @@ jobs:
           fi
           echo "✅ SoftHsm2Pkcs11IntegrationTest: $expected iterasyon, hepsi koştu"
 
-      - name: Verify XadesSoftHsmVerifierE2ETest (25 HSM+verifier iterations)
+      - name: Verify XadesSoftHsmVerifierE2ETest (20 HSM+verifier iterations)
         run: |
           set -euo pipefail
           report="target/surefire-reports/io.mersel.dss.signer.api.e2e.verifier.XadesSoftHsmVerifierE2ETest.txt"
@@ -379,13 +381,16 @@ jobs:
           cat "$report"
           echo "==================="
 
-          expected=25  # 5 PfxTestKey × 5 XadesDocumentFixture
+          # 0.7.0'da XadesDocumentFixture.standardFixtures() EARSIV_RAPORU'yu
+          # hariç tuttu (TSA bağımlılığı; XAdESLevelUpgradeService fail-fast).
+          # 5 PfxTestKey × 4 fixture = 20 iterasyon.
+          expected=20
           actual_run=$(grep -oE 'Tests run: [0-9]+' "$report" | head -1 | grep -oE '[0-9]+' || echo "0")
           actual_skipped=$(grep -oE 'Skipped: [0-9]+' "$report" | head -1 | grep -oE '[0-9]+' || echo "0")
 
           if [ "$actual_run" != "$expected" ]; then
             echo "❌ Beklenen: $expected HSM+verifier iterasyonu, Gerçek: $actual_run"
-            echo "   (5 PfxTestKey × 5 XadesDocumentFixture = 25)"
+            echo "   (5 PfxTestKey × 4 XadesDocumentFixture = 20)"
             exit 1
           fi
           if [ "$actual_skipped" != "0" ]; then

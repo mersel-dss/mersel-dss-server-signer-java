@@ -7,6 +7,107 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /api/certificates/signingCertificate` — aktif imzacı sertifikayı
+  base64 encoded biçimde de döndüren tek-shot endpoint.**
+  - **Motivasyon**: Manuel XAdES imza akışı (özellikle GİB UBL-TR 2.1
+    için özel namespace prefix gereksinimi olan senaryolar)
+    `<ds:Signature>` elementini elle kuruyor; bu sırada
+    `<ds:X509Certificate>` elementine basılacak base64 encoded
+    sertifika için server'a tekrar tekrar dosya okuma / `/list`
+    endpoint'i + alias-serial filtreleme döngüsü yapmak zorunda
+    kalıyordu. `/list` çağrı başına token'daki tüm entry'leri döner
+    ve büyük HSM'lerde (50+ sertifika) gereksiz payload üretir.
+  - **Mekanizma**: Yeni endpoint, Spring container'da başlangıçta
+    resolve edilmiş tek `SigningMaterial` singleton'ından beslenir.
+    Token'a fazladan istek atılmaz; sertifika materyali zaten
+    bootstrap'ta okunduğu için yanıt sub-millisecond düzeyde döner.
+  - **Yanıt sözleşmesi**: `CertificateInfoDto` formatında — listing
+    endpoint'iyle birebir aynı şema. İki ek alan: `publicKeyAlgorithm`
+    (örn. `RSA`, `EC`) ve `base64EncodedCertificate` (X.509 DER
+    encoding'in base64'lenmiş hali). `hasPrivateKey` her zaman
+    `true` döner; HSM (PKCS#11) yapılandırmasında JCA katmanı private
+    key handle'ı `null` yansıtsa bile imza materyali fiilen token'da
+    yaşadığı için bilgilendirme doğru.
+  - **Cache sözleşmesi**: `SigningMaterial` başlangıçta resolve
+    edildiği için içerik uygulama yaşam döngüsü boyunca **değişmez**.
+    Yanıt `Cache-Control: private, max-age=3600, immutable` header'ı
+    taşır; reverse-proxy ve client tarafı in-memory cache'ler tekrarlı
+    çağrılarda 0-RTT lookup yapabilir.
+  - **Listing endpoint hijenı**: `base64EncodedCertificate` alanı
+    `/list` yanıtında kasıtlı olarak `null` bırakılır — 50+ sertifika
+    içeren HSM'lerde payload'un 100 KB+'a şişmesini önler. Manuel
+    XAdES kullanan akışlar `/signingCertificate`'a yönlendirilir.
+
+### Fixed
+
+- **`CertificateInfoService` listing yolunda iki minör regresyon
+  kapatıldı.**
+  - **Belirti 1**: Helper'a çıkarılan `convertToCertificateInfoDto(...)`
+    sonrası `cert == null` durumu yalnızca NPE → catch → warn log
+    pattern'iyle yakalanıyordu; exception ile kontrol akışı.
+    **Çözüm**: Null sertifika explicit `continue` ile sessizce
+    atlanır, debug seviyesi log düşer.
+  - **Belirti 2**: Refactor sırasında `keyStore.isCertificateEntry()`
+    ve `keyStore.isKeyEntry()` çağrıları per-alias try-catch dışına
+    çıkmıştı; bu metotlar legacy/bozuk keystore entry'lerinde
+    `KeyStoreException` atabildiği için tek bir kötü alias tüm
+    listing'i patlatıyordu. **Çözüm**: Tüm alias-bazlı okuma adımları
+    tek try ile sarmalandı — eski "sessiz skip" davranışı korundu.
+
+- **`CertificateInfoDto.toString()` log satırı başına 1.5–2 KB
+  şişmesin diye base64 sertifika kasıtlı olarak değer yerine
+  uzunlukla loglanır.** Aksi halde DTO'nun debug seviyesinde
+  loglandığı yerlerde her satır devasa base64 string içerir; 0.7.0'da
+  gelen `LogHeadersFilter` ile birlikte log dosya boyutları görünür
+  şekilde patlardı.
+
+- **`scripts/check-changelog-updated.sh` awk regex'inde gizli bug
+  düzeltildi — her PR yanlışlıkla "CHANGELOG güncellenmemiş" hatası
+  alıyordu.**
+  - **Belirti**: `Verify CHANGELOG.md is updated` GitHub Actions
+    check'i, [Unreleased] bölümüne entry ekleyen PR'larda dahi
+    "[Unreleased] bolumune yeni satir eklenmemis gibi gorunuyor"
+    hatası veriyordu. Hasan'ın PR #20 commit'i ve önceki
+    `feat(observability)` commit'i (`54c8ce0`) hep aynı false
+    positive ile fail dönüyordu; production'a etkisiz çünkü doğrudan
+    main'e push edilen commit'lerde CI failure merge'i engellemiyor,
+    ama PR akışında engelleyici.
+  - **Kök neden**: Awk pattern `/^[+\-] ## \[Unreleased\]/` iki
+    sorunu birden taşıyordu. (a) Unified diff format'ında marker
+    (`+`/`-`) ile içerik arasında boşluk yoktur (`+## ...`), ama
+    pattern literal boşluk bekliyordu. (b) Mevcut `## [Unreleased]`
+    header'ı, eklemeler altına yapıldığı için diff'te **context
+    satır** (` ## [Unreleased]`, space-prefix'li) olarak görünür;
+    karakter sınıfı `[+\-]` boşluğu kapsamadığı için context satır
+    zone'a hiç giremezdi. Sonuç: pattern fiilen hiçbir gerçek diff
+    formatında match etmez.
+  - **Çözüm**: Zone trigger karakter sınıfı `[+\- ]`'ye genişletildi
+    (space dahil), marker ile `##` arasındaki literal boşluk
+    kaldırıldı, zone exit pattern'i `## [0-9]` ile sürüm-numaralı
+    section'lara odaklandı (yine "Unreleased" yakalanmasın diye).
+    Doğrulama: mevcut PR + iki geçmiş feature commit (`54c8ce0`,
+    `a9ae7dd`) artık PASSED dönerken, CHANGELOG güncellemesi
+    olmayan saf-kod commit'i (Hasan'ın orijinal `880c784` commit'i)
+    hâlâ doğru şekilde FAILED veriyor — negatif case korundu.
+
+- **`integration-tests.yml` workflow'undaki `XadesSoftHsmVerifierE2ETest`
+  iterasyon sayısı 25 → 20 olarak güncellendi.**
+  - **Belirti**: 0.7.0 release'inde `XadesDocumentFixture.standardFixtures()`
+    fixture listesi 5'ten 4'e düşürüldü (EARSIV_RAPORU XAdES-A TSA
+    zorunluluğu nedeniyle hariç tutuldu; bkz. yukarıdaki XAdES fail-fast
+    sözleşmesi). Ancak CI workflow'undaki assertion (`expected=25`,
+    "5 PfxTestKey × 5 XadesDocumentFixture") güncellenmediği için
+    HSM integration check her PR'da fail veriyor (gerçek: 20, beklenen: 25).
+  - **Görünmezlik sebebi**: 0.7.0 commit'i (`10ed0a6`) doğrudan main'e
+    push edildiği için CI failure merge'i engellemedi; bug ilk PR
+    (#20) main'e rebase olunca yüzeye çıktı.
+  - **Çözüm**: `expected=20`, açıklama yorumlarında "5 × 4 = 20"
+    matematiği netleştirildi, hem step adındaki "(25 HSM+verifier
+    iterations)" başlığı hem üst seviye workflow header'ı 0.7.0
+    fixture daralmasına atıfla güncellendi.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added

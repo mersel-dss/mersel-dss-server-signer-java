@@ -2,6 +2,7 @@ package io.mersel.dss.signer.api.services;
 
 import io.mersel.dss.signer.api.dtos.CertificateInfoDto;
 import io.mersel.dss.signer.api.exceptions.KeyStoreException;
+import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
@@ -11,8 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyStore;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -36,17 +39,35 @@ public class CertificateInfoService {
     /** Spring inject eder; PFX yapılandırmasında {@code null}. CLI yolunda manuel set. */
     private final IaikPkcs11Module iaikModule;
 
+    /**
+     * Aktif imza yapılandırmasındaki materyal. {@code /signingCertificate}
+     * endpoint'i bu singleton'dan beslenir; CLI yolunda ({@link #CertificateInfoService()})
+     * {@code null} kalır ve tek-sertifika yolu kapanır.
+     */
+    private final SigningMaterial signingMaterial;
+
     @Autowired
-    public CertificateInfoService(@Autowired(required = false) IaikPkcs11Module iaikModule) {
+    public CertificateInfoService(@Autowired(required = false) IaikPkcs11Module iaikModule,
+                                  @Autowired(required = false) SigningMaterial signingMaterial) {
         this.iaikModule = iaikModule;
+        this.signingMaterial = signingMaterial;
     }
 
     /**
      * CLI / non-Spring kullanımı için no-arg constructor. PKCS#11 listeleme
-     * istiyorsa {@link #CertificateInfoService(IaikPkcs11Module)} kullan.
+     * istiyorsa {@link #CertificateInfoService(IaikPkcs11Module, SigningMaterial)} kullan.
      */
     public CertificateInfoService() {
-        this((IaikPkcs11Module) null);
+        this(null, null);
+    }
+
+    /**
+     * Geriye dönük uyumluluk: yalnızca {@link IaikPkcs11Module} ile inject —
+     * mevcut testler ve CLI yolu için. {@code /signingCertificate} endpoint'i
+     * bu yolda kullanılamaz; HSM listing'i çalışmaya devam eder.
+     */
+    public CertificateInfoService(IaikPkcs11Module iaikModule) {
+        this(iaikModule, null);
     }
 
     /**
@@ -92,55 +113,95 @@ public class CertificateInfoService {
      */
     private List<CertificateInfoDto> listViaKeyStoreAliases(KeyStoreProvider provider, char[] pin) {
         List<CertificateInfoDto> certificates = new ArrayList<>();
-
         try {
             KeyStore keyStore = provider.loadKeyStore(pin);
             Enumeration<String> aliases = keyStore.aliases();
-            
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
-                
+                // Tek alias için tüm okuma adımlarını (isCertificateEntry, isKeyEntry,
+                // getCertificate, extension extraction) tek try ile saralayalım;
+                // legacy/bozuk entry'lerde sessiz skip davranışı korunsun.
                 try {
-                    // Sertifika var mı kontrol et
-                    if (keyStore.isCertificateEntry(alias) || keyStore.isKeyEntry(alias)) {
-                        X509Certificate cert = (X509Certificate) keyStore.getCertificate(alias);
-                        
-                        if (cert != null) {
-                            CertificateInfoDto dto = new CertificateInfoDto();
-                            dto.setAlias(alias);
-                            dto.setSerialNumberHex(cert.getSerialNumber().toString(16).toUpperCase());
-                            dto.setSerialNumberDec(cert.getSerialNumber().toString());
-                            dto.setSubject(cert.getSubjectX500Principal().toString());
-                            dto.setIssuer(cert.getIssuerX500Principal().toString());
-                            dto.setValidFrom(cert.getNotBefore());
-                            dto.setValidTo(cert.getNotAfter());
-                            dto.setHasPrivateKey(keyStore.isKeyEntry(alias));
-                            dto.setType(cert.getType());
-                            dto.setSignatureAlgorithm(cert.getSigAlgName());
-                            
-                            dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(cert));
-                            dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(cert));
-                            dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(cert));
-                            
-                            certificates.add(dto);
-                            
-                            LOGGER.debug("Sertifika bulundu - Alias: {}, Serial: {}, Subject: {}", 
-                                alias, dto.getSerialNumberHex(), dto.getSubject());
-                        }
+                    if (!keyStore.isCertificateEntry(alias) && !keyStore.isKeyEntry(alias)) {
+                        continue;
                     }
+                    X509Certificate cert = (X509Certificate) keyStore.getCertificate(alias);
+                    if (cert == null) {
+                        LOGGER.debug("Alias '{}' için sertifika boş döndü, atlanıyor", alias);
+                        continue;
+                    }
+                    CertificateInfoDto dto = convertToCertificateInfoDto(cert);
+                    dto.setAlias(alias);
+                    dto.setHasPrivateKey(keyStore.isKeyEntry(alias));
+                    certificates.add(dto);
+                    LOGGER.debug("Sertifika bulundu - Alias: {}, Serial: {}, Subject: {}",
+                            alias, dto.getSerialNumberHex(), dto.getSubject());
                 } catch (Exception e) {
                     LOGGER.warn("Alias için sertifika bilgisi alınamadı: {} - {}", alias, e.getMessage());
                 }
             }
-            
+
             LOGGER.info("Toplam {} sertifika bulundu", certificates.size());
-            
+
         } catch (Exception e) {
             throw new KeyStoreException("Sertifika listesi alınamadı: " + e.getMessage(), e);
         }
-        
+
         return certificates;
     }
+
+    /**
+     * Aktif imza yapılandırmasındaki imzacı sertifika bilgilerini döner.
+     *
+     * <p>Listing endpoint'lerinden farklı olarak {@code base64EncodedCertificate}
+     * alanını da doldurur — bu, manuel XAdES {@code <ds:X509Certificate>} elementi
+     * dolduran client'lar için tek-shot lookup hedefler. {@code hasPrivateKey}
+     * her zaman {@code true}'dur çünkü {@link SigningMaterial} constructor'ı
+     * geçerli bir backend (JCA private key veya PKCS#11 key handle) garanti eder.</p>
+     *
+     * @throws IllegalStateException Spring bağlamı içinde {@link SigningMaterial}
+     *     bean'i mevcut değilse (CLI yapılandırması veya bootstrap hatası).
+     */
+    public CertificateInfoDto getSigningCertificateInfo() throws CertificateEncodingException {
+        if (signingMaterial == null) {
+            throw new IllegalStateException(
+                "SigningMaterial bean'i bulunamadı. /signingCertificate endpoint'i yalnızca "
+                + "imza yapılandırması başlatılmış Spring context'inde kullanılabilir.");
+        }
+        X509Certificate cert = signingMaterial.getSigningCertificate();
+        CertificateInfoDto dto = convertToCertificateInfoDto(cert);
+        // SigningMaterial constructor private key veya HSM key handle olmadan
+        // oluşturulmaz; backend tipinden bağımsız olarak imzacı materyali
+        // burada her zaman privateKey-equivalent içerir.
+        dto.setHasPrivateKey(true);
+        dto.setBase64EncodedCertificate(Base64.getEncoder().encodeToString(cert.getEncoded()));
+        return dto;
+    }
+
+    /**
+     * Listing/info DTO mapping'i — base64 encoded sertifika kasıtlı olarak
+     * doldurulmaz. {@code /list} endpoint'i çağrı başına onlarca entry
+     * dönebileceği için payload şişmesini önlüyoruz; manuel XAdES için
+     * {@link #getSigningCertificateInfo()} kullanılmalıdır.
+     */
+    private CertificateInfoDto convertToCertificateInfoDto(X509Certificate cert) {
+        if (cert == null) return null;
+        CertificateInfoDto dto = new CertificateInfoDto();
+        dto.setSerialNumberHex(cert.getSerialNumber().toString(16).toUpperCase());
+        dto.setSerialNumberDec(cert.getSerialNumber().toString());
+        dto.setSubject(cert.getSubjectX500Principal().toString());
+        dto.setIssuer(cert.getIssuerX500Principal().toString());
+        dto.setValidFrom(cert.getNotBefore());
+        dto.setValidTo(cert.getNotAfter());
+        dto.setType(cert.getType());
+        dto.setSignatureAlgorithm(cert.getSigAlgName());
+        dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(cert));
+        dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(cert));
+        dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(cert));
+        dto.setPublicKeyAlgorithm(cert.getPublicKey().getAlgorithm());
+        return dto;
+    }
+
 
     /**
      * Sertifika bilgilerini konsol formatında yazdırır.
