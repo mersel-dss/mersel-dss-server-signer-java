@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-05-25
+
 ### Changed (BREAKING)
 
 - **`POST /v1/xadessign`: imza profili (XADES_BES / XADES_A) tamamen request
