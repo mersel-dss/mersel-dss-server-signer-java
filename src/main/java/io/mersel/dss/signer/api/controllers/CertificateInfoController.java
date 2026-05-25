@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.cert.CertificateEncodingException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -131,6 +132,24 @@ public class CertificateInfoController {
         }
 
         return ResponseEntity.ok(info);
+    }
+
+    /**
+     * Keystore bilgilerini döndürür (hangi tip kullanılıyor, vs.)
+     *
+     * GET /api/certificates/info
+     */
+    @GetMapping(value = "/signingCertificate", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(
+            summary = "İmzalama için kullanılan sertifika bilgilerini döner",
+            description = "Yalnızca imza işleminde kullanılacak sertifika bilgilerini döner",
+            responses = {
+                    @ApiResponse(responseCode = "200", description = "İmzacı sertifika başarıyla döndürüldü")
+            }
+    )
+    public ResponseEntity<?> getSigningCertificate() throws CertificateEncodingException {
+        CertificateInfoDto dto = certificateInfoService.getSigningCertificateInfo();
+        return ResponseEntity.ok(dto);
     }
 }
 

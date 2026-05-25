@@ -26,15 +26,10 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.math.BigInteger;
 import java.security.MessageDigest;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -542,7 +537,7 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      * listeler. SunPKCS11 alias map'ine bağımlı DEĞİLDİR — JCA katmanı boş
      * dönse de buradan tam liste gelir.
      */
-    public List<CertificateInfoDto> listCertificates() {
+    public List<CertificateInfoDto> listCertificates() throws CertificateEncodingException {
         List<TokenObject> objects = collectAllRelevantObjects();
         Map<String, CertificateInfoDto> byAlias = new LinkedHashMap<>();
         int orphanKeyCounter = 0;
@@ -583,6 +578,8 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(obj.cert));
             dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(obj.cert));
             dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(obj.cert));
+            dto.setPublicKeyAlgorithm(obj.cert.getPublicKey().getAlgorithm());
+            dto.setBase64EncodedCertificate(Base64.getEncoder().encodeToString(obj.cert.getEncoded()));
             byAlias.put(alias, dto);
         }
 

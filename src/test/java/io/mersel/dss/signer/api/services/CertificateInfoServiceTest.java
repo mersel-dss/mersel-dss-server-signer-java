@@ -13,6 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
+import java.security.cert.CertificateEncodingException;
 import java.util.Collections;
 import java.util.List;
 
@@ -45,7 +46,7 @@ class CertificateInfoServiceTest {
 
         @Test
         @DisplayName("IAIK fail + PKCS11Provider → KeyStoreException atmalı, fallback'e düşmemeli")
-        void iaikFailure_onPkcs11Provider_shouldThrowKeyStoreException() {
+        void iaikFailure_onPkcs11Provider_shouldThrowKeyStoreException() throws CertificateEncodingException {
             IaikPkcs11Module module = mock(IaikPkcs11Module.class);
             RuntimeException hsmFailure = new RuntimeException("CKR_DEVICE_ERROR");
             when(module.listCertificates()).thenThrow(hsmFailure);
@@ -70,7 +71,7 @@ class CertificateInfoServiceTest {
 
         @Test
         @DisplayName("IAIK fail + non-PKCS11 provider → fallback denenir (regression koruma)")
-        void iaikFailure_onNonPkcs11Provider_shouldFallbackQuietly() {
+        void iaikFailure_onNonPkcs11Provider_shouldFallbackQuietly() throws CertificateEncodingException {
             // PKCS11 olmayan provider için fallback davranışı korunmalı.
             // (Pratikte bu vaka çok yaygın değil çünkü IAIK module sadece
             // PKCS11 yapılandırmasında inject edilir; ama defensive contract
@@ -108,7 +109,7 @@ class CertificateInfoServiceTest {
 
         @Test
         @DisplayName("IAIK başarılı listing → doğrudan döner")
-        void iaikSuccess_shouldReturnList() {
+        void iaikSuccess_shouldReturnList() throws CertificateEncodingException {
             IaikPkcs11Module module = mock(IaikPkcs11Module.class);
             CertificateInfoDto dto = new CertificateInfoDto();
             dto.setAlias("hsm-key-1");

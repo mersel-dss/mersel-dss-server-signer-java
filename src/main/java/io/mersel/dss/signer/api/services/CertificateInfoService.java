@@ -2,6 +2,7 @@ package io.mersel.dss.signer.api.services;
 
 import io.mersel.dss.signer.api.dtos.CertificateInfoDto;
 import io.mersel.dss.signer.api.exceptions.KeyStoreException;
+import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
@@ -11,8 +12,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.security.KeyStore;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Enumeration;
 import java.util.List;
 
@@ -35,6 +38,9 @@ public class CertificateInfoService {
 
     /** Spring inject eder; PFX yapılandırmasında {@code null}. CLI yolunda manuel set. */
     private final IaikPkcs11Module iaikModule;
+
+    @Autowired
+    private SigningMaterial signingMaterial;
 
     @Autowired
     public CertificateInfoService(@Autowired(required = false) IaikPkcs11Module iaikModule) {
@@ -92,44 +98,23 @@ public class CertificateInfoService {
      */
     private List<CertificateInfoDto> listViaKeyStoreAliases(KeyStoreProvider provider, char[] pin) {
         List<CertificateInfoDto> certificates = new ArrayList<>();
-
         try {
             KeyStore keyStore = provider.loadKeyStore(pin);
             Enumeration<String> aliases = keyStore.aliases();
-            
             while (aliases.hasMoreElements()) {
                 String alias = aliases.nextElement();
-                
-                try {
-                    // Sertifika var mı kontrol et
-                    if (keyStore.isCertificateEntry(alias) || keyStore.isKeyEntry(alias)) {
+                if (keyStore.isCertificateEntry(alias) || keyStore.isKeyEntry(alias)) {
+                    try {
                         X509Certificate cert = (X509Certificate) keyStore.getCertificate(alias);
-                        
-                        if (cert != null) {
-                            CertificateInfoDto dto = new CertificateInfoDto();
-                            dto.setAlias(alias);
-                            dto.setSerialNumberHex(cert.getSerialNumber().toString(16).toUpperCase());
-                            dto.setSerialNumberDec(cert.getSerialNumber().toString());
-                            dto.setSubject(cert.getSubjectX500Principal().toString());
-                            dto.setIssuer(cert.getIssuerX500Principal().toString());
-                            dto.setValidFrom(cert.getNotBefore());
-                            dto.setValidTo(cert.getNotAfter());
-                            dto.setHasPrivateKey(keyStore.isKeyEntry(alias));
-                            dto.setType(cert.getType());
-                            dto.setSignatureAlgorithm(cert.getSigAlgName());
-                            
-                            dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(cert));
-                            dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(cert));
-                            dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(cert));
-                            
-                            certificates.add(dto);
-                            
-                            LOGGER.debug("Sertifika bulundu - Alias: {}, Serial: {}, Subject: {}", 
+                        CertificateInfoDto dto = convertToCertificateInfoDto(cert);
+                        dto.setAlias(alias);
+                        dto.setHasPrivateKey(keyStore.isKeyEntry(alias));
+                        certificates.add(dto);
+                        LOGGER.debug("Sertifika bulundu - Alias: {}, Serial: {}, Subject: {}",
                                 alias, dto.getSerialNumberHex(), dto.getSubject());
-                        }
+                    }catch (Exception e){
+                        LOGGER.warn("Alias için sertifika bilgisi alınamadı: {} - {}", alias, e.getMessage());
                     }
-                } catch (Exception e) {
-                    LOGGER.warn("Alias için sertifika bilgisi alınamadı: {} - {}", alias, e.getMessage());
                 }
             }
             
@@ -141,6 +126,33 @@ public class CertificateInfoService {
         
         return certificates;
     }
+
+    public CertificateInfoDto getSigningCertificateInfo() throws CertificateEncodingException {
+        CertificateInfoDto dto = convertToCertificateInfoDto(signingMaterial.getSigningCertificate());
+        dto.setHasPrivateKey(signingMaterial.getPrivateKey()!=null);
+
+        return dto;
+    }
+
+    private CertificateInfoDto convertToCertificateInfoDto(X509Certificate cert) throws CertificateEncodingException {
+        if (cert == null) return null;
+        CertificateInfoDto dto = new CertificateInfoDto();
+        dto.setSerialNumberHex(cert.getSerialNumber().toString(16).toUpperCase());
+        dto.setSerialNumberDec(cert.getSerialNumber().toString());
+        dto.setSubject(cert.getSubjectX500Principal().toString());
+        dto.setIssuer(cert.getIssuerX500Principal().toString());
+        dto.setValidFrom(cert.getNotBefore());
+        dto.setValidTo(cert.getNotAfter());
+        dto.setType(cert.getType());
+        dto.setSignatureAlgorithm(cert.getSigAlgName());
+        dto.setKeyUsage(X509ExtensionInspector.extractKeyUsage(cert));
+        dto.setExtendedKeyUsage(X509ExtensionInspector.extractExtendedKeyUsage(cert));
+        dto.setCertificatePolicies(X509ExtensionInspector.extractCertificatePolicies(cert));
+        dto.setPublicKeyAlgorithm(cert.getPublicKey().getAlgorithm());
+        dto.setBase64EncodedCertificate(Base64.getEncoder().encodeToString(cert.getEncoded()));
+        return dto;
+    }
+
 
     /**
      * Sertifika bilgilerini konsol formatında yazdırır.
