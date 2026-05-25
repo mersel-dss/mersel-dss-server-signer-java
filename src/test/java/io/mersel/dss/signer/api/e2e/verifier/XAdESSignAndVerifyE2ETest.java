@@ -2,6 +2,7 @@ package io.mersel.dss.signer.api.e2e.verifier;
 
 import eu.europa.esig.dss.spi.validation.CertificateVerifier;
 import eu.europa.esig.dss.xades.signature.XAdESService;
+import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
@@ -22,6 +23,7 @@ import io.qameta.allure.Severity;
 import io.qameta.allure.SeverityLevel;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -35,29 +37,37 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Stream;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * XAdES için uçtan-uca sign → verify roundtrip testi.
  *
  * <h3>Senaryo matrisi</h3>
- * <p>İki test method'u:</p>
+ * <p>Üç test method'u:</p>
  *
  * <ol>
- *   <li><b>UBL/EArchive/HR-XML fixture matrisi</b>:
- *       5 PFX × 2 backend × <b>tüm</b> {@link XadesDocumentFixture} değerleri
- *       (12 fixture: UBL e-Fatura/e-İrsaliye/e-Müstahsil, EArchive Raporu,
- *       HR-XML, large UBL ~5 MB, BOM-encoded UBL, mixed-newlines,
- *       CDATA, comments, foreign-namespace-prefix, unicode-emoji)
- *       = <b>120 senaryo</b>.</li>
+ *   <li><b>TSA-bağımsız UBL/HR-XML fixture matrisi</b>:
+ *       5 PFX × 2 backend × {@code XadesDocumentFixture} TSA-bağımsız değerleri
+ *       (UBL e-Fatura/e-İrsaliye/e-Müstahsil, HR-XML, large UBL ~5 MB,
+ *       BOM-encoded UBL, mixed-newlines, CDATA, comments,
+ *       foreign-namespace-prefix, unicode-emoji). EARSIV_RAPORU
+ *       {@link XadesDocumentFixture#requiresTsa()} olduğu için bu matrise
+ *       <em>dahil değildir</em> (aşağıdaki dedike test'e bakın).</li>
  *   <li><b>Generic OtherXmlDocument matrisi</b>:
  *       5 PFX × 2 backend × 1 jenerik XML = <b>10 senaryo</b>
  *       ({@link DocumentType#OtherXmlDocument} placement yolunu test
  *       eder; bu yol enum'da değil çünkü "production fixture" değil).</li>
+ *   <li><b>EArchiveReport fail-fast</b>: TSA yapılandırılmamış ortamda
+ *       e-Arşiv Raporu imzalanmaya çalışıldığında {@code XAdES-A}
+ *       yükseltmesinin sessizce atlanmadığını,
+ *       {@link TimestampException} fırlattığını doğrular —
+ *       silent XAdES-B fallback regresyonunu engeller.</li>
  * </ol>
  *
- * <p><b>Toplam: 130 senaryo.</b> Her senaryo XAdES-BES (BASELINE_B) üretir;
+ * <p>Her TSA-bağımsız senaryo XAdES-BES (BASELINE_B) üretir;
  * verifier <code>signatureType=XADES</code>, <code>indication=TOTAL_PASSED</code>
  * dönmeli.</p>
  *
@@ -76,10 +86,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * yol açar. Job-level <code>timeout-minutes: 20</code> güvenlik ağıdır.</p>
  *
  * <h3>Kapsam dışı</h3>
- * <p>e-Arşiv Raporu (XAdES-A upgrade) gerçek TSA gerektirir; test JVM'inde
- * TSA olmadığı için upgrade sessizce atlanır ve belge XAdES-B olarak
- * üretilir. Verifier bunu <code>TOTAL_PASSED</code> kabul eder (T-level
- * kontrolü yapılmaz çünkü TSA-token yok).</p>
+ * <p>e-Arşiv Raporu için XAdES-A roundtrip (gerçek TSA ile) ayrı bir
+ * suite'in işidir. Bu sınıf TSA-bağımsız fixture'larda BASELINE_B akışını
+ * doğrular; e-Arşiv için <em>sadece fail-fast davranışını</em> sınar.</p>
  */
 @ExtendWith(SignedArtifactExporter.class)
 @Epic("Signature Roundtrip")
@@ -114,6 +123,7 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
 
         // TimestampConfigurationService boş TSP config'iyle — XAdES-A upgrade
         // tetiklenmediği sürece (UblDocument / OtherXmlDocument / HrXml) çağrılmaz.
+        // EArchiveReport ile çağrılırsa fail-fast: TimestampException fırlar.
         TimestampConfigurationService tsConfig = new TimestampConfigurationService(
                 /*tspServerUrl*/ "",
                 /*tspUserId*/ "",
@@ -144,9 +154,17 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
         // Pozitif matriks: yalnızca Status.VALID PFX'ler. Negative lifecycle
         // (revoked/expired/suspended) PFX'leri ayrı bir test sınıfında
         // ele alınır — bkz. CertificateLifecycleNegativeE2ETest.
+        //
+        // TSA-gerektiren fixture'lar (EArchiveReport / EBiletReport) kasıtlı
+        // olarak filtrelenir — XAdESLevelUpgradeService TSA olmadan fail-fast
+        // TimestampException fırlatır (silent XAdES-B fallback kaldırıldı).
+        // Bu davranışı sınayan dedike test method'u aşağıda mevcut.
         for (PfxTestKey key : PfxTestKey.positiveValues()) {
             for (E2eSigningBackend backend : E2eSigningBackend.values()) {
                 for (XadesDocumentFixture fixture : XadesDocumentFixture.values()) {
+                    if (fixture.requiresTsa()) {
+                        continue;
+                    }
                     b.add(Arguments.of(key, backend, fixture));
                 }
             }
@@ -269,6 +287,60 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
 
         CAdESSignAndVerifyE2ETest.assertVerificationPassed(
                 result, "XADES", key, backend + "/OtherXmlDocument");
+    }
+
+    // ================================================================
+    // Matrix 3: EArchiveReport fail-fast (TSA yapılandırılmamış)
+    // ================================================================
+
+    /**
+     * <h3>e-Arşiv Raporu için silent XAdES-B fallback regresyonu</h3>
+     *
+     * <p>e-Arşiv Raporu GİB tarafına XAdES-A seviyesinde gönderilmek
+     * <em>zorundadır</em>. {@code XAdESLevelUpgradeService} eskiden TSA
+     * yapılandırılmamışken WARN log + XAdES-B döndürüyordu — bu sessizce
+     * uyumsuz rapor üretiyordu (silent data corruption pattern). Yeni
+     * sözleşmede TSA yoksa veya upgrade hata alırsa
+     * {@link TimestampException} fırlatılır, HTTP katmanında 503
+     * SERVICE_UNAVAILABLE + {@code TIMESTAMP_ERROR} envelope'una mapping'i
+     * {@code GlobalExceptionHandlerTest} kapsar.</p>
+     *
+     * <p>Bu test: TSA yapılandırılmamış servis stack'inde
+     * {@link XadesDocumentFixture#EARSIV_RAPORU} imzalanmaya
+     * çalışıldığında {@code TimestampException} alındığını ve mesajın
+     * client'a yönlendirme bilgisi (TS_SERVER_HOST property)
+     * taşıdığını doğrular.</p>
+     */
+    @Test
+    @DisplayName("EArchiveReport: TSA yapılandırılmamışken fail-fast TimestampException fırlatır")
+    void earchiveReportFailsFastWhenTsaUnconfigured() {
+        XadesDocumentFixture fixture = XadesDocumentFixture.EARSIV_RAPORU;
+        byte[] xmlBytes = fixture.readBytes();
+        assertTrue(xmlBytes.length > 0, "e-Arşiv Raporu fixture boş olmamalı");
+
+        // Pozitif PFX'lerden ilki yeterli — backend ile fail-fast davranışı
+        // arasında bir bağımlılık yok; TSA kontrolü imza üretiminden önce
+        // (XAdESLevelUpgradeService.upgradeIfNeeded içinde) yapılır.
+        PfxTestKey key = PfxTestKey.positiveValues()[0];
+        SigningMaterial material = E2eSigningBackend.values()[0].load(key);
+
+        TimestampException ex = assertThrows(TimestampException.class,
+                () -> xadesSignatureService.signXml(
+                        new ByteArrayInputStream(xmlBytes),
+                        fixture.getDocumentType(),
+                        "id-" + UUID.randomUUID().toString().replace("-", ""),
+                        /*zipped*/ false,
+                        material),
+                "TSA yapılandırılmamışken EArchiveReport için TimestampException beklenir; "
+                        + "silent XAdES-B fallback regresyon vakası");
+
+        assertEquals("TIMESTAMP_ERROR", ex.getErrorCode(),
+                "GlobalExceptionHandler 503 + TIMESTAMP_ERROR envelope için error code'u görmek zorunda");
+        assertTrue(ex.getMessage().contains("EArchiveReport"),
+                "Mesaj hangi belge tipinin upgrade gerektirdiğini söylemeli ki client doğru "
+                        + "endpoint'i / config property'sini hedefleyebilsin: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("TS_SERVER_HOST"),
+                "Mesaj operatöre yapılandırması gereken property adını söylemeli: " + ex.getMessage());
     }
 
     // ================================================================

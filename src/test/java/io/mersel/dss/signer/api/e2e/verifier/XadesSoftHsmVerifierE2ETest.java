@@ -61,14 +61,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * DSS verifier API'sine gönderilir ve {@code TOTAL_PASSED} dönmesi beklenir.</p>
  *
  * <h2>Senaryo matrisi</h2>
- * <p>{@code 5 PFX × 5 belge tipi = 25 parametrize iterasyon}:</p>
+ * <p>{@code 5 PFX × 4 belge tipi = 20 parametrize iterasyon}
+ * — {@link XadesDocumentFixture#standardFixtures()} TSA-bağımsız fixture
+ * setini döndürür:</p>
  * <ul>
  *   <li>{@link XadesDocumentFixture#EFATURA} (UBL Invoice)</li>
  *   <li>{@link XadesDocumentFixture#EIRSALIYE} (UBL DespatchAdvice)</li>
  *   <li>{@link XadesDocumentFixture#EMUSTAHSIL} (UBL CreditNote)</li>
- *   <li>{@link XadesDocumentFixture#EARSIV_RAPORU} (e-Arşiv raporu)</li>
  *   <li>{@link XadesDocumentFixture#HRXML} (HR-XML ProcessUserAccount)</li>
  * </ul>
+ *
+ * <p>{@link XadesDocumentFixture#EARSIV_RAPORU} bu matrise <em>dahil
+ * değildir</em>: e-Arşiv Raporu için XAdES-A yükseltmesi zorunludur ve
+ * {@code XAdESLevelUpgradeService} TSA tanımlı değilse fail-fast davranır
+ * ({@link io.mersel.dss.signer.api.exceptions.TimestampException}
+ * fırlatır). EArchiveReport-spesifik fail-fast regresyonu
+ * {@code XAdESSignAndVerifyE2ETest#earchiveReportFailsFastWhenTsaUnconfigured()}
+ * tarafından kapsanır; pozitif XAdES-A roundtrip'i için TSA-mock'lı dedike
+ * suite gerekir.</p>
  *
  * <h2>Production kod yolunun kapsadığı kritik noktalar</h2>
  * <ul>
@@ -104,16 +114,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *   mvn test -B -Dgroups=verifier-e2e -DexcludedGroups=
  * </pre>
  *
- * <h2>e-Arşiv Raporu için not</h2>
- * <p>{@link XadesDocumentFixture#EARSIV_RAPORU} production'da {@code XAdES-A}
- * upgrade (TSA gerektirir) tetikler. Test ortamında TSA olmadığı için
- * {@code XAdESLevelUpgradeService} sessizce upgrade'i atlar ve belge
- * {@code XAdES-B} olarak üretilir. Verifier {@code XADES-BASELINE-B} olarak
- * kabul eder, indication=TOTAL_PASSED beklenir.</p>
- *
  * <h2>Performans</h2>
  * <p>SoftHSM init + 5 PFX import + verifier container startup ≈ 30-60 saniye
- * (per-class, bir kez). Sonraki 25 test her biri ≈ 1-2 saniye → toplam
+ * (per-class, bir kez). Sonraki 20 test her biri ≈ 1-2 saniye → toplam
  * yaklaşık 1-2 dakika.</p>
  */
 @Tag("pkcs11-integration")
@@ -274,7 +277,9 @@ class XadesSoftHsmVerifierE2ETest extends AbstractVerifierE2ETest {
         XAdESDocumentPlacementService placement = new XAdESDocumentPlacementService();
 
         // TSA yapılandırılmamış → e-Arşiv/e-Bilet için XAdES-A upgrade
-        // sessizce atlanır ve XAdES-B üretilir. Verifier her ikisini de kabul eder.
+        // çağrılırsa fail-fast TimestampException fırlar. Bu matrisde EArchive/
+        // EBilet fixture'ları kullanılmadığı için (standardFixtures() onları
+        // hariç tutar) sorun çıkmaz.
         TimestampConfigurationService tsConfig = new TimestampConfigurationService(
                 /*tspServerUrl*/ "",
                 /*tspUserId*/ "",

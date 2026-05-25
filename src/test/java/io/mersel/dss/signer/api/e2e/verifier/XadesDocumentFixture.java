@@ -20,12 +20,21 @@ import java.nio.file.Files;
  *
  * <h3>e-Arşiv Raporu hakkında not</h3>
  * <p>{@link #EARSIV_RAPORU} {@link DocumentType#EArchiveReport} ile işaretlidir;
- * production'da bu tetikleme {@code XAdES-B → XAdES-A} yükseltmesi ister ve
- * TSA bağımlılığı doğurur. E2E test ortamında TSA olmadığı için
- * {@code XAdESLevelUpgradeService} sessizce upgrade'i atlar ve belge XAdES-B
- * olarak üretilir. Verifier API bunu XAdES-B-LEVEL olarak görür ve kabul eder
- * (TSA olmadan üretildiği için "indication=TOTAL_PASSED" beklenir, "T" seviye
- * kontrolü yapılmaz).</p>
+ * production'da bu tetikleme <em>zorunlu</em> {@code XAdES-B → XAdES-A}
+ * yükseltmesini ister ve TSA bağımlılığı doğurur. {@code XAdESLevelUpgradeService}
+ * artık TSA tanımlı değilken (veya yükseltme hata alırsa) <em>fail-fast</em>
+ * davranır ve {@link io.mersel.dss.signer.api.exceptions.TimestampException}
+ * fırlatır — silent XAdES-B fallback kaldırılmıştır çünkü XAdES-B'lik bir
+ * e-Arşiv raporu GİB tarafına uygun değildir.</p>
+ *
+ * <p>Bu nedenle TSA-bağımsız E2E test matrislerinde EARSIV_RAPORU
+ * <em>kullanılmamalıdır</em>. Bu fixture {@link #standardFixtures()}'dan
+ * kasıtlı olarak çıkarılmıştır; matriks iterasyonları
+ * {@link #requiresTsa()} sorusunu kontrol etmelidir. EARSIV_RAPORU yine de
+ * enum'da kalır çünkü {@code XAdESDocumentPlacementServiceTest} unit'i
+ * {@code <baslik>} altına yerleştirme stratejisini bu belge tipi üzerinden
+ * doğrular ve fail-fast davranışını sınayan dedike testler için referans
+ * fixture rolünü sürdürür.</p>
  */
 public enum XadesDocumentFixture {
 
@@ -137,6 +146,25 @@ public enum XadesDocumentFixture {
         return documentType;
     }
 
+    /**
+     * Bu fixture'ın imzalanması için TSA (timestamp authority) yapılandırmasının
+     * gerekli olup olmadığını söyler. {@link DocumentType#EArchiveReport} ve
+     * {@link DocumentType#EBiletReport} XAdES-A zorunluluğu nedeniyle TSA
+     * gerektirir; diğer belge tipleri (UBL, HR-XML, OtherXmlDocument) XAdES-B
+     * seviyesinde imzalandığı için TSA-bağımsızdır.
+     *
+     * <p>TSA-bağımsız test matrisleri (örn. {@code XAdESSignAndVerifyE2ETest},
+     * {@code XadesSoftHsmVerifierE2ETest}) iterasyonlarında bu method'u
+     * kontrol ederek TSA gerektiren fixture'ları atlar — aksi halde
+     * {@code XAdESLevelUpgradeService} fail-fast olarak
+     * {@link io.mersel.dss.signer.api.exceptions.TimestampException}
+     * fırlatır.</p>
+     */
+    public boolean requiresTsa() {
+        return documentType == DocumentType.EArchiveReport
+                || documentType == DocumentType.EBiletReport;
+    }
+
     /** Mutlak dosya yolu — Maven testlerde user.dir repo köküdür. */
     public File getFile() {
         return new File(FIXTURE_DIR, fileName).getAbsoluteFile();
@@ -168,14 +196,21 @@ public enum XadesDocumentFixture {
     }
 
     /**
-     * Standart (küçük, &lt;100 KB) XAdES fixture'ları &mdash; SoftHSM ve
-     * verifier-api matrisleri varsayılan olarak bunları kullanır. Çok büyük
-     * dokümanlar (örn. {@link #EFATURA_LARGE}) ayrı suite'lerde koşturulur ki
-     * mevcut roundtrip'lerin determinist süresi bozulmasın.
+     * Standart (küçük, &lt;100 KB) <b>TSA-bağımsız</b> XAdES fixture'ları
+     * &mdash; SoftHSM ve verifier-api matrisleri varsayılan olarak bunları
+     * kullanır. Çok büyük dokümanlar (örn. {@link #EFATURA_LARGE}) ayrı
+     * suite'lerde koşturulur ki mevcut roundtrip'lerin determinist süresi
+     * bozulmasın.
+     *
+     * <p>{@link #EARSIV_RAPORU} <em>kasıtlı olarak hariç tutulmuştur</em>:
+     * XAdES-A yükseltmesi TSA zorunluluğu doğurur ve TSA olmayan E2E
+     * ortamında {@code XAdESLevelUpgradeService} fail-fast davranır
+     * (bkz. javadoc "e-Arşiv Raporu hakkında not"). EARSIV_RAPORU'nun
+     * roundtrip kapsaması TSA-mock'lı dedike bir suite'in işidir.</p>
      */
     public static XadesDocumentFixture[] standardFixtures() {
         return new XadesDocumentFixture[] {
-                EFATURA, EIRSALIYE, EMUSTAHSIL, EARSIV_RAPORU, HRXML
+                EFATURA, EIRSALIYE, EMUSTAHSIL, HRXML
         };
     }
 }
