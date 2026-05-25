@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-25
+
 ### Added
 
 - **`x-log-*` request header'ları artık tüm log satırlarında JSON olarak
