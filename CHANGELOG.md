@@ -63,6 +63,35 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
   gelen `LogHeadersFilter` ile birlikte log dosya boyutları görünür
   şekilde patlardı.
 
+- **`scripts/check-changelog-updated.sh` awk regex'inde gizli bug
+  düzeltildi — her PR yanlışlıkla "CHANGELOG güncellenmemiş" hatası
+  alıyordu.**
+  - **Belirti**: `Verify CHANGELOG.md is updated` GitHub Actions
+    check'i, [Unreleased] bölümüne entry ekleyen PR'larda dahi
+    "[Unreleased] bolumune yeni satir eklenmemis gibi gorunuyor"
+    hatası veriyordu. Hasan'ın PR #20 commit'i ve önceki
+    `feat(observability)` commit'i (`54c8ce0`) hep aynı false
+    positive ile fail dönüyordu; production'a etkisiz çünkü doğrudan
+    main'e push edilen commit'lerde CI failure merge'i engellemiyor,
+    ama PR akışında engelleyici.
+  - **Kök neden**: Awk pattern `/^[+\-] ## \[Unreleased\]/` iki
+    sorunu birden taşıyordu. (a) Unified diff format'ında marker
+    (`+`/`-`) ile içerik arasında boşluk yoktur (`+## ...`), ama
+    pattern literal boşluk bekliyordu. (b) Mevcut `## [Unreleased]`
+    header'ı, eklemeler altına yapıldığı için diff'te **context
+    satır** (` ## [Unreleased]`, space-prefix'li) olarak görünür;
+    karakter sınıfı `[+\-]` boşluğu kapsamadığı için context satır
+    zone'a hiç giremezdi. Sonuç: pattern fiilen hiçbir gerçek diff
+    formatında match etmez.
+  - **Çözüm**: Zone trigger karakter sınıfı `[+\- ]`'ye genişletildi
+    (space dahil), marker ile `##` arasındaki literal boşluk
+    kaldırıldı, zone exit pattern'i `## [0-9]` ile sürüm-numaralı
+    section'lara odaklandı (yine "Unreleased" yakalanmasın diye).
+    Doğrulama: mevcut PR + iki geçmiş feature commit (`54c8ce0`,
+    `a9ae7dd`) artık PASSED dönerken, CHANGELOG güncellemesi
+    olmayan saf-kod commit'i (Hasan'ın orijinal `880c784` commit'i)
+    hâlâ doğru şekilde FAILED veriyor — negatif case korundu.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added

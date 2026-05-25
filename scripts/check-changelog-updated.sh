@@ -118,11 +118,19 @@ fi
 
 # CHANGELOG.md degismis ama [Unreleased] bolumune mi eklendi?
 # diff'i kontrol et — Unreleased icinde + satiri var mi?
+#
+# Unified diff format: '+content' (added), '-content' (removed),
+# ' content' (context). [Unreleased] header'i genellikle context
+# satirdir (mevcut header'in altina ekleme yapilir), bu yuzden zone
+# trigger pattern'i hem +/-/space prefix'lerini hem de marker ile
+# icerik arasinda BOSLUK OLMADAN match etmeli — diff formatinda
+# marker'la icerik bitiisiktir ('+## [Unreleased]', '## [Unreleased]'
+# context icin space-prefix'li hali).
 UNRELEASED_DIFF=$(git diff "${BASE_REF}..${HEAD_REF}" -- CHANGELOG.md | awk '
-    /^@@/      { in_hunk = 1; in_unreleased_zone = 0; next }
-    /^[+\-] ## \[Unreleased\]/ { in_unreleased_zone = 1; next }
-    /^[+\-] ## \[/             { in_unreleased_zone = 0 }
-    in_unreleased_zone && /^[+][^+]/ { print; found = 1 }
+    /^@@/                              { in_hunk = 1; in_unreleased_zone = 0; next }
+    /^[+\- ]## \[Unreleased\]/         { in_unreleased_zone = 1; next }
+    /^[+\- ]## \[[0-9]/                { in_unreleased_zone = 0; next }
+    in_unreleased_zone && /^\+[^+]/    { print; found = 1 }
     END { exit (found ? 0 : 1) }
 ' || true)
 
