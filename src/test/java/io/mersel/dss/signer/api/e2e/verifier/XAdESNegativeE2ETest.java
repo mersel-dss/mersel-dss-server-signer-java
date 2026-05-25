@@ -5,6 +5,7 @@ import eu.europa.esig.dss.xades.signature.XAdESService;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
@@ -238,7 +239,7 @@ class XAdESNegativeE2ETest extends AbstractVerifierE2ETest {
                 fixture.getDocumentType(),
                 signatureId,
                 /*zipped*/ false,
-                defaultMaterial);
+                defaultMaterial, XadesSignatureLevel.XADES_BES);
         assertNotNull(signed, "signResponse null olmamalı");
         byte[] signedBytes = signed.getSignedDocument();
         assertNotNull(signedBytes, "imzalı XML null olmamalı");

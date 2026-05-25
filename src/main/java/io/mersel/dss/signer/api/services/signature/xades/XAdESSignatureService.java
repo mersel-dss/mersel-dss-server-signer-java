@@ -29,6 +29,7 @@ import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 
 /**
@@ -88,18 +89,28 @@ public class XAdESSignatureService {
     /**
      * XML belgesini XAdES imzası ile imzalar.
      *
-     * @param xmlInputStream XML belgesi içeren input stream
-     * @param documentType   Belge tipi (e-Fatura, e-Arşiv vb.)
-     * @param signatureId    İsteğe bağlı imza tanımlayıcısı
-     * @param zipped         Belgenin ZIP formatında olup olmadığı
-     * @param material       İmzalama sertifikası ve private key içeren materyal
+     * @param xmlInputStream  XML belgesi içeren input stream
+     * @param documentType    Belge tipi (e-Fatura, e-Arşiv vb.). İmzanın yerleşim
+     *                        kuralları, UBL extension hazırlığı ve OCSP cache cleanup
+     *                        davranışı bu alana göre belirlenir; ancak XAdES <em>seviyesi</em>
+     *                        artık bu alandan bağımsızdır.
+     * @param signatureId     İsteğe bağlı imza tanımlayıcısı
+     * @param zipped          Belgenin ZIP formatında olup olmadığı
+     * @param material        İmzalama sertifikası ve private key içeren materyal
+     * @param signatureLevel  İstenen XAdES profili. {@link XadesSignatureLevel#XADES_BES}
+     *                        ise yalnızca baseline imza üretilir; TSA çağrılmaz.
+     *                        {@link XadesSignatureLevel#XADES_A} ise archive timestamp eklenir;
+     *                        TSA yapılandırılmamışsa istek fail-fast olarak reddedilir.
+     *                        <strong>null geçilemez</strong>; controller katmanı DTO getter'ı
+     *                        üzerinden XADES_BES fallback'i garantiler.
      * @return İmzalanmış belge ve imza değeri içeren yanıt
      */
     public SignResponse signXml(InputStream xmlInputStream,
             DocumentType documentType,
             String signatureId,
             boolean zipped,
-            SigningMaterial material) {
+            SigningMaterial material,
+            XadesSignatureLevel signatureLevel) {
         try {
             // 1. XML byte'larını çıkar
             byte[] xmlBytes = extractXmlBytes(xmlInputStream, zipped);
@@ -132,7 +143,7 @@ public class XAdESSignatureService {
 
             // 7. İmzayı oluştur
             SignResponse response = createSignature(document, dssDocument, parameters,
-                    documentType, material);
+                    documentType, material, signatureLevel);
 
             // 8. Gerekirse ZIP'le
             if (zipped) {
@@ -160,7 +171,8 @@ public class XAdESSignatureService {
             DSSDocument dssDocument,
             XAdESSignatureParameters parameters,
             DocumentType documentType,
-            SigningMaterial material) throws Exception {
+            SigningMaterial material,
+            XadesSignatureLevel signatureLevel) throws Exception {
 
         // OCSP cache cleanup için signature ID'yi takip et
         String actualSignatureId = null;
@@ -207,9 +219,11 @@ public class XAdESSignatureService {
             DSSDocument signedDocument = xadesService.signDocument(
                     dssDocument, parameters, signatureValue);
 
-            // e-Arşiv Raporu ise XAdES-A seviyesine yükselt
+            // İmza seviyesi tamamen request ile gelen 'signatureLevel' alanına bağlıdır.
+            // documentType artık seviye kararına dahil değildir; rapor tipi olsa bile
+            // XADES_A açıkça istenmediği sürece archive timestamp eklenmez.
             signedDocument = levelUpgradeService.upgradeIfNeeded(
-                    signedDocument, documentType, parameters);
+                    signedDocument, parameters, signatureLevel);
 
             // Signature ID'yi yakala (cache cleanup için)
             SignedDocumentValidator tempValidator = SignedDocumentValidator.fromDocument(signedDocument);
@@ -246,10 +260,12 @@ public class XAdESSignatureService {
                 // 1. Bu imzaya özel cache'i temizle (her imza için)
                 XAdESLevelC.cleanupOcspCache(actualSignatureId);
 
-                // 2. Eski genel cache'leri temizle (sadece e-Arşiv Raporu/XAdES-A upgrade
-                // yapıldıysa)
-                // Çünkü XAdES-A upgrade sırasında çok fazla OCSP/CRL cache'i oluşur
-                if (documentType == DocumentType.EArchiveReport || documentType == DocumentType.EBiletReport) {
+                // 2. Eski genel cache'leri temizle (sadece XADES_A upgrade yapıldıysa)
+                // Çünkü XADES_A upgrade sırasında çok fazla OCSP/CRL cache'i oluşur.
+                // documentType ile koşullamak yerine, gerçekten XADES_A istenmiş mi
+                // olduğuna bakıyoruz: rapor tipinde olup XADES_BES seçilen istek
+                // hiç ek OCSP/CRL üretmez, gereksiz cleanup tetiklenmesin.
+                if (signatureLevel == XadesSignatureLevel.XADES_A) {
                     XAdESLevelC.cleanupOldCaches(5 * 60 * 1000L);
                 }
             }

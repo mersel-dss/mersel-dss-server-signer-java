@@ -6,6 +6,7 @@ import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
@@ -195,7 +196,8 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                 fixture.getDocumentType(),
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,
+                XadesSignatureLevel.XADES_BES);
         long signNanos = System.nanoTime() - signStart;
 
         assertNotNull(signed, "signResponse null olmamalı");
@@ -267,7 +269,8 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.OtherXmlDocument,
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,
+                XadesSignatureLevel.XADES_BES);
 
         assertNotNull(signed, "signResponse null olmamalı");
         byte[] signedBytes = signed.getSignedDocument();
@@ -312,8 +315,11 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
      * taşıdığını doğrular.</p>
      */
     @Test
-    @DisplayName("EArchiveReport: TSA yapılandırılmamışken fail-fast TimestampException fırlatır")
-    void earchiveReportFailsFastWhenTsaUnconfigured() {
+    @DisplayName("XADES_A explicit istendiğinde TSA yapılandırılmamışken fail-fast TimestampException fırlatır")
+    void xadesAFailsFastWhenTsaUnconfigured() {
+        // documentType artık seviye kararına dahil değildir; bu test
+        // request'in explicit XADES_A talebinde fail-fast davranışını
+        // (silent XAdES-B fallback'in oluşmadığını) garanti eder.
         XadesDocumentFixture fixture = XadesDocumentFixture.EARSIV_RAPORU;
         byte[] xmlBytes = fixture.readBytes();
         assertTrue(xmlBytes.length > 0, "e-Arşiv Raporu fixture boş olmamalı");
@@ -330,15 +336,15 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                         fixture.getDocumentType(),
                         "id-" + UUID.randomUUID().toString().replace("-", ""),
                         /*zipped*/ false,
-                        material),
-                "TSA yapılandırılmamışken EArchiveReport için TimestampException beklenir; "
+                        material,
+                        XadesSignatureLevel.XADES_A),
+                "Explicit XADES_A istendiğinde TSA yokken TimestampException beklenir; "
                         + "silent XAdES-B fallback regresyon vakası");
 
         assertEquals("TIMESTAMP_ERROR", ex.getErrorCode(),
                 "GlobalExceptionHandler 503 + TIMESTAMP_ERROR envelope için error code'u görmek zorunda");
-        assertTrue(ex.getMessage().contains("EArchiveReport"),
-                "Mesaj hangi belge tipinin upgrade gerektirdiğini söylemeli ki client doğru "
-                        + "endpoint'i / config property'sini hedefleyebilsin: " + ex.getMessage());
+        assertTrue(ex.getMessage().contains("XADES_A"),
+                "Mesaj hangi profilin TSA gerektirdiğini söylemeli: " + ex.getMessage());
         assertTrue(ex.getMessage().contains("TS_SERVER_HOST"),
                 "Mesaj operatöre yapılandırması gereken property adını söylemeli: " + ex.getMessage());
     }

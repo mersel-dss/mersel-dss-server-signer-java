@@ -30,14 +30,17 @@ internal sealed class XadesSigner : DssSignerHttpBase, IXadesSigner
             throw new ArgumentException("DocumentType.None gönderilemez; geçerli bir XML belge tipi seçin.", nameof(request));
 
         Logger.LogDebug(
-            "DSS Signer XAdES isteği — boyut: {Boyut} bayt, tip: {Tip}, zip: {Zip}",
-            request.Document.Length, request.DocumentType, request.ZipFile);
+            "DSS Signer XAdES isteği — boyut: {Boyut} bayt, tip: {Tip}, zip: {Zip}, seviye: {Seviye}",
+            request.Document.Length, request.DocumentType, request.ZipFile, request.SignatureLevel);
 
         using var form = new MultipartFormDataContent();
         AddFilePart(form, "document", request.Document, request.FileName, "application/xml");
         AddStringPart(form, "documentType", request.DocumentType.ToString());
         AddStringPart(form, "zipFile", request.ZipFile ? "true" : "false");
         AddStringPart(form, "signatureId", request.SignatureId);
+        // signatureLevel asla null değildir (default XADES_BES); enum sabit ismi
+        // sunucu Java enum'u ile birebir eşleşir (XADES_BES / XADES_A).
+        AddStringPart(form, "signatureLevel", request.SignatureLevel.ToString());
 
         using var response = await PostMultipartBinaryAsync("/v1/xadessign", form, ct).ConfigureAwait(false);
         return await BuildSignResultAsync(response, ct).ConfigureAwait(false);
