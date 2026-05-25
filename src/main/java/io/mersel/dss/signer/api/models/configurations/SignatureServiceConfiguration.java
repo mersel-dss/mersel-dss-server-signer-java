@@ -71,9 +71,6 @@ public class SignatureServiceConfiguration {
     @Value("${IS_TUBITAK_TSP:false}")
     private boolean isTubitakTsp;
 
-    @Value("${MA3API_LICENSE_PATH:0}")
-    private String ma3apiLicensePath;
-
     /**
      * Eş zamanlı imza tavanı — tek bir kavram, iki katmanda uygulanır:
      *
@@ -240,10 +237,6 @@ public class SignatureServiceConfiguration {
 
     public String getTimeStampUserPassword() {
         return timeStampUserPassword;
-    }
-
-    public String getMa3apiLicensePath() {
-        return ma3apiLicensePath;
     }
 
     public String getPfxPath() {
