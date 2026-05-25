@@ -59,4 +59,23 @@ public sealed class CertificateInfo
     /// <summary>Sertifika politikaları (Certificate Policies OIDs).</summary>
     [JsonPropertyName("certificatePolicies")]
     public string? CertificatePolicies { get; set; }
+
+    /// <summary>
+    /// Public key algoritması (örn. <c>RSA</c>, <c>EC</c>).
+    /// PR #20 ile eklendi.
+    /// </summary>
+    [JsonPropertyName("publicKeyAlgorithm")]
+    public string? PublicKeyAlgorithm { get; set; }
+
+    /// <summary>
+    /// Base64 encoded X.509 sertifika (DER kodlamanın base64'lenmiş hali).
+    /// </summary>
+    /// <remarks>
+    /// Yalnızca <c>/api/certificates/signingCertificate</c> endpoint'i bu alanı
+    /// doldurur; <c>/api/certificates/list</c> yanıtında <c>null</c> kalır
+    /// (50+ sertifika içeren HSM'lerde payload'un patlamaması için kasıtlı).
+    /// Manuel XAdES <c>&lt;ds:X509Certificate&gt;</c> elementi doldurmak için kullanılır.
+    /// </remarks>
+    [JsonPropertyName("base64EncodedCertificate")]
+    public string? Base64EncodedCertificate { get; set; }
 }

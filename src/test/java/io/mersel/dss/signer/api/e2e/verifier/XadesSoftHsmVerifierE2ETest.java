@@ -6,6 +6,7 @@ import eu.europa.esig.dss.xades.signature.XAdESService;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningContext;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.SigningMaterialFactory;
 import io.mersel.dss.signer.api.services.certificate.CertificateChainBuilderService;
 import io.mersel.dss.signer.api.services.certificate.CertificateValidatorService;
@@ -224,7 +225,7 @@ class XadesSoftHsmVerifierE2ETest extends AbstractVerifierE2ETest {
                 fixture.getDocumentType(),
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material, XadesSignatureLevel.XADES_BES);
 
         assertNotNull(signed, "signResponse null olmamalı (" + key + " / " + fixture + ")");
         assertNotNull(signed.getSignedDocument(),

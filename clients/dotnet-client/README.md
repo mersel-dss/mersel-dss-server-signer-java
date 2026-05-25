@@ -70,6 +70,7 @@ public class FaturaImzalama(IDssSignerClient signer)
 {
     public async Task<byte[]> EFaturaImzala(byte[] ublXml, CancellationToken ct = default)
     {
+        // Varsayılan profil XADES_BES — TSA çağrılmaz, kontör harcanmaz.
         var result = await signer.Xades.SignAsync(ublXml, DocumentType.UblDocument, ct);
         // result.SignedDocument → imzalı XML
         // result.SignatureValue → x-signature-value header'ı (Base64)
@@ -77,6 +78,35 @@ public class FaturaImzalama(IDssSignerClient signer)
     }
 }
 ```
+
+#### XAdES İmza Profilini (BES / A) Seçme
+
+İmza profili artık tamamen request alanı ile belirlenir; `DocumentType` seviye kararına dahil değildir.
+e-Arşiv Raporu / e-Bilet Raporu gibi arşivsel akışlarda XAdES-A istemek isterseniz `SignatureLevel`'ı
+explicit set edin:
+
+```csharp
+// 1) Default (BES) — alan set edilmediğinde otomatik XADES_BES uygulanır.
+var bes = await signer.Xades.SignAsync(new SignXadesRequest
+{
+    Document = ublXml,
+    DocumentType = DocumentType.UblDocument
+    // SignatureLevel = XadesSignatureLevel.XADES_BES (default)
+});
+
+// 2) e-Arşiv Raporu için XAdES-A (archive timestamp eklenir).
+//    Sunucu tarafında TSA yapılandırılmamışsa 503 + TIMESTAMP_ERROR alırsınız.
+var rapor = await signer.Xades.SignAsync(new SignXadesRequest
+{
+    Document = earsivRaporXml,
+    DocumentType = DocumentType.EArchiveReport,
+    SignatureLevel = XadesSignatureLevel.XADES_A
+});
+```
+
+> **Mali sorumluluk**: e-Arşiv Raporu / e-Bilet Raporu gibi 10 yıllık saklama gerektiren akışlarda
+> `XADES_A` talebi çağıran tarafın sorumluluğundadır. Sistem belge tipine bakarak otomatik upgrade
+> yapmaz.
 
 ### WS-Security (SOAP zarfı)
 
@@ -145,6 +175,25 @@ foreach (var sert in liste.Certificates)
 var info = await signer.Certificates.GetInfoAsync();
 Console.WriteLine(info.KeystoreType);   // PKCS11 / PFX
 ```
+
+#### İmzacı Sertifikayı Tek-Shot Alma (Manuel XAdES İçin)
+
+Manuel `<ds:X509Certificate>` doldurmak (örn. UBL-TR 2.1 namespace prefix gereksinimi olan
+özel akışlar) için aktif imzacı sertifikayı base64 encoded biçimde tek bir çağrıyla alabilirsiniz.
+Sunucu `Cache-Control: private, max-age=3600, immutable` döndürür; reverse-proxy / in-memory
+cache'ler tekrarlı çağrılarda 0-RTT lookup yapar.
+
+```csharp
+var imzaciSertifika = await signer.Certificates.GetSigningCertificateAsync();
+
+Console.WriteLine($"Alias: {imzaciSertifika.Alias}");
+Console.WriteLine($"Algoritma: {imzaciSertifika.PublicKeyAlgorithm}");     // RSA / EC
+string base64Der = imzaciSertifika.Base64EncodedCertificate!;
+// ds:X509Certificate elementine doğrudan basılabilir.
+```
+
+> **Not**: `Base64EncodedCertificate` alanı yalnızca bu endpoint'te doludur; `ListAsync()`
+> yanıtında `null` kalır (50+ sertifika içeren HSM'lerde payload'un patlamaması için kasıtlı).
 
 ## Hata Yönetimi
 

@@ -22,4 +22,8 @@ internal sealed class CertificateInfoClient : DssSignerHttpBase, ICertificateInf
     /// <inheritdoc />
     public Task<KeystoreInfo> GetInfoAsync(CancellationToken ct = default)
         => GetJsonAsync<KeystoreInfo>("/api/certificates/info", ct);
+
+    /// <inheritdoc />
+    public Task<CertificateInfo> GetSigningCertificateAsync(CancellationToken ct = default)
+        => GetJsonAsync<CertificateInfo>("/api/certificates/signingCertificate", ct);
 }

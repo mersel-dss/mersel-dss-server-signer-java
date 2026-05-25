@@ -6,6 +6,7 @@ import eu.europa.esig.dss.xades.signature.XAdESService;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
@@ -342,7 +343,7 @@ class CertificateLifecycleNegativeE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.UblDocument,
                 "id-" + UUID.randomUUID().toString().replace("-", ""),
                 /*zipped*/ false,
-                material);
+                material, XadesSignatureLevel.XADES_BES);
         return signed.getSignedDocument();
     }
 
