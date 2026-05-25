@@ -7,6 +7,89 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Fixed
+
+- **HSM heartbeat self-healing — `CKR_SMS_ERROR` (0x80000384) ardından
+  Cryptoki-level otomatik reinit + müşteri tarafı tek-shot recovery.**
+  - **Belirti**: Production'da 22 May 2026 boot sonrası ilk 71 dakikalık
+    happy-path'in ardından bir `C_Sign` çağrısı ~99 dakika asılı kaldı;
+    secure messaging katmanı çöktü ve **3297 ardışık başarısız heartbeat**
+    boyunca (54+ saat) hiç self-recovery olmadı. Müşteri istekleri
+    `{ "code": "SIGNATURE_FAILED", "message": "HSM imza başarısız:
+    CKR_0X80000384" }` dönüyordu — Thales PTK-C vendor tablosundan
+    `CKR_SMS_ERROR` (kaynak:
+    https://thalesdocs.com/gphsm/ptk/5.9/docs/Content/PTK-C_Program/PTK-C_Mechs/vendor_def_error.htm).
+  - **Kök neden — varsayım hatası**: Mevcut heartbeat tasarımı
+    *"pratikte başarısız ilk çağrı HSM tarafında secure channel'ı
+    re-init eder"* varsayımına dayanıyordu. Thales PTK-C tarafında SMS
+    layer komple çöktüğünde xipki wrapper'ın token-level recovery'si
+    (`getSessionInfo` → `C_Login`) **çalışmıyor** çünkü PKCS#11 spec
+    gereği `C_Login` de secure messaging üstünden gider; login bile
+    `CKR_SMS_ERROR` döner. Production log'larında her başarısız
+    iterasyon için satır deseni:
+    ```
+    WARN  org.xipki.pkcs11.wrapper - error getSessionInfo: CKR_0X80000384
+    WARN  org.xipki.pkcs11.wrapper - login failed as user of type CKU_USER: CKR_0X80000384
+    WARN  i.m.d.s.a.s.k.i.HsmHeartbeatScheduler - HSM heartbeat başarısız ...
+    ```
+    Yani recovery için **tek çare** Cryptoki global state'ini
+    `C_Finalize + C_Initialize` ile sıfırdan kurmak — token-level reset
+    yetmiyor.
+  - **Çözüm — iki katmanlı koruma**:
+    - **L1 — Heartbeat self-healing**: `HsmHeartbeatScheduler`
+      ardışık 3 başarısızlığa ulaştığında
+      `IaikPkcs11Module.reinitializeForSmsRecovery(alias, null)` ile
+      Cryptoki tam reset tetikler. Reinit kendi başarısız olursa
+      exponential backoff aktif: 0s → 60s → 5dk → 15dk → 30dk cap.
+      Backoff penceresi içinde heartbeat normal şekilde tetiklenir
+      (HSM dış müdahaleyle iyileşirse hemen fark eder) ama yeniden
+      reinit denemez — log spam ve HSM-side rate limiting önlenir.
+      Başarılı sign sonrası tüm state sıfırlanır (RECOVERED log +
+      counter reset).
+    - **L2 — Caller-path recovery**: `IaikPkcs11Module.signOnSession`
+      yeni alias-aware overload'ı (`ResolvedKey` parametresi alır)
+      müşteri sign isteklerinin yolunda devreye girer. İlk `C_Sign`
+      çağrısı `CKR_SMS_ERROR` veya `CKR_NO_SESSION_KEYS` ile reddedilirse
+      tek-shot reinit + retry yapar. Heartbeat henüz tetiklenmemiş olsa
+      bile **müşteri kısa pencerede 1 fail yerine recovered sonuç görür**.
+      Tek-shot kontratı: retry de SMS-aile hata alırsa **tekrar reinit
+      denenmez** (sonsuz döngü koruması), orijinal hata propagate eder
+      ve L1 backoff'a alır.
+  - **Thread-safety — no-drain rasyoneli**: Reinit anında başka
+    thread'lerin in-flight `token.sign(...)` çağrıları olabilir. Bu
+    çağrıları drain etmiyoruz çünkü `signatureSemaphore.acquire(N)`
+    uzun bir pencere açar ve p99 latency'yi şişirir. Yerine stale
+    referansla patlayan in-flight sign'lar L2 branch'i tarafından
+    yakalanır ve yeni kanal üstünde retry edilir. Reinit ~1-3 sn;
+    kısa pencerede en fazla pool-size kadar müşteri 1 fail görebilir,
+    sonraki istekleri transparent recovery.
+  - **`ResolvedKey` cascade**: Cryptoki finalize tüm key handle'ları
+    invalidate eder. `ResolvedKey.privateKeyHandle` artık `volatile`;
+    reinit dönen taze handle çağıran (heartbeat scheduler / signer)
+    tarafından **in-place** kopyalanır. `IaikPkcs11Signer.sign()`
+    her çağrıda `resolvedKey.privateKeyHandle`'i fresh okur — aynı
+    instance referansını paylaşan tüm holderlar yeni handle'ı bir
+    sonraki sign'da otomatik görür.
+  - **`IaikPkcs11Signer` API değişikliği**: `getPrivateKeyHandle()`
+    deprecated; yerine `getResolvedKey()` eklendi. İçeride
+    `module.signOnSession(resolvedKey, ...)` yeni overload kullanılır.
+    Public `Pkcs11Signer` sözleşmesi değişmedi — sadece internal
+    paket-private signer'da fark var.
+  - **Test kapsamı**: `IaikPkcs11ModuleSmsRecoveryTest` (yeni, 7 test)
+    L2 branch'ini kapsar — SMS-aile hata kodları, non-SMS hata
+    propagation, reinit fail propagation, tek-shot kontratı, nested
+    wrap chain unwrap. `HsmHeartbeatSchedulerTest$L1ReinitSelfHealing`
+    (yeni, 5 test) L1 state machine'ini kapsar — eşik, in-place handle
+    refresh, backoff penceresi, success-resets-state, repeated reinit
+    failures. `IaikPkcs11SignerTest` yeni overload'a uyarlandı +
+    volatile-handle-refresh testi eklendi. Toplam: 434 test yeşil,
+    sıfır regresyon.
+  - **Deferred**: `C_Sign` wrapper-level timeout (JNI hang koruması —
+    99 dakikalık scheduling-1 thread hang'ini deterministik önler) ve
+    Spring Boot actuator `HsmHealthIndicator` (`lastSuccessAtMillis`
+    bazlı readiness probe) ayrı bir PR'da gelecek; bu PR mevcut
+    production incident'ını acil deploy ile çözmek için odaklandı.
+
 ## [0.6.3] - 2026-05-24
 
 ### Changed

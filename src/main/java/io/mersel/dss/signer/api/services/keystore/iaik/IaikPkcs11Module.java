@@ -120,6 +120,23 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     private volatile PKCS11Token token;
 
     /**
+     * {@link #reinitializeForSmsRecovery(String, String)} ile {@link #destroy()}
+     * arasındaki yarış için ayrı bir monitör. {@code synchronized(this)}
+     * {@link #destroy()} tarafından kullanıldığı için reinit'i bağımsız bir
+     * lock üzerinde tutuyoruz — destroy reinit ortasında çalışırsa
+     * {@code reinitLock} drain edip sonra {@code this} üzerinde temizliği yapar.
+     *
+     * <p>Bu lock <b>sign çağrılarını engellemez</b>: reinit sırasında
+     * in-flight {@code token.sign(...)} çağrıları stale token/module
+     * referansıyla yarışır ve çoğu PKCS11Exception ile patlar. Bunlar
+     * {@link #signOnSession(ResolvedKey, byte[], SignatureAlgorithm)}
+     * tek-shot SMS-aile recovery branch'i tarafından yakalanır ve retry
+     * edilir — net etki: müşteri kısa pencerede 1 fail görür ama sonraki
+     * istekleri yeni kanal üzerinden başarılı olur.</p>
+     */
+    private final Object reinitLock = new Object();
+
+    /**
      * PKCS#11 Cryptoki global state'ini <b>biz mi</b> initialize ettik —
      * yoksa aynı process içindeki başka bir bileşen mi?
      *
@@ -223,74 +240,87 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
     @Override
     public void afterPropertiesSet() {
         try {
-            LOGGER.info("ipkcs11wrapper modülü yükleniyor: library={}", libraryPath);
-            module = PKCS11Module.getInstance(libraryPath);
-            InitOutcome outcome = initializeIdempotent(module, forceNullInitArgs);
-            ownsInitialization = outcome.owned;
-            singleThreadedMode = outcome.singleThreaded;
-
-            Token rawToken = resolveToken();
-            TokenInfo info = rawToken.getTokenInfo();
-            LOGGER.info("Token açıldı: label='{}', manufacturer='{}', serial='{}'",
-                safeTrim(info.getLabel()),
-                safeTrim(info.getManufacturerID()),
-                safeTrim(info.getSerialNumber()));
-
-            // PKCS11Token ctor login'i kendisi yapar (pin verilirse). PIN
-            // sağlanmamışsa anonymous okuma denenir; CKA_PRIVATE=true objeleri
-            // okuma/imza patlar — operasyonel görünürlük için warn'leyelim.
-            char[] effectivePin = (pin != null && pin.length > 0) ? pin : null;
-            if (effectivePin == null) {
-                LOGGER.warn("PIN sağlanmadı; private key'lere erişim "
-                    + "CKA_PRIVATE=true objeler için başarısız olacak.");
-            }
-            // ─────────────────────────────────────────────────────────────
-            // Session pool boyutu — üç katmanlı karar:
-            // ─────────────────────────────────────────────────────────────
-            //  1) singleThreadedMode (AKİS / NULL-init-args)
-            //       → her zaman 1; sessionPoolSize property'si yoksayılır.
-            //         PKCS#11 v2.40 §5.4 gereği kütüphane thread güvencesi
-            //         vermez; paralel session = SIGSEGV / sessiz data
-            //         corruption riski.
-            //
-            //  2) sessionPoolSize > 0  (operatör explicit set etti)
-            //       → wrapper'a {@code numSessions=sessionPoolSize} geç;
-            //         wrapper yine HSM'in {@code tokenMaxSessionCount}
-            //         raporuyla {@code min} alır (HSM-tarafı tavanı korunur).
-            //         Bu yol, default {@code Math.min(32, tokenMaxSessionCount)}
-            //         hard cap'ini by-pass etmek için tasarlandı —
-            //         Luna/ProtectServer/Utimaco gibi yüksek-paralel HSM'lerde
-            //         throughput'un 32'de sessizce tıkanmasını önler.
-            //
-            //  3) sessionPoolSize <= 0 (default / unset)
-            //       → wrapper default'u uygula; cap=32. Geriye uyumlu davranış.
-            // ─────────────────────────────────────────────────────────────
-            if (singleThreadedMode) {
-                LOGGER.info("AKİS uyumluluk modu aktif: PKCS11Token tek session ile "
-                    + "yaratılıyor (kütüphane paralel session güvencesi vermiyor; "
-                    + "MAX_SESSION_COUNT={} değeri yoksayıldı).", sessionPoolSize);
-                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
-                    Integer.valueOf(1));
-            } else if (sessionPoolSize > 0) {
-                LOGGER.info("PKCS11Token session havuzu explicit yapılandırıldı: "
-                    + "numSessions={} (wrapper, HSM tokenMaxSessionCount ile min "
-                    + "alacak; wrapper'ın default 32-cap'i by-pass edildi).", sessionPoolSize);
-                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
-                    Integer.valueOf(sessionPoolSize));
-            } else {
-                LOGGER.info("PKCS11Token session havuzu default modda — wrapper "
-                    + "hard cap = min(32, tokenMaxSessionCount). Yüksek concurrency "
-                    + "için MAX_SESSION_COUNT env var'ı ile artırılabilir (üretim "
-                    + "yolu zaten bu değeri pool'a besler; bu mesaj test/CLI yolunda görülür).");
-                token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin);
-            }
-            if (effectivePin != null) {
-                LOGGER.info("HSM token'a USER olarak login başarılı.");
-            }
+            openTokenAndModuleInternal(false /* isReinit */);
         } catch (Exception e) {
             cleanupOnFailure();
             throw new KeyStoreException(
                 "ipkcs11wrapper modülü initialize edilemedi: " + libraryPath, e);
+        }
+    }
+
+    /**
+     * PKCS#11 modülü + token açma + login akışı. {@link #afterPropertiesSet()}
+     * ile {@link #reinitializeForSmsRecovery(String, String)} aynı kod
+     * yolunu paylaşır — boot ile recovery arasında davranış farkı olmamalı.
+     *
+     * <p>{@code isReinit=true} sadece log severity'sini değiştirir (recovery
+     * patikası WARN ile başlar, operatör için sinyal güçlüdür).</p>
+     */
+    private void openTokenAndModuleInternal(boolean isReinit) throws Exception {
+        LOGGER.info("ipkcs11wrapper modülü yükleniyor: library={}, mode={}",
+            libraryPath, isReinit ? "REINIT" : "BOOT");
+        module = PKCS11Module.getInstance(libraryPath);
+        InitOutcome outcome = initializeIdempotent(module, forceNullInitArgs);
+        ownsInitialization = outcome.owned;
+        singleThreadedMode = outcome.singleThreaded;
+
+        Token rawToken = resolveToken();
+        TokenInfo info = rawToken.getTokenInfo();
+        LOGGER.info("Token açıldı: label='{}', manufacturer='{}', serial='{}'",
+            safeTrim(info.getLabel()),
+            safeTrim(info.getManufacturerID()),
+            safeTrim(info.getSerialNumber()));
+
+        // PKCS11Token ctor login'i kendisi yapar (pin verilirse). PIN
+        // sağlanmamışsa anonymous okuma denenir; CKA_PRIVATE=true objeleri
+        // okuma/imza patlar — operasyonel görünürlük için warn'leyelim.
+        char[] effectivePin = (pin != null && pin.length > 0) ? pin : null;
+        if (effectivePin == null) {
+            LOGGER.warn("PIN sağlanmadı; private key'lere erişim "
+                + "CKA_PRIVATE=true objeler için başarısız olacak.");
+        }
+        // ─────────────────────────────────────────────────────────────
+        // Session pool boyutu — üç katmanlı karar:
+        // ─────────────────────────────────────────────────────────────
+        //  1) singleThreadedMode (AKİS / NULL-init-args)
+        //       → her zaman 1; sessionPoolSize property'si yoksayılır.
+        //         PKCS#11 v2.40 §5.4 gereği kütüphane thread güvencesi
+        //         vermez; paralel session = SIGSEGV / sessiz data
+        //         corruption riski.
+        //
+        //  2) sessionPoolSize > 0  (operatör explicit set etti)
+        //       → wrapper'a {@code numSessions=sessionPoolSize} geç;
+        //         wrapper yine HSM'in {@code tokenMaxSessionCount}
+        //         raporuyla {@code min} alır (HSM-tarafı tavanı korunur).
+        //         Bu yol, default {@code Math.min(32, tokenMaxSessionCount)}
+        //         hard cap'ini by-pass etmek için tasarlandı —
+        //         Luna/ProtectServer/Utimaco gibi yüksek-paralel HSM'lerde
+        //         throughput'un 32'de sessizce tıkanmasını önler.
+        //
+        //  3) sessionPoolSize <= 0 (default / unset)
+        //       → wrapper default'u uygula; cap=32. Geriye uyumlu davranış.
+        // ─────────────────────────────────────────────────────────────
+        if (singleThreadedMode) {
+            LOGGER.info("AKİS uyumluluk modu aktif: PKCS11Token tek session ile "
+                + "yaratılıyor (kütüphane paralel session güvencesi vermiyor; "
+                + "MAX_SESSION_COUNT={} değeri yoksayıldı).", sessionPoolSize);
+            token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
+                Integer.valueOf(1));
+        } else if (sessionPoolSize > 0) {
+            LOGGER.info("PKCS11Token session havuzu explicit yapılandırıldı: "
+                + "numSessions={} (wrapper, HSM tokenMaxSessionCount ile min "
+                + "alacak; wrapper'ın default 32-cap'i by-pass edildi).", sessionPoolSize);
+            token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin,
+                Integer.valueOf(sessionPoolSize));
+        } else {
+            LOGGER.info("PKCS11Token session havuzu default modda — wrapper "
+                + "hard cap = min(32, tokenMaxSessionCount). Yüksek concurrency "
+                + "için MAX_SESSION_COUNT env var'ı ile artırılabilir (üretim "
+                + "yolu zaten bu değeri pool'a besler; bu mesaj test/CLI yolunda görülür).");
+            token = new PKCS11Token(rawToken, true /* readOnly */, effectivePin);
+        }
+        if (effectivePin != null) {
+            LOGGER.info("HSM token'a USER olarak login başarılı.");
         }
     }
 
@@ -340,6 +370,106 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             } catch (Exception e) {
                 LOGGER.warn("Modül kapatılırken hata: {}", e.getMessage());
             }
+        }
+    }
+
+    /**
+     * Thales PTK-C / SafeNet ailesinde gözlenen secure messaging
+     * çöküşünden (CKR_SMS_ERROR=0x80000384, CKR_NO_SESSION_KEYS=0x80000387)
+     * agresif kurtarma: Cryptoki modülünü {@code C_Finalize} +
+     * {@code C_Initialize} ile yeniden başlatır, token'a yeniden login
+     * eder, key handle cache'ini temizler ve <b>aynı alias için yeni
+     * handle'ı re-resolve edip döner</b>.
+     *
+     * <h2>Neden Cryptoki-level reset?</h2>
+     * <p>Production'da gözlendi (Mayıs 2026 incident, 3297x ardışık fail,
+     * 54+ saat self-recovery yok): xipki wrapper kendi içinde session
+     * recovery dener — önce {@code C_GetSessionInfo}, sonra
+     * {@code C_Login}. Ama PTK-C tarafında secure messaging katmanı
+     * komple çöktüğünde {@code C_Login} de CKR_SMS_ERROR atar çünkü
+     * spec gereği login de secure channel üstünden gider. <b>Tek çare:
+     * Cryptoki global state'ini sıfırdan kurmak.</b></p>
+     *
+     * <h2>Thread-safety / in-flight sign çağrıları</h2>
+     * <p>Reinit anında başka thread'ler {@code token.sign(...)} ortasında
+     * olabilir. Onları durdurmuyoruz — drain {@code signatureSemaphore}
+     * üzerinde uzun bir pencere açar ve customer p99 latency'yi şişirir.
+     * Yerine: stale token/module referansları üstünde patlayan in-flight
+     * sign'lar {@link #signOnSession(ResolvedKey, byte[], SignatureAlgorithm)}
+     * SMS-aile recovery branch'i tarafından yakalanır ve yeni kanal
+     * üstünde retry edilir. Net etki: kısa pencerede 1 fail, sonra
+     * transparent recovery.</p>
+     *
+     * <h2>Re-resolve cascade</h2>
+     * <p>Cryptoki C_Finalize/C_Initialize <b>tüm handle'ları invalidate
+     * eder</b> — eski key handle bir daha geçerli değil.
+     * {@link #resolvedKeyCache} temizlenir; aynı alias için yeni handle
+     * resolve edilir; <b>çağıran (heartbeat scheduler / signer)</b>
+     * dönen {@link ResolvedKey}'i alır VEYA elindeki referansı
+     * in-place günceller. {@link ResolvedKey} field'ları
+     * {@code volatile}; refresh atomik.</p>
+     *
+     * @param alias  re-resolve için CKA_LABEL (mevcut scheduler'ın
+     *               cached alias'ı). {@code null}/boş ise serial bazlı arama.
+     * @param serialHex sertifika serial; {@code null} ise alias yeterli.
+     * @return yeni handle ile {@link ResolvedKey} (her zaman taze instance).
+     * @throws KeyStoreException Cryptoki-level reset başarısız olursa
+     *         (HSM gerçekten ölü, network kesik, partition lock vb.).
+     *         Çağıran bu durumda exponential backoff'a girmeli.
+     */
+    public ResolvedKey reinitializeForSmsRecovery(String alias, String serialHex) {
+        synchronized (reinitLock) {
+            long t0 = System.currentTimeMillis();
+            LOGGER.warn("Module REINIT başlıyor — secure messaging recovery "
+                + "(alias='{}', serialHex='{}')", alias, serialHex);
+
+            closeQuietlyForReinit();
+
+            try {
+                openTokenAndModuleInternal(true /* isReinit */);
+            } catch (Exception e) {
+                throw new KeyStoreException(
+                    "Module reinit (C_Finalize+C_Initialize) başarısız: " + e.getMessage(), e);
+            }
+
+            resolvedKeyCache.clear();
+            ResolvedKey refreshed = resolveFromToken(alias, serialHex);
+
+            long elapsed = System.currentTimeMillis() - t0;
+            LOGGER.info("Module REINIT başarılı: alias='{}', yeni keyHandle=0x{}, elapsed={}ms",
+                refreshed.alias, Long.toHexString(refreshed.privateKeyHandle), elapsed);
+            return refreshed;
+        }
+    }
+
+    /**
+     * Reinit için sessiz kapanış. {@link #destroy()}'dan farkı:
+     * <ul>
+     *   <li>{@code synchronized(this)} <b>almıyor</b> — çağıran
+     *       {@code reinitLock} altında zaten.</li>
+     *   <li>{@code module.finalize()} ownership'ten bağımsız <b>her zaman</b>
+     *       çağrılır — paylaşımlı state riskini reinit zamanında kabul
+     *       ediyoruz; secure channel zaten ölü, başka bileşen de bunu
+     *       hissediyordur.</li>
+     *   <li>Hata olursa swallow + debug log; reinit akışı kesilmez.</li>
+     * </ul>
+     */
+    private void closeQuietlyForReinit() {
+        if (token != null) {
+            try { token.logout(); } catch (Exception ignored) { }
+            try { token.closeAllSessions(); } catch (Exception ignored) { }
+            token = null;
+        }
+        if (module != null) {
+            try {
+                module.finalize(null);
+                LOGGER.debug("Reinit: PKCS#11 modülü finalize edildi.");
+            } catch (Exception e) {
+                LOGGER.debug("Reinit: module.finalize() hatası (yoksayıldı): {}", e.getMessage());
+            }
+            module = null;
+            ownsInitialization = false;
+            singleThreadedMode = false;
         }
     }
 
@@ -531,6 +661,110 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      */
     private static final byte[] HEARTBEAT_PAYLOAD =
         "mersel-hsm-heartbeat-ping-v1".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+
+    /**
+     * SafeNet PTK-C / Luna ailesine özgü vendor-defined hata kodları
+     * (kaynak: Thales PTK-C Vendor-Defined Error Codes tablosu).
+     *
+     * <ul>
+     *   <li>{@code 0x80000384} = CKR_SMS_ERROR — Secure Messaging System
+     *       genel hatası (HSM ya da network kaynaklı).</li>
+     *   <li>{@code 0x80000387} = CKR_NO_SESSION_KEYS — secure messaging
+     *       session-key'leri reap edildi (idle teardown).</li>
+     * </ul>
+     *
+     * <p>Bu iki kod aynı kök nedenin (SMS layer çöküşü) iki yüzü; ikisinde de
+     * tek-shot strateji: {@link #reinitializeForSmsRecovery(String, String)}
+     * ile Cryptoki global state'ini sıfırdan kurup yeni handle ile retry.</p>
+     */
+    private static final long CKR_SMS_ERROR        = 0x80000384L;
+    private static final long CKR_NO_SESSION_KEYS  = 0x80000387L;
+
+    private static boolean isSmsFamilyError(long errorCode) {
+        return errorCode == CKR_SMS_ERROR || errorCode == CKR_NO_SESSION_KEYS;
+    }
+
+    /**
+     * Alias-aware {@code signOnSession} overload'u — {@link IaikPkcs11Signer}
+     * müşteri isteklerinde bu yolu kullanır. Mevcut handle-bazlı overload
+     * heartbeat scheduler tarafından korunur (heartbeat L1 yolu üzerinden
+     * reinit'i bağımsız tetikler).
+     *
+     * <h2>L2 — caller-path SMS-aile recovery</h2>
+     * <p>İlk {@code C_Sign} çağrısı {@code CKR_SMS_ERROR} (0x80000384) veya
+     * {@code CKR_NO_SESSION_KEYS} (0x80000387) ile reddedilirse:</p>
+     * <ol>
+     *   <li>{@link #reinitializeForSmsRecovery(String, String)} ile
+     *       Cryptoki tam reset.</li>
+     *   <li>Dönen yeni {@link ResolvedKey} alanları, çağıranın elindeki
+     *       {@code rk} instance'ına <b>in-place</b> kopyalanır (volatile
+     *       field write; aynı referansı tutan heartbeat scheduler yeni
+     *       handle'ı görür).</li>
+     *   <li>Sign tek kez retry edilir; bu kez yeni kanal üstünden.</li>
+     * </ol>
+     *
+     * <p>Retry de SMS-aile hatası alırsa <b>tekrar reinit denemiyoruz</b>
+     * (sonsuz döngü riski); orijinal exception propagate eder. Heartbeat
+     * L1 yolu o zaman exponential backoff'a alır.</p>
+     *
+     * <p>Eşzamanlı çağrılarda yarış: birden çok request thread'i aynı
+     * anda SMS hatası alıp reinit'e girebilir. {@code reinitLock} ilkini
+     * çalıştırır, diğerleri lock'ta bekler; lock serbest kaldığında yeni
+     * (canlı) handle'ı görürler ve retry'ları direkt başarılı olur.</p>
+     */
+    byte[] signOnSession(ResolvedKey rk,
+                         byte[] dataToSign,
+                         SignatureAlgorithm signatureAlgorithm) {
+        try {
+            return signOnSession(rk.privateKeyHandle, dataToSign, signatureAlgorithm);
+        } catch (io.mersel.dss.signer.api.exceptions.SignatureException sigEx) {
+            long smsErrorCode = extractSmsFamilyErrorCode(sigEx);
+            if (smsErrorCode == 0L) {
+                throw sigEx;
+            }
+            LOGGER.warn("L2 SMS-aile hata yakalandı (CKR=0x{}, alias='{}'); "
+                + "module reinit + tek-shot retry deniyor.",
+                Long.toHexString(smsErrorCode), rk.alias);
+            ResolvedKey refreshed;
+            try {
+                refreshed = reinitializeForSmsRecovery(rk.alias, null);
+            } catch (Exception reinitEx) {
+                LOGGER.error("L2 reinit başarısız (alias='{}'): {}; orijinal SMS "
+                    + "hatası propagate ediliyor.", rk.alias, reinitEx.getMessage());
+                throw sigEx;
+            }
+            // In-place refresh — çağıranın referansları (heartbeat scheduler
+            // dahil) yeni handle'ı bir sonraki sign'da otomatik okur.
+            rk.privateKeyHandle = refreshed.privateKeyHandle;
+            rk.certificate = refreshed.certificate;
+            rk.certificateChain = refreshed.certificateChain;
+            LOGGER.info("L2 reinit tamam, sign retry'sı atılıyor (alias='{}', yeni handle=0x{}).",
+                rk.alias, Long.toHexString(rk.privateKeyHandle));
+            // Tek-shot — retry'da yine SMS-aile hatası gelirse oraya kadar.
+            return signOnSession(rk.privateKeyHandle, dataToSign, signatureAlgorithm);
+        }
+    }
+
+    /**
+     * {@link io.mersel.dss.signer.api.exceptions.SignatureException} sarıcısının
+     * altındaki PKCS11Exception'a bakıp SMS-aile error code'unu çıkarır;
+     * SMS-aile değilse {@code 0L} döner.
+     */
+    private static long extractSmsFamilyErrorCode(Throwable t) {
+        Throwable cur = t;
+        // Genelde sigEx.getCause() == PKCS11Exception; defensive bir kaç hop
+        // dolaş — gelecekte wrap zinciri büyürse de çalışsın.
+        for (int i = 0; cur != null && i < 5; i++, cur = cur.getCause()) {
+            if (cur instanceof PKCS11Exception) {
+                long code = ((PKCS11Exception) cur).getErrorCode();
+                if (isSmsFamilyError(code)) {
+                    return code;
+                }
+                return 0L;
+            }
+        }
+        return 0L;
+    }
 
     byte[] signOnSession(long privateKeyHandle,
                          byte[] dataToSign,
@@ -1116,8 +1350,13 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
      */
     static final class ResolvedKey {
         String alias;
-        X509Certificate certificate;
-        List<X509Certificate> certificateChain;
-        long privateKeyHandle;
+        // SMS recovery (CKR_SMS_ERROR / CKR_NO_SESSION_KEYS) sonrası
+        // reinitializeForSmsRecovery() çağrısı bu instance'ı in-place
+        // günceller — çağıran (IaikPkcs11Signer, HsmHeartbeatScheduler)
+        // referansı koruyup yeni handle ile devam edebilsin. volatile,
+        // sign-thread'in stale long okumamasını garantiler.
+        volatile X509Certificate certificate;
+        volatile List<X509Certificate> certificateChain;
+        volatile long privateKeyHandle;
     }
 }

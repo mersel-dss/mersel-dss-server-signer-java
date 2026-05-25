@@ -124,14 +124,29 @@ public class SignatureServiceConfiguration {
     private int maxSessionCount;
 
     /**
-     * SafeNet HSM ailesinde gözlenen idle-time secure channel teardown
-     * davranışını (vendor hata kodu {@code CKR_NO_SESSION_KEYS = 0x80000387})
-     * önlemek için periyodik gerçek {@code C_Sign} heartbeat'i aktive eder.
+     * SafeNet / Thales HSM ailesinde gözlenen secure messaging katmanı
+     * çöküşlerini (vendor hata kodları:
+     * {@code CKR_NO_SESSION_KEYS = 0x80000387} — Luna NTLS idle teardown;
+     * {@code CKR_SMS_ERROR = 0x80000384} — PTK-C Secure Messaging System
+     * çöküşü, üretimde gözlendi) önlemek için periyodik gerçek
+     * {@code C_Sign} heartbeat'i aktive eder.
+     *
+     * <h2>Self-healing davranışı (v0.6.4+)</h2>
+     * <p>Heartbeat 3 ardışık başarısızlığa ulaşırsa
+     * {@code IaikPkcs11Module.reinitializeForSmsRecovery} ile Cryptoki
+     * global state'ini {@code C_Finalize + C_Initialize} ile yeniden
+     * kurar; key handle'ları otomatik refresh eder. Reinit başarısızsa
+     * exponential backoff: 0s → 60s → 5dk → 15dk → 30dk cap.</p>
+     *
+     * <p>Müşteri sign isteği de SMS-aile hata alırsa
+     * {@code IaikPkcs11Module.signOnSession(ResolvedKey,...)} tek-shot
+     * reinit + retry yapar — heartbeat henüz tetiklenmemişse bile
+     * müşteri kısa pencerede recovered sonuç görür.</p>
      *
      * <p>Default {@code false} (opt-in). PFX modunda bayrak aktif edilse bile
      * ilgili scheduler bean'i Spring container'da yaratılmaz — etkisizdir.
-     * SafeNet Luna / ProtectServer kullanıcıları için tipik üretim ayarı:
-     * {@code HSM_HEARTBEAT_ENABLED=true}.</p>
+     * SafeNet Luna / ProtectServer / Thales PTK-C kullanıcıları için tipik
+     * üretim ayarı: {@code HSM_HEARTBEAT_ENABLED=true}.</p>
      */
     @Value("${HSM_HEARTBEAT_ENABLED:false}")
     private boolean hsmHeartbeatEnabled;

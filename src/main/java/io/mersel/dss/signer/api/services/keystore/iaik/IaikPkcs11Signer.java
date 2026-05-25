@@ -41,15 +41,30 @@ final class IaikPkcs11Signer implements Pkcs11Signer {
 
     @Override
     public byte[] sign(byte[] dataToSign, SignatureAlgorithm signatureAlgorithm) {
-        return module.signOnSession(resolvedKey.privateKeyHandle, dataToSign, signatureAlgorithm);
+        // Alias-aware overload (L2 SMS-aile recovery branch) — handle her
+        // sign çağrısında {@code resolvedKey.privateKeyHandle} (volatile)
+        // üzerinden fresh okunur. Reinit sonrası in-place refresh edilen
+        // handle'ı bir sonraki sign otomatik kullanır; cascade transparent.
+        return module.signOnSession(resolvedKey, dataToSign, signatureAlgorithm);
     }
 
     /**
-     * HSM heartbeat scheduler için package-private erişim. Aynı paketteki
-     * {@link HsmHeartbeatScheduler} sabit interval'de {@link IaikPkcs11Module#heartbeatSign}
-     * çağırırken bu handle'a ihtiyaç duyar; public {@link Pkcs11Signer}
-     * sözleşmesini handle ile kirletmemek için package-private bırakıldı.
+     * HSM heartbeat scheduler için package-private erişim. Heartbeat L1
+     * yolu üzerinden Cryptoki reinit'i bağımsız tetikler ve reinit sonrası
+     * bu {@link ResolvedKey} instance'ı in-place refresh edilir — scheduler
+     * her heartbeat tick'inde fresh handle okur.
+     *
+     * <p>Public {@link Pkcs11Signer} sözleşmesini handle ile kirletmemek
+     * için package-private bırakıldı.</p>
      */
+    IaikPkcs11Module.ResolvedKey getResolvedKey() {
+        return resolvedKey;
+    }
+
+    /** @deprecated {@link #getResolvedKey()} kullanın — handle volatile
+     *  field'dan okunur, reinit sonrası fresh.
+     */
+    @Deprecated
     long getPrivateKeyHandle() {
         return resolvedKey.privateKeyHandle;
     }

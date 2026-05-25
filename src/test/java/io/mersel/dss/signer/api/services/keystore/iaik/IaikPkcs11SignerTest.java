@@ -123,7 +123,9 @@ class IaikPkcs11SignerTest {
             byte[] hsmSignature = new byte[]{0x70, 0x71};
             long handle = 0xDEADBEEFL;
 
-            when(moduleMock.signOnSession(eq(handle), any(byte[].class), any(SignatureAlgorithm.class)))
+            // L2 SMS-aile recovery branch'i ResolvedKey overload'unu kullanır.
+            when(moduleMock.signOnSession(any(IaikPkcs11Module.ResolvedKey.class),
+                any(byte[].class), any(SignatureAlgorithm.class)))
                 .thenReturn(hsmSignature);
 
             IaikPkcs11Module.ResolvedKey rk =
@@ -134,11 +136,18 @@ class IaikPkcs11SignerTest {
             assertArrayEquals(hsmSignature, result,
                 "Signer modülün dönen byte'larını mutate etmemeli");
 
+            ArgumentCaptor<IaikPkcs11Module.ResolvedKey> rkCaptor =
+                ArgumentCaptor.forClass(IaikPkcs11Module.ResolvedKey.class);
             ArgumentCaptor<byte[]> dataCaptor = ArgumentCaptor.forClass(byte[].class);
             ArgumentCaptor<SignatureAlgorithm> algCaptor =
                 ArgumentCaptor.forClass(SignatureAlgorithm.class);
-            verify(moduleMock, times(1)).signOnSession(eq(handle),
+            verify(moduleMock, times(1)).signOnSession(rkCaptor.capture(),
                 dataCaptor.capture(), algCaptor.capture());
+            assertSame(rk, rkCaptor.getValue(),
+                "Signer kendi ResolvedKey referansını modüle geçirmeli — "
+                + "in-place handle refresh için aynı instance paylaşılmalı");
+            assertEquals(handle, rkCaptor.getValue().privateKeyHandle,
+                "ResolvedKey üzerindeki handle modüle aktarılmalı");
             assertSame(data, dataCaptor.getValue(),
                 "Veri direkt referans olarak modüle geçirilmeli — gereksiz kopya yok");
             assertEquals(SignatureAlgorithm.RSA_SHA256, algCaptor.getValue());
@@ -146,8 +155,9 @@ class IaikPkcs11SignerTest {
 
         @Test
         void multipleSignCalls_shouldEachInvokeModule() {
-            when(moduleMock.signOnSession(any(Long.class), any(byte[].class),
-                any(SignatureAlgorithm.class))).thenReturn(new byte[]{0x01});
+            when(moduleMock.signOnSession(any(IaikPkcs11Module.ResolvedKey.class),
+                any(byte[].class), any(SignatureAlgorithm.class)))
+                .thenReturn(new byte[]{0x01});
 
             IaikPkcs11Module.ResolvedKey rk =
                 resolvedKey(1L, "x", Collections.singletonList(cert));
@@ -157,16 +167,19 @@ class IaikPkcs11SignerTest {
             signer.sign(new byte[]{2}, SignatureAlgorithm.RSA_SHA384);
             signer.sign(new byte[]{3}, SignatureAlgorithm.RSA_SHA512);
 
-            verify(moduleMock, times(3))
-                .signOnSession(any(Long.class), any(byte[].class), any(SignatureAlgorithm.class));
-            verify(moduleMock).signOnSession(eq(1L), any(byte[].class),
+            verify(moduleMock, times(3)).signOnSession(
+                any(IaikPkcs11Module.ResolvedKey.class),
+                any(byte[].class),
+                any(SignatureAlgorithm.class));
+            verify(moduleMock).signOnSession(eq(rk), any(byte[].class),
                 eq(SignatureAlgorithm.RSA_SHA384));
         }
 
         @Test
         void differentSignaturesAlgorithms_areForwarded() {
-            when(moduleMock.signOnSession(any(Long.class), any(byte[].class),
-                any(SignatureAlgorithm.class))).thenReturn(new byte[]{0x01});
+            when(moduleMock.signOnSession(any(IaikPkcs11Module.ResolvedKey.class),
+                any(byte[].class), any(SignatureAlgorithm.class)))
+                .thenReturn(new byte[]{0x01});
 
             IaikPkcs11Module.ResolvedKey rk =
                 resolvedKey(42L, "ecdsa-key", Collections.singletonList(cert));
@@ -180,8 +193,38 @@ class IaikPkcs11SignerTest {
                 SignatureAlgorithm.RSA_SSA_PSS_SHA256_MGF1
             }) {
                 signer.sign(new byte[]{1}, alg);
-                verify(moduleMock).signOnSession(eq(42L), any(byte[].class), eq(alg));
+                verify(moduleMock).signOnSession(eq(rk), any(byte[].class), eq(alg));
             }
+        }
+
+        @Test
+        void resolvedKey_volatileHandleRefresh_isPickedUpByNextSign() {
+            // L1/L2 reinit sonrası ResolvedKey.privateKeyHandle in-place
+            // güncellenir; signer aynı ResolvedKey referansını paylaştığı
+            // için bir sonraki sign çağrısı yeni handle ile gitmeli.
+            when(moduleMock.signOnSession(any(IaikPkcs11Module.ResolvedKey.class),
+                any(byte[].class), any(SignatureAlgorithm.class)))
+                .thenReturn(new byte[]{0x01});
+
+            IaikPkcs11Module.ResolvedKey rk =
+                resolvedKey(0xAAA, "x", Collections.singletonList(cert));
+            IaikPkcs11Signer signer = new IaikPkcs11Signer(moduleMock, rk);
+
+            signer.sign(new byte[]{1}, SignatureAlgorithm.RSA_SHA256);
+
+            // Reinit simülasyonu: handle yenilendi.
+            rk.privateKeyHandle = 0xBBBL;
+            signer.sign(new byte[]{2}, SignatureAlgorithm.RSA_SHA256);
+
+            ArgumentCaptor<IaikPkcs11Module.ResolvedKey> rkCaptor =
+                ArgumentCaptor.forClass(IaikPkcs11Module.ResolvedKey.class);
+            verify(moduleMock, times(2)).signOnSession(rkCaptor.capture(),
+                any(byte[].class), any(SignatureAlgorithm.class));
+            // Aynı reference paylaşılır; her iki çağrıda da current handle okunur.
+            assertSame(rk, rkCaptor.getAllValues().get(0));
+            assertSame(rk, rkCaptor.getAllValues().get(1));
+            assertEquals(0xBBBL, rk.privateKeyHandle,
+                "Reinit sonrası handle in-place güncellendi.");
         }
     }
 

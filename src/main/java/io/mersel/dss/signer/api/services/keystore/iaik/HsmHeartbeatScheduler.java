@@ -14,42 +14,73 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * SafeNet HSM ailesinde gözlenen idle-time secure channel teardown
- * davranışını önleyen periyodik gerçek-imza heartbeat'i.
+ * SafeNet / Thales HSM ailesinde gözlenen idle-time secure messaging
+ * teardown davranışını önleyen periyodik gerçek-imza heartbeat'i +
+ * Cryptoki-level <b>self-healing</b> kontrolörü.
  *
  * <h2>Neden var?</h2>
- * <p>SafeNet Luna / ProtectServer / ProtectToolkit HSM'lerinde client ile
- * HSM arasındaki secure messaging session-key'leri belirli bir idle
- * süresinden sonra HSM tarafında reap edilir. Bir sonraki kullanıcı
- * isteğinde xipki {@code PKCS11Token} havuzdan cached session handle'ı
- * verir, üstüne {@code Session.login()} çağrılır ve HSM tarafında secure
- * channel zaten yıkıldığı için secure messaging key türetimi başarısız
- * olur. Sonuç: vendor hata kodu {@code CKR_NO_SESSION_KEYS = 0x80000387}.</p>
+ * <p>SafeNet Luna / ProtectServer / Thales PTK-C HSM ailesinde client
+ * ile HSM arasındaki secure messaging session-key'leri belirli bir
+ * idle süresinden sonra HSM tarafında reap edilir veya network/TLS
+ * tarafından düşürülür. İlk müşteri imza isteği bu sırada gelirse
+ * vendor hata kodlarını alırsınız:</p>
+ * <ul>
+ *   <li>{@code CKR_NO_SESSION_KEYS = 0x80000387} — Luna NTLS idle teardown</li>
+ *   <li>{@code CKR_SMS_ERROR = 0x80000384} — PTK-C Secure Messaging System
+ *       genel çöküşü (HSM veya network kaynaklı; üretimde gözlendi)</li>
+ * </ul>
  *
- * <p>Operasyon ekipleri tarihsel olarak bunu dışarıdan periyodik bir cron
- * script'i (boş XML imzala) ile çözdü. Bu scheduler aynı stratejiyi
- * uygulama içine taşır: konfigürasyon-tabanlı, opt-in, operasyonel bus
- * factor'ünü azaltır, dış sistem bağımlılığı yok.</p>
+ * <h2>İki katmanlı koruma</h2>
+ * <ol>
+ *   <li><b>Heartbeat (L1, bu sınıf)</b>: periyodik gerçek {@code C_Sign}
+ *       round-trip'i secure messaging katmanını sıcak tutar. Başarısız
+ *       olursa exponential backoff ile Cryptoki-level reinit tetikler.</li>
+ *   <li><b>Caller-path recovery (L2,
+ *       {@link IaikPkcs11Module#signOnSession(IaikPkcs11Module.ResolvedKey,
+ *       byte[], SignatureAlgorithm)})</b>: müşteri sign isteği SMS-aile
+ *       hata alırsa, tek-shot Cryptoki reset + retry yapar. Heartbeat
+ *       geç kalsa bile müşteri kısa pencerede recovered olur.</li>
+ * </ol>
  *
  * <h2>Aktivasyon koşulu</h2>
  * <ol>
  *   <li>{@code PKCS11_LIBRARY} dolu — yani HSM yolu kullanılıyor</li>
  *   <li>{@code HSM_HEARTBEAT_ENABLED=true} — operatör explicit olarak açtı</li>
  * </ol>
- * <p>Her iki koşul karşılanmadığında bean container'da yaratılmaz; PFX
- * kullanıcıları ve heartbeat'i istemeyen operatörler için sıfır maliyet.</p>
  *
- * <h2>Hata davranışı</h2>
- * <p>Heartbeat sign'i kendisi {@code CKR_NO_SESSION_KEYS} veya benzer bir
- * hata aldığında: WARN log + counter artırılır, scheduler crash etmez.
- * Bir sonraki interval'da tekrar denenir — pratikte başarısız ilk çağrı
- * HSM tarafında secure channel'ı re-init eder ve takip eden çağrılar
- * başarılı olur. Üst üste 5 başarısız heartbeat → ERROR (alerting hook).</p>
+ * <h2>Self-healing state machine (Mayıs 2026 incident öğrenimleri)</h2>
+ * <p>Üretimde gözlenen vaka: 22 May 14:41 boot → 71 başarılı heartbeat
+ * → 15:53'te bir {@code C_Sign} ~99 dk asılı kaldı → secure channel
+ * çöktü → <b>3297x ardışık başarısız heartbeat</b>, hiç self-recovery
+ * yok, müşteri ilk isteği {@code CKR_SMS_ERROR} alıyordu. Sebep:
+ * xipki wrapper'ın token-level recovery'si ({@code C_GetSessionInfo}
+ * + relogin) PTK-C tarafında secure messaging katmanı komple ölünce
+ * çalışmaz — login bile secure channel üzerinden gider.</p>
+ *
+ * <p><b>Çözüm</b>: ardışık başarısızlık eşiği ({@link #REINIT_THRESHOLD})
+ * aşıldığında {@link IaikPkcs11Module#reinitializeForSmsRecovery} ile
+ * Cryptoki global state'ini {@code C_Finalize + C_Initialize} ile
+ * sıfırdan kurmak. Reinit başarısızsa exponential backoff:</p>
+ *
+ * <table border="1" summary="Reinit backoff schedule">
+ *   <tr><th>Deneme #</th><th>Bekleme</th></tr>
+ *   <tr><td>1 (eşik aşılınca)</td><td>hemen</td></tr>
+ *   <tr><td>2</td><td>60 s</td></tr>
+ *   <tr><td>3</td><td>300 s (5 dk)</td></tr>
+ *   <tr><td>4</td><td>900 s (15 dk)</td></tr>
+ *   <tr><td>≥ 5</td><td>1800 s (30 dk) cap</td></tr>
+ * </table>
+ *
+ * <p>Backoff penceresinde heartbeat normal şekilde tetiklenir (sign
+ * dener — HSM dış müdahaleyle iyileşirse hemen fark ederiz) ama yeniden
+ * reinit denemez. Başarılı sign sonrası tüm state sıfır + RECOVERED log.</p>
  *
  * <h2>Concurrency</h2>
  * <p>{@code @Scheduled} fixedDelay kullanır: önceki heartbeat tamamlanmadan
  * yeni iteration başlamaz. Heartbeat üst seviye {@code signatureSemaphore}
- * permit tüketmez — yoğun yük altında aç kalmamalı.</p>
+ * permit tüketmez. Reinit'in {@link IaikPkcs11Module} tarafındaki
+ * {@code reinitLock} üstünde sign çağrılarıyla yarış senaryosu için
+ * bkz. {@link IaikPkcs11Module#reinitializeForSmsRecovery}.</p>
  */
 @Component
 @ConditionalOnExpression(
@@ -61,18 +92,40 @@ public class HsmHeartbeatScheduler {
 
     /**
      * Üst üste başarısız heartbeat sayısı bu eşiği geçtiğinde ERROR
-     * seviyesine yükseltilir; future-extension: alerting hook'a bağlanır.
+     * seviyesine yükseltilir (alerting hook).
      */
     private static final int CONSECUTIVE_FAILURE_ERROR_THRESHOLD = 5;
 
+    /**
+     * Üst üste başarısız heartbeat sayısı bu eşiği geçtiğinde Cryptoki-level
+     * reinit tetiklenir. 3 dakika (3 × 60s interval default) pencere —
+     * transient glitch ile kalıcı çöküşü ayırt etmeye yeter; çok küçük
+     * olursa benign network jitter'ında gereksiz reinit yapar.
+     */
+    private static final int REINIT_THRESHOLD = 3;
+
+    /** Reinit exponential backoff schedule (ms). Index = reinitAttempts (1-based). */
+    private static final long[] REINIT_BACKOFF_MS = {
+        0L,            // attempts=1: hemen
+        60_000L,       // attempts=2: +60 s
+        300_000L,      // attempts=3: +5 dk
+        900_000L,      // attempts=4: +15 dk
+        1_800_000L     // attempts≥5: +30 dk cap
+    };
+
     private final IaikPkcs11Module module;
-    private final long privateKeyHandle;
+    private final IaikPkcs11Signer signer;
+    private final IaikPkcs11Module.ResolvedKey resolvedKey;
     private final SignatureAlgorithm signatureAlgorithm;
     private final String alias;
 
     private final AtomicLong successCount = new AtomicLong();
     private final AtomicLong failureCount = new AtomicLong();
     private final AtomicLong consecutiveFailures = new AtomicLong();
+    private final AtomicLong reinitAttempts = new AtomicLong();
+    private final AtomicLong reinitSuccesses = new AtomicLong();
+    /** {@code System.currentTimeMillis()} biçiminde — bu zamandan önce yeni reinit denemesi yapılmaz. */
+    private final AtomicLong nextReinitAllowedAtMillis = new AtomicLong(0L);
     private volatile long lastSuccessAtMillis = 0L;
 
     public HsmHeartbeatScheduler(IaikPkcs11Module module,
@@ -90,21 +143,23 @@ public class HsmHeartbeatScheduler {
                 + "konfigürasyon tutarsız. HSM_HEARTBEAT_ENABLED yalnızca PKCS#11 yolu "
                 + "etkin olduğunda aktive edilmelidir.");
         }
-        Pkcs11Signer signer = signingMaterial.getPkcs11Signer();
-        if (!(signer instanceof IaikPkcs11Signer)) {
+        Pkcs11Signer rawSigner = signingMaterial.getPkcs11Signer();
+        if (!(rawSigner instanceof IaikPkcs11Signer)) {
             // ipkcs11wrapper dışında bir signer implementasyonu pratik
             // olarak yok (Pkcs11Signer tek implementasyonu IaikPkcs11Signer);
             // ileride değişirse explicit hata mesajı görsün.
             throw new IllegalStateException(
                 "Beklenmeyen Pkcs11Signer implementasyonu: "
-                + signer.getClass().getName() + ". HsmHeartbeatScheduler yalnızca "
+                + rawSigner.getClass().getName() + ". HsmHeartbeatScheduler yalnızca "
                 + "IaikPkcs11Signer ile uyumludur.");
         }
-        this.privateKeyHandle = ((IaikPkcs11Signer) signer).getPrivateKeyHandle();
-        this.alias = signer.getAlias();
-        this.signatureAlgorithm = deriveAlgorithm(signer);
-        LOGGER.info("HSM heartbeat scheduler aktive edildi: alias='{}', alg={}, intervalSeconds={}",
-            alias, signatureAlgorithm, intervalSeconds);
+        this.signer = (IaikPkcs11Signer) rawSigner;
+        this.resolvedKey = signer.getResolvedKey();
+        this.alias = rawSigner.getAlias();
+        this.signatureAlgorithm = deriveAlgorithm(rawSigner);
+        LOGGER.info("HSM heartbeat scheduler aktive edildi: alias='{}', alg={}, "
+            + "intervalSeconds={}, reinitThreshold={} (Cryptoki-level self-healing aktif)",
+            alias, signatureAlgorithm, intervalSeconds, REINIT_THRESHOLD);
     }
 
     /**
@@ -138,19 +193,26 @@ public class HsmHeartbeatScheduler {
     public void heartbeat() {
         long t0 = System.currentTimeMillis();
         try {
-            int sigLen = module.heartbeatSign(privateKeyHandle, signatureAlgorithm);
+            // Handle her tick'te resolvedKey'den fresh okunur — reinit
+            // sonrası (L1 veya L2) in-place refresh'lenmiş volatile değer.
+            int sigLen = module.heartbeatSign(resolvedKey.privateKeyHandle, signatureAlgorithm);
             long elapsed = System.currentTimeMillis() - t0;
             long s = successCount.incrementAndGet();
             long priorConsecutiveFailures = consecutiveFailures.getAndSet(0);
             lastSuccessAtMillis = System.currentTimeMillis();
+            // Başarılı sign sonrası reinit state'ini de sıfırla — bir
+            // sonraki çöküşte tekrar baştan exponential başlasın.
+            long priorReinitAttempts = reinitAttempts.getAndSet(0);
+            nextReinitAllowedAtMillis.set(0L);
             if (priorConsecutiveFailures > 0) {
                 // Failure -> success state change: operatör için kritik bir
                 // sinyaller (HSM secure channel kendini iyileştirdi).
                 LOGGER.info("HSM heartbeat imzası RECOVERED: alias='{}', alg={}, "
                     + "sigLen={}, elapsed={}ms, öncesindeki ardışık başarısızlık={}, "
-                    + "totalSuccess={}, totalFail={}",
+                    + "reinitDenemesi={}, totalSuccess={}, totalFail={}, totalReinit={}",
                     alias, signatureAlgorithm, sigLen, elapsed,
-                    priorConsecutiveFailures, s, failureCount.get());
+                    priorConsecutiveFailures, priorReinitAttempts, s, failureCount.get(),
+                    reinitSuccesses.get());
             } else {
                 LOGGER.info("HSM heartbeat imzası atıldı: alias='{}', alg={}, "
                     + "sigLen={}, elapsed={}ms, totalSuccess={}",
@@ -159,20 +221,68 @@ public class HsmHeartbeatScheduler {
         } catch (Exception e) {
             long f = failureCount.incrementAndGet();
             long c = consecutiveFailures.incrementAndGet();
-            // İlk hata WARN; eşik aşılınca ERROR (monitoring/alert kancası).
-            if (c >= CONSECUTIVE_FAILURE_ERROR_THRESHOLD) {
-                LOGGER.error("HSM heartbeat ÜST ÜSTE BAŞARISIZ ({}x): alias='{}', alg={}, "
-                    + "totalFail={}, son hata='{}'. HSM durumu kontrol edilmeli "
-                    + "(secure channel / partition / firmware).",
-                    c, alias, signatureAlgorithm, f, e.getMessage());
-            } else {
-                LOGGER.warn("HSM heartbeat başarısız (denenenecek): alias='{}', alg={}, "
-                    + "totalFail={}, hata='{}'",
-                    alias, signatureAlgorithm, f, e.getMessage());
-            }
+            logHeartbeatFailure(c, f, e);
+            maybeTriggerReinit(c);
             // ASLA throw etme — Spring scheduler exception fırlatan task'ı
-            // pool'dan düşürmez ama ardışık iteration'larda da exception
-            // fırlatırsa log spam'i yaratır. Sessizce devam etmek doğru.
+            // pool'dan düşürmez ama log spam'i yaratır.
+        }
+    }
+
+    private void logHeartbeatFailure(long consecutive, long total, Exception e) {
+        if (consecutive >= CONSECUTIVE_FAILURE_ERROR_THRESHOLD) {
+            LOGGER.error("HSM heartbeat ÜST ÜSTE BAŞARISIZ ({}x): alias='{}', alg={}, "
+                + "totalFail={}, son hata='{}'. HSM durumu kontrol edilmeli "
+                + "(secure channel / partition / firmware).",
+                consecutive, alias, signatureAlgorithm, total, e.getMessage());
+        } else {
+            LOGGER.warn("HSM heartbeat başarısız (denenenecek): alias='{}', alg={}, "
+                + "totalFail={}, hata='{}'",
+                alias, signatureAlgorithm, total, e.getMessage());
+        }
+    }
+
+    /**
+     * Self-healing tetik kararı. {@link #REINIT_THRESHOLD} aşıldığında VE
+     * exponential backoff penceresi dolmuşsa Cryptoki-level reinit dener.
+     * Reinit başarılı olursa local handle refresh; başarısız olursa
+     * backoff timestamp'i ileri sarılır.
+     */
+    private void maybeTriggerReinit(long consecutive) {
+        if (consecutive < REINIT_THRESHOLD) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long nextAllowed = nextReinitAllowedAtMillis.get();
+        if (now < nextAllowed) {
+            LOGGER.debug("Reinit backoff window aktif: alias='{}', kalan={}ms",
+                alias, nextAllowed - now);
+            return;
+        }
+        long attempt = reinitAttempts.incrementAndGet();
+        long backoffMs = REINIT_BACKOFF_MS[
+            (int) Math.min(attempt, REINIT_BACKOFF_MS.length - 1)];
+        nextReinitAllowedAtMillis.set(now + backoffMs);
+
+        LOGGER.warn("L1 Cryptoki-level REINIT tetiklendi: alias='{}', consecutiveFail={}, "
+            + "reinitDenemesi={}, sonrakiDenemeicinBekleme={}s",
+            alias, consecutive, attempt, backoffMs / 1000);
+
+        try {
+            IaikPkcs11Module.ResolvedKey refreshed =
+                module.reinitializeForSmsRecovery(alias, null);
+            // In-place refresh — aynı ResolvedKey instance'ını paylaşan
+            // signer (müşteri istekleri) ve heartbeat aynı handle'ı görür.
+            resolvedKey.privateKeyHandle = refreshed.privateKeyHandle;
+            resolvedKey.certificate = refreshed.certificate;
+            resolvedKey.certificateChain = refreshed.certificateChain;
+            reinitSuccesses.incrementAndGet();
+            LOGGER.info("L1 reinit başarılı: alias='{}', yeni handle=0x{}. "
+                + "Sonraki heartbeat tick'inde sign yeni kanal üstünden denenecek.",
+                alias, Long.toHexString(resolvedKey.privateKeyHandle));
+        } catch (Exception reinitEx) {
+            LOGGER.error("L1 reinit BAŞARISIZ (deneme={}): alias='{}', hata='{}'. "
+                + "Sonraki reinit denemesine {}s sonra izin verilecek.",
+                attempt, alias, reinitEx.getMessage(), backoffMs / 1000);
         }
     }
 
@@ -194,5 +304,17 @@ public class HsmHeartbeatScheduler {
 
     public long getLastSuccessAtMillis() {
         return lastSuccessAtMillis;
+    }
+
+    public long getReinitAttempts() {
+        return reinitAttempts.get();
+    }
+
+    public long getReinitSuccesses() {
+        return reinitSuccesses.get();
+    }
+
+    public long getNextReinitAllowedAtMillis() {
+        return nextReinitAllowedAtMillis.get();
     }
 }
