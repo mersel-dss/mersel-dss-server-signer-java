@@ -5,6 +5,7 @@ import eu.europa.esig.dss.xades.signature.XAdESService;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
@@ -208,7 +209,7 @@ class XAdESEcdsaP384EfaturaE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.UblDocument,
                 signatureId,
                 /*zipped*/ false,
-                material,false);
+                material, XadesSignatureLevel.XADES_BES);
         long signMs = (System.nanoTime() - signStartNs) / 1_000_000L;
 
         assertNotNull(signed, "signResponse null");

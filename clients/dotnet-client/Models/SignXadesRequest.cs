@@ -28,4 +28,21 @@ public sealed class SignXadesRequest
     /// imzalama mantığını etkilemez.
     /// </summary>
     public string FileName { get; set; } = "document.xml";
+
+    /// <summary>
+    /// XAdES imza profili. API kontratı gereği <em>asla null değildir</em>;
+    /// varsayılan <see cref="XadesSignatureLevel.XADES_BES"/>'tir
+    /// (timestamp eklenmez, TSA çağrılmaz, kontör harcanmaz).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="XadesSignatureLevel.XADES_A"/> istenirse arşiv timestamp eklenir;
+    /// sunucu tarafında TSA yapılandırılmamışsa istek 503 / <c>TIMESTAMP_ERROR</c>
+    /// ile reddedilir.
+    /// <para>
+    /// <b>Önemli</b>: <see cref="DocumentType"/> artık seviye kararına dahil
+    /// <em>değildir</em>. Rapor akışında XADES_A istenecekse bu alanın explicit
+    /// olarak set edilmesi gerekir.
+    /// </para>
+    /// </remarks>
+    public XadesSignatureLevel SignatureLevel { get; set; } = XadesSignatureLevel.XADES_BES;
 }

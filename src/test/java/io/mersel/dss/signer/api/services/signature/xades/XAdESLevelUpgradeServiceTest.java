@@ -5,7 +5,7 @@ import eu.europa.esig.dss.model.InMemoryDocument;
 import eu.europa.esig.dss.spi.validation.CertificateVerifier;
 import eu.europa.esig.dss.xades.XAdESSignatureParameters;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
-import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -26,8 +26,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+/**
+ * XAdESLevelUpgradeService kontrat testleri.
+ *
+ * <p>Karar verici sözleşmesi: imza seviyesi yalnızca {@link XadesSignatureLevel}
+ * parametresine bağlıdır; documentType (UblDocument, EArchiveReport vb.) bu
+ * servisin imzasına dahil değildir ve seviye kararına etki etmez. Parametre
+ * <strong>asla null olamaz</strong>; null safety DTO katmanında garanti edilir.</p>
+ */
 @Epic("Service Layer")
-@Feature("XAdES Level Upgrade (T/LT/LTA)")
+@Feature("XAdES Level Upgrade (request-driven)")
 @Severity(SeverityLevel.NORMAL)
 class XAdESLevelUpgradeServiceTest {
 
@@ -53,44 +61,37 @@ class XAdESLevelUpgradeServiceTest {
         return new XAdESSignatureParameters();
     }
 
+    /**
+     * level={@link XadesSignatureLevel#XADES_BES} geldiğinde upgrade akışına hiç
+     * girilmemeli; {@code timestampService}'e tek bir çağrı bile yapılmamalıdır.
+     * Bu, kontör tasarrufu kontratının özüdür.
+     */
     @Nested
-    class SkipUpgrade {
+    class NoUpgrade {
 
         @Test
-        void shouldSkipUpgradeForUblDocument() {
+        void shouldReturnOriginalDocumentWhenLevelIsXADES_BES() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.UblDocument, createTestParameters(),false);
+            DSSDocument result = service.upgradeIfNeeded(
+                    original, createTestParameters(), XadesSignatureLevel.XADES_BES);
 
-            assertSame(original, result);
+            assertSame(original, result, "XADES_BES iken orijinal belge dönmeli");
             verifyNoInteractions(timestampService);
         }
 
+        /**
+         * Kritik test: TSA host'u <em>hiç</em> yapılandırılmamış olsa bile
+         * level=XADES_BES iken fail-fast tetiklenmemeli. Bu, e-Adisyon /
+         * e-Döviz rapor akışlarında TSA olmadan rapor üretme senaryosunun
+         * iş gerekçesidir.
+         */
         @Test
-        void shouldSkipUpgradeForHrXml() {
+        void shouldNotThrowEvenWhenTimestampServiceMisconfiguredAndLevelIsBes() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.HrXml, createTestParameters(),false);
-
-            assertSame(original, result);
-            verifyNoInteractions(timestampService);
-        }
-
-        @Test
-        void shouldSkipUpgradeForOtherXmlDocument() {
-            DSSDocument original = createTestDocument();
-
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.OtherXmlDocument, createTestParameters(),false);
-
-            assertSame(original, result);
-            verifyNoInteractions(timestampService);
-        }
-
-        @Test
-        void shouldSkipUpgradeForNone() {
-            DSSDocument original = createTestDocument();
-
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.None, createTestParameters(),false);
+            DSSDocument result = service.upgradeIfNeeded(
+                    original, createTestParameters(), XadesSignatureLevel.XADES_BES);
 
             assertSame(original, result);
             verifyNoInteractions(timestampService);
@@ -98,14 +99,12 @@ class XAdESLevelUpgradeServiceTest {
     }
 
     /**
-     * EArchiveReport için XAdES-A yükseltmesi GİB tarafına gönderilen raporun
-     * uygunluğu için zorunludur. TSP yapılandırılmamışsa veya upgrade hata
-     * alırsa servis sessizce XAdES-B döndürmemeli — fail-fast olmalı ki
-     * client {@link TimestampException} → HTTP 503 / {@code TIMESTAMP_ERROR}
-     * görür ve işlemi tekrar denemeye / config'i düzeltmeye yönlenir.
+     * level={@link XadesSignatureLevel#XADES_A} açıkça istendiğinde fail-fast
+     * davranışı korunur: TSA yapılandırılmamışsa veya yükseltme hata alırsa
+     * {@link TimestampException} bubble eder; XADES_BES fallback üretilmez.
      */
     @Nested
-    class EArchiveReportUpgrade {
+    class XADES_A_UpgradeFailFast {
 
         @Test
         void shouldThrowTimestampExceptionWhenTimestampServiceUnavailable() {
@@ -114,11 +113,11 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
+                    () -> service.upgradeIfNeeded(original, parameters, XadesSignatureLevel.XADES_A));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
-            assertTrue(ex.getMessage().contains("EArchiveReport"),
-                    "Hata mesajı belge tipini içermeli ki client hangi rapor için TSP gerektiğini bilsin");
+            assertTrue(ex.getMessage().contains("XADES_A"),
+                    "Hata mesajı istenen profili içermeli ki client neyin başarısız olduğunu bilsin");
             assertTrue(ex.getMessage().contains("TS_SERVER_HOST"),
                     "Hata mesajı yapılandırılması gereken property'yi söylemeli");
             verify(timestampService).isAvailable();
@@ -126,7 +125,7 @@ class XAdESLevelUpgradeServiceTest {
         }
 
         @Test
-        void shouldThrowTimestampExceptionWhenUpgradeFails() {
+        void shouldBubbleOriginalTimestampExceptionWhenTspSourceFails() {
             when(timestampService.isAvailable()).thenReturn(true);
             when(timestampService.getTspSource())
                     .thenThrow(new TimestampException("TSP unavailable"));
@@ -134,7 +133,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
+                    () -> service.upgradeIfNeeded(original, parameters, XadesSignatureLevel.XADES_A));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode(),
                     "Orijinal TimestampException sarmalanmadan bubble etmeli ki error envelope korunabilsin");
@@ -151,51 +150,11 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
+                    () -> service.upgradeIfNeeded(original, parameters, XadesSignatureLevel.XADES_A));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
-            assertTrue(ex.getMessage().contains("EArchiveReport"));
-            assertTrue(ex.getMessage().contains("XAdES-A"),
-                    "Hata mesajı XAdES-A bağlamını net etmeli (XAdES-B yarım imza üretilmediği belirtilmeli)");
-        }
-    }
-
-    /**
-     * EBiletReport için aynı XAdES-A garantisi: TSP yoksa fail-fast,
-     * upgrade fail olursa fail-fast.
-     */
-    @Nested
-    class EBiletReportUpgrade {
-
-        @Test
-        void shouldThrowTimestampExceptionWhenTimestampServiceUnavailable() {
-            when(timestampService.isAvailable()).thenReturn(false);
-            DSSDocument original = createTestDocument();
-            XAdESSignatureParameters parameters = createTestParameters();
-
-            TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters,false));
-
-            assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
-            assertTrue(ex.getMessage().contains("EBiletReport"));
-            verify(timestampService).isAvailable();
-            verify(timestampService, never()).getTspSource();
-        }
-
-        @Test
-        void shouldThrowTimestampExceptionWhenUpgradeFails() {
-            when(timestampService.isAvailable()).thenReturn(true);
-            when(timestampService.getTspSource())
-                    .thenThrow(new RuntimeException("TSP unreachable"));
-            DSSDocument original = createTestDocument();
-            XAdESSignatureParameters parameters = createTestParameters();
-
-            TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters,false));
-
-            assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
-            verify(timestampService).isAvailable();
-            verify(timestampService).getTspSource();
+            assertTrue(ex.getMessage().contains("XADES_A"),
+                    "Hata mesajı XADES_A bağlamını net etmeli (XADES_BES yarım imza üretilmediği belirtilmeli)");
         }
     }
 }

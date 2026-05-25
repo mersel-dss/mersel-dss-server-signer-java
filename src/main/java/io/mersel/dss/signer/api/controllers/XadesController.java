@@ -59,7 +59,11 @@ public class XadesController {
 
     @Operation(
         summary = "XML belgelerini XAdES imzası ile imzalar",
-        description = "e-Fatura, e-Arşiv Raporu, Uygulama Yanıtı, İrsaliye, HrXml ve diğer XML belgelerini destekler"
+        description = "e-Fatura, e-Arşiv Raporu, Uygulama Yanıtı, İrsaliye, HrXml ve diğer XML belgelerini destekler. "
+                + "İmza profili (XADES_BES / XADES_A) tamamen 'signatureLevel' alanı ile belirlenir; "
+                + "documentType seviye kararına dahil değildir. Alan gönderilmezse XADES_BES uygulanır "
+                + "(TSA çağrılmaz, kontör harcanmaz). XADES_A istenirse TSA yapılandırılmamışsa "
+                + "istek TIMESTAMP_ERROR ile reddedilir."
     )
     @RequestMapping(value = "/v1/xadessign", method = RequestMethod.POST, 
         consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
@@ -94,7 +98,7 @@ public class XadesController {
                     dto.getSignatureId(),
                     zipped,
                     signingMaterial,
-                    dto.isDisableTimeStamp()
+                    dto.getSignatureLevel()
                 );
             }
 

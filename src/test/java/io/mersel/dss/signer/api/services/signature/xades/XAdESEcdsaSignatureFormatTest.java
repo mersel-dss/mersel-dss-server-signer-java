@@ -10,6 +10,7 @@ import io.mersel.dss.signer.api.e2e.verifier.PfxTestKey;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
 import io.mersel.dss.signer.api.services.crypto.CryptoSignerService;
 import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.crypto.SignatureAlgorithmResolverService;
@@ -114,7 +115,7 @@ class XAdESEcdsaSignatureFormatTest {
                 DocumentType.UblDocument,
                 "id-" + UUID.randomUUID().toString().replace("-", ""),
                 /*zipped*/ false,
-                material,false);
+                material, XadesSignatureLevel.XADES_BES);
 
         assertNotNull(signed.getSignedDocument(), "signedDocument null olmamalı");
 
