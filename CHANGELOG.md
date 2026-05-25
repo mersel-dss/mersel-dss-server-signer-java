@@ -92,6 +92,22 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
     olmayan saf-kod commit'i (Hasan'ın orijinal `880c784` commit'i)
     hâlâ doğru şekilde FAILED veriyor — negatif case korundu.
 
+- **`integration-tests.yml` workflow'undaki `XadesSoftHsmVerifierE2ETest`
+  iterasyon sayısı 25 → 20 olarak güncellendi.**
+  - **Belirti**: 0.7.0 release'inde `XadesDocumentFixture.standardFixtures()`
+    fixture listesi 5'ten 4'e düşürüldü (EARSIV_RAPORU XAdES-A TSA
+    zorunluluğu nedeniyle hariç tutuldu; bkz. yukarıdaki XAdES fail-fast
+    sözleşmesi). Ancak CI workflow'undaki assertion (`expected=25`,
+    "5 PfxTestKey × 5 XadesDocumentFixture") güncellenmediği için
+    HSM integration check her PR'da fail veriyor (gerçek: 20, beklenen: 25).
+  - **Görünmezlik sebebi**: 0.7.0 commit'i (`10ed0a6`) doğrudan main'e
+    push edildiği için CI failure merge'i engellemedi; bug ilk PR
+    (#20) main'e rebase olunca yüzeye çıktı.
+  - **Çözüm**: `expected=20`, açıklama yorumlarında "5 × 4 = 20"
+    matematiği netleştirildi, hem step adındaki "(25 HSM+verifier
+    iterations)" başlığı hem üst seviye workflow header'ı 0.7.0
+    fixture daralmasına atıfla güncellendi.
+
 ## [0.7.0] - 2026-05-25
 
 ### Added
