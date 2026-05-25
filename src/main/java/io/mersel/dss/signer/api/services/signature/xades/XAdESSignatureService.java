@@ -99,7 +99,7 @@ public class XAdESSignatureService {
             DocumentType documentType,
             String signatureId,
             boolean zipped,
-            SigningMaterial material) {
+            SigningMaterial material,boolean disableTimestamp) {
         try {
             // 1. XML byte'larını çıkar
             byte[] xmlBytes = extractXmlBytes(xmlInputStream, zipped);
@@ -209,7 +209,7 @@ public class XAdESSignatureService {
 
             // e-Arşiv Raporu ise XAdES-A seviyesine yükselt
             signedDocument = levelUpgradeService.upgradeIfNeeded(
-                    signedDocument, documentType, parameters);
+                    signedDocument, documentType, parameters,false);
 
             // Signature ID'yi yakala (cache cleanup için)
             SignedDocumentValidator tempValidator = SignedDocumentValidator.fromDocument(signedDocument);

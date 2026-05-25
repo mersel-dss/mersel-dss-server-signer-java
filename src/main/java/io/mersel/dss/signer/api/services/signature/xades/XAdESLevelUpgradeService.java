@@ -63,8 +63,12 @@ public class XAdESLevelUpgradeService {
      */
     public DSSDocument upgradeIfNeeded(DSSDocument signedDocument,
                                       DocumentType documentType,
-                                      XAdESSignatureParameters baseParameters) {
+                                      XAdESSignatureParameters baseParameters,boolean disableTimestamp) {
         if (documentType != DocumentType.EArchiveReport && documentType != DocumentType.EBiletReport) {
+            return signedDocument;
+        }
+
+        if(disableTimestamp){
             return signedDocument;
         }
 

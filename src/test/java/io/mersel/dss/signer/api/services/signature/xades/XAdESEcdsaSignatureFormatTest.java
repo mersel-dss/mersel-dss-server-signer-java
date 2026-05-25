@@ -114,7 +114,7 @@ class XAdESEcdsaSignatureFormatTest {
                 DocumentType.UblDocument,
                 "id-" + UUID.randomUUID().toString().replace("-", ""),
                 /*zipped*/ false,
-                material);
+                material,false);
 
         assertNotNull(signed.getSignedDocument(), "signedDocument null olmamalı");
 

@@ -208,7 +208,7 @@ class XAdESEcdsaP384EfaturaE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.UblDocument,
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,false);
         long signMs = (System.nanoTime() - signStartNs) / 1_000_000L;
 
         assertNotNull(signed, "signResponse null");

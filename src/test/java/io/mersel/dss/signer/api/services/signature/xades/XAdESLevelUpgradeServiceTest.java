@@ -60,7 +60,7 @@ class XAdESLevelUpgradeServiceTest {
         void shouldSkipUpgradeForUblDocument() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.UblDocument, createTestParameters());
+            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.UblDocument, createTestParameters(),false);
 
             assertSame(original, result);
             verifyNoInteractions(timestampService);
@@ -70,7 +70,7 @@ class XAdESLevelUpgradeServiceTest {
         void shouldSkipUpgradeForHrXml() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.HrXml, createTestParameters());
+            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.HrXml, createTestParameters(),false);
 
             assertSame(original, result);
             verifyNoInteractions(timestampService);
@@ -80,7 +80,7 @@ class XAdESLevelUpgradeServiceTest {
         void shouldSkipUpgradeForOtherXmlDocument() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.OtherXmlDocument, createTestParameters());
+            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.OtherXmlDocument, createTestParameters(),false);
 
             assertSame(original, result);
             verifyNoInteractions(timestampService);
@@ -90,7 +90,7 @@ class XAdESLevelUpgradeServiceTest {
         void shouldSkipUpgradeForNone() {
             DSSDocument original = createTestDocument();
 
-            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.None, createTestParameters());
+            DSSDocument result = service.upgradeIfNeeded(original, DocumentType.None, createTestParameters(),false);
 
             assertSame(original, result);
             verifyNoInteractions(timestampService);
@@ -114,7 +114,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters));
+                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
             assertTrue(ex.getMessage().contains("EArchiveReport"),
@@ -134,7 +134,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters));
+                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode(),
                     "Orijinal TimestampException sarmalanmadan bubble etmeli ki error envelope korunabilsin");
@@ -151,7 +151,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters));
+                    () -> service.upgradeIfNeeded(original, DocumentType.EArchiveReport, parameters,false));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
             assertTrue(ex.getMessage().contains("EArchiveReport"));
@@ -174,7 +174,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters));
+                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters,false));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
             assertTrue(ex.getMessage().contains("EBiletReport"));
@@ -191,7 +191,7 @@ class XAdESLevelUpgradeServiceTest {
             XAdESSignatureParameters parameters = createTestParameters();
 
             TimestampException ex = assertThrows(TimestampException.class,
-                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters));
+                    () -> service.upgradeIfNeeded(original, DocumentType.EBiletReport, parameters,false));
 
             assertEquals("TIMESTAMP_ERROR", ex.getErrorCode());
             verify(timestampService).isAvailable();

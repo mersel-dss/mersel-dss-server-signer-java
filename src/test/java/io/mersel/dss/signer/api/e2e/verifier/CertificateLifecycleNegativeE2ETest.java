@@ -342,7 +342,7 @@ class CertificateLifecycleNegativeE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.UblDocument,
                 "id-" + UUID.randomUUID().toString().replace("-", ""),
                 /*zipped*/ false,
-                material);
+                material,false);
         return signed.getSignedDocument();
     }
 

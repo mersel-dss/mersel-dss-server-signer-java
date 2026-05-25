@@ -224,7 +224,7 @@ class XadesSoftHsmVerifierE2ETest extends AbstractVerifierE2ETest {
                 fixture.getDocumentType(),
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,false);
 
         assertNotNull(signed, "signResponse null olmamalı (" + key + " / " + fixture + ")");
         assertNotNull(signed.getSignedDocument(),

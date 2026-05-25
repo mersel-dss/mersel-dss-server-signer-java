@@ -12,6 +12,7 @@ public class SignXadesDto {
     private String SignatureId;
     private DocumentType DocumentType;
     private Boolean ZipFile;
+    private boolean DisableTimeStamp;
 
     public String getSignatureId() {
         return SignatureId;
@@ -46,5 +47,13 @@ public class SignXadesDto {
 
     public void setZipFile(Boolean zipFile) {
         ZipFile = zipFile;
+    }
+
+    public boolean isDisableTimeStamp() {
+        return DisableTimeStamp;
+    }
+
+    public void setDisableTimeStamp(boolean disableTimeStamp) {
+        this.DisableTimeStamp = disableTimeStamp;
     }
 }

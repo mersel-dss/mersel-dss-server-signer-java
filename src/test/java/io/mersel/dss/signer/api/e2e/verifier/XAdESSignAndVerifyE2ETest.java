@@ -195,7 +195,7 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                 fixture.getDocumentType(),
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,false);
         long signNanos = System.nanoTime() - signStart;
 
         assertNotNull(signed, "signResponse null olmamalı");
@@ -267,7 +267,7 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                 DocumentType.OtherXmlDocument,
                 signatureId,
                 /*zipped*/ false,
-                material);
+                material,false);
 
         assertNotNull(signed, "signResponse null olmamalı");
         byte[] signedBytes = signed.getSignedDocument();
@@ -330,7 +330,7 @@ class XAdESSignAndVerifyE2ETest extends AbstractVerifierE2ETest {
                         fixture.getDocumentType(),
                         "id-" + UUID.randomUUID().toString().replace("-", ""),
                         /*zipped*/ false,
-                        material),
+                        material,false),
                 "TSA yapılandırılmamışken EArchiveReport için TimestampException beklenir; "
                         + "silent XAdES-B fallback regresyon vakası");
 

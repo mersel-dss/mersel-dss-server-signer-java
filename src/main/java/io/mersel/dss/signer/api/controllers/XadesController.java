@@ -93,7 +93,8 @@ public class XadesController {
                     dto.getDocumentType(),
                     dto.getSignatureId(),
                     zipped,
-                    signingMaterial
+                    signingMaterial,
+                    dto.isDisableTimeStamp()
                 );
             }
 

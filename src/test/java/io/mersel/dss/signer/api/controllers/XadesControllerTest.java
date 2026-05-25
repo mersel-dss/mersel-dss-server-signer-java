@@ -74,7 +74,7 @@ class XadesControllerTest {
             eq(DocumentType.UblDocument),
             isNull(),
             eq(false),
-            eq(signingMaterial)
+            eq(signingMaterial),false
         )).thenReturn(mockResponse);
 
         // When
@@ -153,7 +153,7 @@ class XadesControllerTest {
             eq(DocumentType.EBiletReport),
             isNull(),
             eq(false),
-            eq(signingMaterial)
+            eq(signingMaterial),false
         )).thenReturn(mockResponse);
 
         // When
@@ -194,7 +194,7 @@ class XadesControllerTest {
             any(DocumentType.class),
             any(),
             anyBoolean(),
-            any()
+            any(),false
         )).thenReturn(mockResponse);
 
         // When
@@ -212,7 +212,7 @@ class XadesControllerTest {
             eq(DocumentType.EBiletReport),
             isNull(),
             eq(false),
-            eq(signingMaterial)
+            eq(signingMaterial),false
         );
     }
 }
