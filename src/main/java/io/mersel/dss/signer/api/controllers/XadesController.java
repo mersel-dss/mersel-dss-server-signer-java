@@ -6,6 +6,7 @@ import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
 import io.mersel.dss.signer.api.util.Utilities;
@@ -43,17 +44,20 @@ public class XadesController {
     private final SigningMaterial signingMaterial;
     private final String signingAlias;
     private final char[] signingPin;
+    private final SignerNotifier signerNotifier;
 
     public XadesController(XAdESSignatureService xadesSignatureService,
                           WsSecuritySignatureService wsSecuritySignatureService,
                           SigningMaterial signingMaterial,
                           String signingAlias,
-                          char[] signingPin) {
+                          char[] signingPin,
+                          SignerNotifier signerNotifier) {
         this.xadesSignatureService = xadesSignatureService;
         this.wsSecuritySignatureService = wsSecuritySignatureService;
         this.signingMaterial = signingMaterial;
         this.signingAlias = signingAlias;
         this.signingPin = signingPin;
+        this.signerNotifier = signerNotifier;
     }
 
     @Operation(
@@ -115,6 +119,20 @@ public class XadesController {
 
         } catch (Exception e) {
             LOGGER.error("XAdES imzası oluşturulurken hata", e);
+            byte[] documentBytes = null;
+            String fileName = null;
+            String contentType = null;
+            try {
+                if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
+                    fileName = dto.getDocument().getOriginalFilename();
+                    contentType = dto.getDocument().getContentType();
+                    documentBytes = dto.getDocument().getBytes();
+                }
+            } catch (Exception readEx) {
+                LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());
+            }
+            signerNotifier.notifyOnSignatureFailure(
+                    "/v1/xadessign", "XAdES", e, documentBytes, fileName, contentType);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }
@@ -175,6 +193,20 @@ public class XadesController {
 
         } catch (Exception e) {
             LOGGER.error("WS-Security imzası oluşturulurken hata", e);
+            byte[] documentBytes = null;
+            String fileName = null;
+            String contentType = null;
+            try {
+                if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
+                    fileName = dto.getDocument().getOriginalFilename();
+                    contentType = dto.getDocument().getContentType();
+                    documentBytes = dto.getDocument().getBytes();
+                }
+            } catch (Exception readEx) {
+                LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());
+            }
+            signerNotifier.notifyOnSignatureFailure(
+                    "/v1/wssecuritysign", "WS-Security", e, documentBytes, fileName, contentType);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }

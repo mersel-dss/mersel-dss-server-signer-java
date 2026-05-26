@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.services.keystore.iaik;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
 import io.qameta.allure.Severity;
@@ -73,7 +74,11 @@ class HsmHeartbeatSchedulerTest {
         IaikPkcs11Signer signer = new IaikPkcs11Signer(module, rk);
         SigningMaterial material = new SigningMaterial(signer, rsaCert,
             Collections.singletonList(rsaCert));
-        return new HsmHeartbeatScheduler(module, material, 60);
+        // SignerNotifier mock — testlerin bildirim akışını dert etmesine
+        // gerek yok; ayrı test sınıfında doğrulanır. Burada no-op olarak
+        // davranır (void notifyOnHeartbeatEvent default = no-op).
+        SignerNotifier notifier = mock(SignerNotifier.class);
+        return new HsmHeartbeatScheduler(module, material, notifier, 60);
     }
 
     @Nested
@@ -243,7 +248,8 @@ class HsmHeartbeatSchedulerTest {
             IaikPkcs11Signer signer = new IaikPkcs11Signer(module, rk);
             SigningMaterial material = new SigningMaterial(signer, rsaCert,
                 Collections.singletonList(rsaCert));
-            HsmHeartbeatScheduler scheduler = new HsmHeartbeatScheduler(module, material, 60);
+            HsmHeartbeatScheduler scheduler = new HsmHeartbeatScheduler(
+                module, material, mock(SignerNotifier.class), 60);
 
             scheduler.heartbeat();
             scheduler.heartbeat();
@@ -378,7 +384,8 @@ class HsmHeartbeatSchedulerTest {
                 rsaCert, Collections.singletonList(rsaCert));
 
             assertThrows(IllegalStateException.class,
-                () -> new HsmHeartbeatScheduler(module, pfxMaterial, 60),
+                () -> new HsmHeartbeatScheduler(module, pfxMaterial,
+                    mock(SignerNotifier.class), 60),
                 "PFX SigningMaterial ile HsmHeartbeatScheduler instantiate edilmemeli "
                 + "(@ConditionalOnExpression normalde engeller; defensive guard).");
         }

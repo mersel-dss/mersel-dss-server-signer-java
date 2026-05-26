@@ -5,6 +5,7 @@ import io.mersel.dss.signer.api.dtos.TimestampStatusDto;
 import io.mersel.dss.signer.api.dtos.TimestampValidationResponseDto;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
 import io.mersel.dss.signer.api.services.timestamp.TimestampService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,12 +36,15 @@ public class TimestampController {
 
     private final TimestampService timestampService;
     private final TimestampConfigurationService timestampConfigurationService;
+    private final SignerNotifier signerNotifier;
 
     public TimestampController(
             TimestampService timestampService,
-            TimestampConfigurationService timestampConfigurationService) {
+            TimestampConfigurationService timestampConfigurationService,
+            SignerNotifier signerNotifier) {
         this.timestampService = timestampService;
         this.timestampConfigurationService = timestampConfigurationService;
+        this.signerNotifier = signerNotifier;
     }
 
     @Operation(
@@ -124,16 +128,42 @@ public class TimestampController {
 
         } catch (TimestampException e) {
             LOGGER.error("Zaman damgası alma hatası: {}", e.getMessage());
+            notifyTimestampFailure(document, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorModel("TIMESTAMP_ERROR", e.getMessage()));
 
         } catch (Exception e) {
             LOGGER.error("Beklenmeyen hata", e);
+            notifyTimestampFailure(document, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorModel("INTERNAL_ERROR", "Zaman damgası alınamadı: " + e.getMessage()));
         }
+    }
+
+    /**
+     * Timestamp ALMA hatalarını (TSA bağlantı problemi, kontör tükenmesi,
+     * yanlış konfigürasyon) Slack/webhook'a fire-and-forget bildirir.
+     * {@code /validate} ve {@code /status} bildirimi yapmaz — bunlar sırf
+     * okuma operasyonu, alarm gürültüsü olur.
+     */
+    private void notifyTimestampFailure(MultipartFile document, Throwable error) {
+        byte[] documentBytes = null;
+        String fileName = null;
+        String contentType = null;
+        try {
+            if (document != null && !document.isEmpty()) {
+                fileName = document.getOriginalFilename();
+                contentType = document.getContentType();
+                documentBytes = document.getBytes();
+            }
+        } catch (Exception readEx) {
+            LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());
+        }
+        signerNotifier.notifyOnSignatureFailure(
+                "/api/timestamp/get", "Timestamp", error,
+                documentBytes, fileName, contentType);
     }
 
     @Operation(

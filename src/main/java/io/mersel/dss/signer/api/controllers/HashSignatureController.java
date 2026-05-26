@@ -4,6 +4,7 @@ import io.mersel.dss.signer.api.dtos.SignHashDto;
 import io.mersel.dss.signer.api.dtos.SignHashResponseDto;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.raw.RawHashSignatureService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -51,9 +52,12 @@ public class HashSignatureController {
     private static final Logger LOGGER = LoggerFactory.getLogger(HashSignatureController.class);
 
     private final RawHashSignatureService rawHashSignatureService;
+    private final SignerNotifier signerNotifier;
 
-    public HashSignatureController(RawHashSignatureService rawHashSignatureService) {
+    public HashSignatureController(RawHashSignatureService rawHashSignatureService,
+                                   SignerNotifier signerNotifier) {
         this.rawHashSignatureService = rawHashSignatureService;
+        this.signerNotifier = signerNotifier;
     }
 
     @Operation(
@@ -101,15 +105,23 @@ public class HashSignatureController {
                 .body(new SignHashResponseDto(base64));
         } catch (IllegalArgumentException e) {
             LOGGER.warn("Hash imzalama validasyon hatası: {}", e.getMessage());
+            // IllegalArgumentException kullanıcı hatası (4xx) — bildirim göndermiyoruz,
+            // operasyonel alarm gürültüsü olmasın. SIGNATURE_FAILED kontratı 5xx için.
             return ResponseEntity.badRequest()
                 .body(new ErrorModel("INVALID_INPUT", e.getMessage()));
         } catch (SignatureException e) {
             LOGGER.error("Hash imzası oluşturulamadı (errorCode={}): {}",
                 e.getErrorCode(), e.getMessage(), e);
+            // Hash imzasında "dosya" digest'in kendisi — operatör forensik için bytes'ı
+            // gönderiyoruz (digest 32-64 byte civarı; payload boyutu sorun değil).
+            signerNotifier.notifyOnSignatureFailure(
+                    "/v1/hashsign", "Hash", e, digest, "digest.bin", "application/octet-stream");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         } catch (Exception e) {
             LOGGER.error("Hash imzası oluşturulurken beklenmedik hata", e);
+            signerNotifier.notifyOnSignatureFailure(
+                    "/v1/hashsign", "Hash", e, digest, "digest.bin", "application/octet-stream");
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }

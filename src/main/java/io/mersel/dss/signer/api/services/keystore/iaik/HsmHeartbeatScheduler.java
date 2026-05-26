@@ -4,6 +4,8 @@ import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.notification.HeartbeatEventType;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -118,6 +122,12 @@ public class HsmHeartbeatScheduler {
     private final IaikPkcs11Module.ResolvedKey resolvedKey;
     private final SignatureAlgorithm signatureAlgorithm;
     private final String alias;
+    /**
+     * State transition'larda Slack/webhook bildirimi atan servis. Feature
+     * flag kapalıysa veya destination yoksa no-op. Heartbeat thread'inde
+     * MDC olmadığı için {@code x-log-*} alanı boş gider — bu tasarım gereği.
+     */
+    private final SignerNotifier signerNotifier;
 
     private final AtomicLong successCount = new AtomicLong();
     private final AtomicLong failureCount = new AtomicLong();
@@ -130,9 +140,11 @@ public class HsmHeartbeatScheduler {
 
     public HsmHeartbeatScheduler(IaikPkcs11Module module,
                                  SigningMaterial signingMaterial,
+                                 SignerNotifier signerNotifier,
                                  @Value("${HSM_HEARTBEAT_INTERVAL_SECONDS:60}")
                                  int intervalSeconds) {
         this.module = module;
+        this.signerNotifier = signerNotifier;
         if (!signingMaterial.isPkcs11()) {
             // Defensive: @ConditionalOnExpression PKCS11_LIBRARY varlığına
             // bakar ama signingMaterial nihai backend kararını verir. PFX'e
@@ -213,6 +225,9 @@ public class HsmHeartbeatScheduler {
                     alias, signatureAlgorithm, sigLen, elapsed,
                     priorConsecutiveFailures, priorReinitAttempts, s, failureCount.get(),
                     reinitSuccesses.get());
+                // Alarm temizliği: yalnız transition'da (failure→success)
+                // bildirim — her başarılı tick'te göndermek operatörü boğar.
+                notifySafely(HeartbeatEventType.RECOVERED, null);
             } else {
                 LOGGER.info("HSM heartbeat imzası atıldı: alias='{}', alg={}, "
                     + "sigLen={}, elapsed={}ms, totalSuccess={}",
@@ -222,10 +237,53 @@ public class HsmHeartbeatScheduler {
             long f = failureCount.incrementAndGet();
             long c = consecutiveFailures.incrementAndGet();
             logHeartbeatFailure(c, f, e);
+            // Bildirim gürültü kontrolü: ilk başarısızlıkta (transition 0→1)
+            // ve ERROR seviyesine yükselen eşik aşımının ilk seferinde
+            // bildir. Aradaki her tick'te göndermek operatörü boğar; eşik
+            // sonrası tekrar geçişi RECOVERED event'i kapatır.
+            if (c == 1L || c == CONSECUTIVE_FAILURE_ERROR_THRESHOLD) {
+                notifySafely(HeartbeatEventType.FAILED, e);
+            }
             maybeTriggerReinit(c);
             // ASLA throw etme — Spring scheduler exception fırlatan task'ı
             // pool'dan düşürmez ama log spam'i yaratır.
         }
+    }
+
+    /**
+     * Notifier'ı best-effort çağırır. Notifier veya bağımlı bir bean
+     * patlasa bile scheduler tick'i etkilenmemeli — burada outer try/catch
+     * uyguluyoruz (notifier zaten kendi içinde try/catch ile çalışıyor;
+     * defense-in-depth için ikinci katman).
+     */
+    private void notifySafely(HeartbeatEventType eventType, Throwable error) {
+        if (signerNotifier == null) {
+            return;
+        }
+        try {
+            signerNotifier.notifyOnHeartbeatEvent(
+                eventType, alias,
+                signatureAlgorithm != null ? signatureAlgorithm.name() : null,
+                snapshotStats(), error);
+        } catch (Throwable t) {
+            LOGGER.warn("Heartbeat notifier çağrısı beklenmedik hata "
+                + "(scheduler etkilenmedi): {}", t.toString());
+        }
+    }
+
+    /**
+     * Cumulative sayaçların anlık snapshot'ını döner — notifier'ın payload
+     * builder'ı bu Map'i okur. Atomik okumalar ardışık (atomik snapshot
+     * gerekmiyor: bildirim audit kanalı, mikro tutarsızlık önemsiz).
+     */
+    private Map<String, Long> snapshotStats() {
+        Map<String, Long> stats = new LinkedHashMap<>();
+        stats.put("successCount", successCount.get());
+        stats.put("failureCount", failureCount.get());
+        stats.put("consecutiveFailures", consecutiveFailures.get());
+        stats.put("reinitAttempts", reinitAttempts.get());
+        stats.put("reinitSuccesses", reinitSuccesses.get());
+        return stats;
     }
 
     private void logHeartbeatFailure(long consecutive, long total, Exception e) {
@@ -266,6 +324,9 @@ public class HsmHeartbeatScheduler {
         LOGGER.warn("L1 Cryptoki-level REINIT tetiklendi: alias='{}', consecutiveFail={}, "
             + "reinitDenemesi={}, sonrakiDenemeicinBekleme={}s",
             alias, consecutive, attempt, backoffMs / 1000);
+        // Operatöre cryptoki-level müdahale başladığını duyur — bu noktada
+        // HSM secure channel'ında ciddi bir problem olduğunu biliyoruz.
+        notifySafely(HeartbeatEventType.REINIT_TRIGGERED, null);
 
         try {
             IaikPkcs11Module.ResolvedKey refreshed =
@@ -279,10 +340,14 @@ public class HsmHeartbeatScheduler {
             LOGGER.info("L1 reinit başarılı: alias='{}', yeni handle=0x{}. "
                 + "Sonraki heartbeat tick'inde sign yeni kanal üstünden denenecek.",
                 alias, Long.toHexString(resolvedKey.privateKeyHandle));
+            notifySafely(HeartbeatEventType.REINIT_SUCCESS, null);
         } catch (Exception reinitEx) {
             LOGGER.error("L1 reinit BAŞARISIZ (deneme={}): alias='{}', hata='{}'. "
                 + "Sonraki reinit denemesine {}s sonra izin verilecek.",
                 attempt, alias, reinitEx.getMessage(), backoffMs / 1000);
+            // Reinit başarısızlığı kritik sinyal — operatör elle müdahale
+            // gerekebileceğini bilmelidir (firmware/network/partition).
+            notifySafely(HeartbeatEventType.REINIT_FAILED, reinitEx);
         }
     }
 

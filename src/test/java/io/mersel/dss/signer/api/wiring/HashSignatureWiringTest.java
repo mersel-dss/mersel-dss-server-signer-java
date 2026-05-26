@@ -1,6 +1,7 @@
 package io.mersel.dss.signer.api.wiring;
 
 import io.mersel.dss.signer.api.controllers.HashSignatureController;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.raw.RawHashSignatureService;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -76,6 +77,15 @@ class HashSignatureWiringTest {
 
     @MockBean
     private RawHashSignatureService rawHashSignatureService;
+
+    /**
+     * SignerNotifier bağımlılığı — controller artık signature-failure
+     * bildirimlerini buraya yönlendiriyor. WebMvcTest slice'ı
+     * {@code @Service}'leri scan etmez (sadece web layer); bu yüzden
+     * notifier bean'ini test için mock olarak sağlıyoruz.
+     */
+    @MockBean
+    private SignerNotifier signerNotifier;
 
     /**
      * Controller bean'i context'te kayıtlı mı?

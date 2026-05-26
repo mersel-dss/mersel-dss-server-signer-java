@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.controllers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mersel.dss.signer.api.GlobalExceptionHandler;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.cades.CAdESSignatureService;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -66,6 +67,7 @@ class MultipartLimitHttpContractTest {
     private static final long EXCEEDED_BYTES = 200L * 1024 * 1024 + 1;
 
     @Mock private CAdESSignatureService cadesSignatureService;
+    @Mock private SignerNotifier signerNotifier;
 
     private MockMvc mockMvc;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -73,7 +75,8 @@ class MultipartLimitHttpContractTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        CadesController cadesController = new CadesController(cadesSignatureService, null);
+        CadesController cadesController = new CadesController(
+            cadesSignatureService, null, signerNotifier);
 
         // Interceptor — her request'i intercept eder ve içinde
         // MaxUploadSizeExceededException atar. Spring DispatcherServlet

@@ -5,6 +5,7 @@ import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -53,6 +54,7 @@ import static org.mockito.Mockito.*;
 class PadesControllerTest {
 
     @Mock private PAdESSignatureService padesSignatureService;
+    @Mock private SignerNotifier signerNotifier;
 
     private SigningMaterial signingMaterial = null;
     private PadesController controller;
@@ -60,7 +62,7 @@ class PadesControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        controller = new PadesController(padesSignatureService, signingMaterial);
+        controller = new PadesController(padesSignatureService, signingMaterial, signerNotifier);
     }
 
     @Nested

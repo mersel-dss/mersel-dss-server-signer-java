@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.controllers;
 import java.util.UUID;
 
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,11 +37,14 @@ public class PadesController {
 
     private final PAdESSignatureService padesSignatureService;
     private final SigningMaterial signingMaterial;
+    private final SignerNotifier signerNotifier;
 
     public PadesController(PAdESSignatureService padesSignatureService,
-                          SigningMaterial signingMaterial) {
+                          SigningMaterial signingMaterial,
+                          SignerNotifier signerNotifier) {
         this.padesSignatureService = padesSignatureService;
         this.signingMaterial = signingMaterial;
+        this.signerNotifier = signerNotifier;
     }
 
     @Operation(
@@ -98,6 +102,20 @@ public class PadesController {
 
         } catch (Exception e) {
             LOGGER.error("PAdES imzası oluşturulurken hata", e);
+            byte[] documentBytes = null;
+            String fileName = null;
+            String contentType = null;
+            try {
+                if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
+                    fileName = dto.getDocument().getOriginalFilename();
+                    contentType = dto.getDocument().getContentType();
+                    documentBytes = dto.getDocument().getBytes();
+                }
+            } catch (Exception readEx) {
+                LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());
+            }
+            signerNotifier.notifyOnSignatureFailure(
+                    "/v1/padessign", "PAdES", e, documentBytes, fileName, contentType);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }

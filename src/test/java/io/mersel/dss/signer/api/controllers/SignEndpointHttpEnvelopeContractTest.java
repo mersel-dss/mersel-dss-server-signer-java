@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.controllers;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.mersel.dss.signer.api.GlobalExceptionHandler;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.cades.CAdESSignatureService;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
 import io.qameta.allure.Epic;
@@ -66,14 +67,17 @@ class SignEndpointHttpEnvelopeContractTest {
 
     @Mock private CAdESSignatureService cadesSignatureService;
     @Mock private PAdESSignatureService padesSignatureService;
+    @Mock private SignerNotifier signerNotifier;
 
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        CadesController cadesController = new CadesController(cadesSignatureService, null);
-        PadesController padesController = new PadesController(padesSignatureService, null);
+        CadesController cadesController = new CadesController(
+            cadesSignatureService, null, signerNotifier);
+        PadesController padesController = new PadesController(
+            padesSignatureService, null, signerNotifier);
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(cadesController, padesController)

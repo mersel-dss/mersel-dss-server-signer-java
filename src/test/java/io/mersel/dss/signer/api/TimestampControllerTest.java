@@ -5,6 +5,7 @@ import io.mersel.dss.signer.api.dtos.TimestampResponseDto;
 import io.mersel.dss.signer.api.dtos.TimestampStatusDto;
 import io.mersel.dss.signer.api.dtos.TimestampValidationResponseDto;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
 import io.mersel.dss.signer.api.services.timestamp.TimestampService;
 import io.qameta.allure.Epic;
@@ -43,11 +44,15 @@ public class TimestampControllerTest {
     @Mock
     private TimestampConfigurationService timestampConfigurationService;
 
+    @Mock
+    private SignerNotifier signerNotifier;
+
     private TimestampController timestampController;
 
     @BeforeEach
     void setUp() {
-        timestampController = new TimestampController(timestampService, timestampConfigurationService);
+        timestampController = new TimestampController(
+            timestampService, timestampConfigurationService, signerNotifier);
     }
 
     @Test

@@ -5,6 +5,7 @@ import io.mersel.dss.signer.api.dtos.SignHashDto;
 import io.mersel.dss.signer.api.dtos.SignHashResponseDto;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.raw.RawHashSignatureService;
 import io.qameta.allure.Epic;
 import io.qameta.allure.Feature;
@@ -43,12 +44,14 @@ import static org.mockito.Mockito.when;
 class HashSignatureControllerTest {
 
     private RawHashSignatureService service;
+    private SignerNotifier signerNotifier;
     private HashSignatureController controller;
 
     @BeforeEach
     void setUp() {
         service = mock(RawHashSignatureService.class);
-        controller = new HashSignatureController(service);
+        signerNotifier = mock(SignerNotifier.class);
+        controller = new HashSignatureController(service, signerNotifier);
     }
 
     @Test
