@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-05-26
+
 ### Added
 
 - **`POST /v1/hashsign` — pre-hashed digest imzalama endpoint'i.**
