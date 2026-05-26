@@ -83,7 +83,63 @@
         -->
         <allure.version>2.27.0</allure.version>
         <aspectj.version>1.9.21</aspectj.version>
+
+        <!--
+            Jackson BOM override — Spring Boot 2.7.18 default'u 2.13.5.
+            =====================================================================
+            Spring Boot starter-parent kendi `<jackson-bom.version>` property'sini
+            'jackson-bom' BOM import'una geçirir; biz bunu override ederek TÜM
+            jackson-* modüllerini (jackson-databind, jackson-core, jackson-annotations,
+            jackson-datatype-jdk8/jsr310, jackson-module-parameter-names,
+            jackson-dataformat-xml/yaml, ...) tek tutarlı versiyona pin'liyoruz.
+
+            ÖNEMLİ: Jackson modülleri "in-lockstep" çalışır — aralarındaki binary
+            uyumluluk minor sürüm bazlı garanti edilir. Karmaşık (split-brain)
+            classpath örneği:
+              - jackson-databind 2.15.3 (explicit override)
+              - jackson-annotations 2.13.5 (BOM default)
+              → Runtime'da NoSuchFieldError:
+                  READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE
+                  (com.fasterxml.jackson.databind.deser.std.EnumDeserializer
+                   .createContextual)
+              Çünkü 2.15.x EnumDeserializer'ı 2.13.x annotations/feature
+              ekosisteminin tanımadığı bir enum field'a reflect eder.
+
+            BOM override = tek versiyon, sıfır skew, sıfır NoSuchFieldError.
+        -->
+        <jackson-bom.version>2.15.3</jackson-bom.version>
     </properties>
+
+    <!--
+        dependencyManagement — Jackson 2.15.3 BOM'unu KENDİ POM'umuzdan
+        explicit import ediyoruz. Belt-and-suspenders savunma:
+        ============================================================
+        Yukarıdaki `<jackson-bom.version>` property'si SB starter-parent'in
+        kendi 'jackson-bom' import'unu yeniden yönlendirir; AMA bu yalnızca
+        Spring Boot starter-parent'ın property cascade'ine güvenir. Bazı
+        IDE'ler (özellikle IntelliJ IDEA) Maven projeyi reimport etmediği
+        sürece bu cascade'i geç görür — pom değişikliğinden hemen sonra
+        çalıştırılan Run Configuration eski classpath'i hâlâ tutuyor olabilir
+        (jackson-annotations 2.13.5 .jar dosyası IDE'nin generated classpath
+        listesinde kalır → NoSuchFieldError tekrarlanır).
+
+        Local <dependencyManagement> ile jackson-bom 2.15.3'ü doğrudan
+        import etmek, Maven resolution sırasında parent POM'un
+        dependencyManagement'ından ÖNCELİKLİ olduğu için sağlamlık ekler.
+        Tek source-of-truth: bu blok. IDE re-import eksikse bile pom'un
+        bir sonraki indekslemesinde bu lock devreye girer.
+    -->
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson-bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
 
@@ -150,10 +206,15 @@
             <artifactId>dss-jaxb-parsers</artifactId>
             <version>6.3</version>
         </dependency>
+        <!--
+            Jackson modülleri için <version> verMİYORUZ — Spring Boot'un
+            jackson-bom (2.15.3'e pin'lendi, properties bloğuna bkz.)
+            tüm jackson-* artefaktlarını tek lockstep versiyonda yönetir.
+            Manual <version> yazmak split-brain riskini geri getirir.
+        -->
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>2.15.3</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.pdfbox/pdfbox -->
         <dependency>
@@ -165,7 +226,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.3</version>
         </dependency>
 
         <!-- SpringDoc OpenAPI Core (without Swagger UI) -->
@@ -312,7 +372,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
             <artifactId>jackson-dataformat-xml</artifactId>
-            <version>2.15.3</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/jakarta.xml.bind/jakarta.xml.bind-api -->

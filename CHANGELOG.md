@@ -7,6 +7,28 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Fixed
+
+- **Jackson sürüm split-brain → `NoSuchFieldError` runtime hatası**: API endpoint'lerine ilk JSON request geldiğinde
+  `java.lang.NoSuchFieldError: READ_UNKNOWN_ENUM_VALUES_USING_DEFAULT_VALUE` ile patlama yaşanıyordu
+  (`com.fasterxml.jackson.databind.deser.std.EnumDeserializer.createContextual` içinden, Spring MVC
+  message converter aşamasında).
+  - **Kök neden**: `pom.xml` yalnızca `jackson-core`, `jackson-databind` ve `jackson-dataformat-xml`
+    artefaktlarını explicit `<version>2.15.3</version>` ile override ediyordu. Spring Boot 2.7.18
+    starter-parent'ın `jackson-bom` 2.13.5'i transitive olarak getirdiği `jackson-annotations`,
+    `jackson-datatype-jdk8`, `jackson-datatype-jsr310`, `jackson-module-parameter-names` ve
+    `jackson-dataformat-yaml` modülleri **2.13.5**'te kalıyordu. Jackson modülleri "in-lockstep"
+    çalışır — `jackson-databind 2.15.3`'ün `EnumDeserializer`'ı `DeserializationFeature` üzerinde
+    2.13.x'te bulunmayan bir enum field'ına reflect ettiğinde JVM `NoSuchFieldError` fırlatıyordu.
+  - **Çözüm**: `pom.xml` `<properties>` bloğuna `<jackson-bom.version>2.15.3</jackson-bom.version>`
+    eklendi. Spring Boot starter-parent kendi `jackson-bom` import'unu bu property üzerinden çözer;
+    artık TÜM jackson-* artefaktları (annotations / datatype-jdk8 / datatype-jsr310 /
+    module-parameter-names / dataformat-yaml / dataformat-xml / core / databind) **2.15.3** lockstep'inde
+    resolve edilir. Explicit dependency declaration'lardaki `<version>` etiketleri de kaldırıldı
+    (DRY — versiyon tek otoriter kaynaktan, BOM'dan, yönetiliyor).
+  - **Etki**: Sıfır kod değişikliği, sıfır API contract kırılması; sadece dependency graph
+    hizalandı. Runtime `NoSuchFieldError` artık reproducible değil.
+
 ## [0.9.1] - 2026-05-26
 
 ### Changed
