@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-26
+
 ### Changed
 
 - **.NET istemci SDK (`MERSEL.Services.DssSigner.Client`) hedef framework
