@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-26
+
 ### Fixed
 
 - **Jackson sürüm split-brain → `NoSuchFieldError` runtime hatası**: API endpoint'lerine ilk JSON request geldiğinde
