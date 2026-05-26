@@ -191,11 +191,18 @@ jobs:
       - name: Determine reproducible build timestamp
         id: ts
         run: |
-          # Tag'in işaret ettiği commit'in author date'ini reproducible build
+          # Tag'in işaret ettiği commit'in committer date'ini reproducible build
           # timestamp olarak kullan. Böylece aynı commit'ten her build aynı bytes'ları üretir.
-          BUILD_TS=$(git log -1 --format=%cI HEAD)
+          #
+          # NOT: Spring Boot maven plugin'in 'project.build.outputTimestamp' parametresi
+          # ISO 8601 INSTANT (Z suffix'li UTC) bekler — git'in %cI formatı timezone offset
+          # (örn. +03:00) verdiği için doğrudan kullanılamaz, parser exception fırlatır.
+          # Çözüm: committer timestamp'ini Unix epoch (%ct) olarak alıp date(1) ile
+          # UTC ISO instant'a normalize ediyoruz. Reproducibility korunur (epoch sabit).
+          GIT_EPOCH=$(git log -1 --format=%ct HEAD)
+          BUILD_TS=$(date -u -d "@${GIT_EPOCH}" +%Y-%m-%dT%H:%M:%SZ)
           echo "BUILD_TS=${BUILD_TS}" >> "$GITHUB_OUTPUT"
-          echo "Reproducible build timestamp: ${BUILD_TS}"
+          echo "Reproducible build timestamp: ${BUILD_TS} (epoch ${GIT_EPOCH})"
 
       - name: Build JAR + SBOM with embedded metadata
         env:
