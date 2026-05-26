@@ -7,6 +7,52 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`POST /v1/hashsign` — pre-hashed digest imzalama endpoint'i.**
+  - **Use case**: e-Defter mali mührü, manuel XAdES `<ds:SignedInfo>` digest
+    imzalama ve benzeri akışlar. Caller hash'i kendisi hesaplar; server
+    digest'i <em>tekrar hash'lemez</em>.
+  - **Akış**:
+    - **RSA**: `Pkcs1DigestInfo.wrap(digest, algorithm)` ile PKCS#1 v1.5
+      DigestInfo prefix eklenir; JCA path'inde `Cipher("RSA/ECB/PKCS1Padding")`,
+      PKCS#11 path'inde `CKM_RSA_PKCS` mekanizması kullanılır.
+    - **ECDSA**: Hash doğrudan eğri üzerinde imzalanır; JCA path'inde
+      `NONEwithECDSA`, PKCS#11 path'inde `CKM_ECDSA` kullanılır. Çıktı
+      DER SEQUENCE `{ r, s }` olarak normalize edilir.
+  - **Validation**: Decoded digest uzunluğu `digestAlgorithm` ile
+    eşleşmiyorsa 400 INVALID_INPUT döner (caller yanlışlıkla raw veri
+    göndermiş regresyonunu erkenden yakalar). Geçersiz base64, eksik
+    body / digest field hepsi 400 ile reddedilir.
+  - **Request kontratı**:
+    ```json
+    {
+      "base64EncodedDigest": "...",
+      "digestAlgorithm": "SHA256"
+    }
+    ```
+  - **Yanıt kontratı**:
+    ```json
+    {
+      "base64EncodedSignature": "..."
+    }
+    ```
+  - **Mimari**: Yeni `HashSignatureController` + `RawHashSignatureService`
+    (paket: `services.signature.raw`). XAdES belge imzalama akışlarından
+    SRP gereği ayrılmıştır. Backend katmanında `SigningBackend.signDigest`
+    + `Pkcs11Signer.signDigest` kontratları eklendi; her iki yolda da
+    SMS-aile recovery (CKR=0x80000384/0x80000387) korunur.
+  - **Güvenlik notu**: Endpoint bir signing oracle olduğu için private
+    network içinde tüketilmek üzere tasarlanmıştır. Public exposure
+    senaryosunda API key authentication, audit log ve rate limiting
+    eklenmesi önerilir.
+
+### Changed
+
+- `Pkcs1DigestInfo` (PKCS#1 v1.5 DigestInfo encoder) artık `public` —
+  raw RSA imzalama yolunda hem JCA hem PKCS#11 backend'leri tarafından
+  ortak kullanılıyor.
+
 ## [0.8.0] - 2026-05-25
 
 ### Changed (BREAKING)

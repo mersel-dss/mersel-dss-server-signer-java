@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.dtos.CertificateInfoDto;
@@ -768,6 +769,102 @@ public class IaikPkcs11Module implements InitializingBean, DisposableBean {
             }
         }
         return 0L;
+    }
+
+    /**
+     * Pre-hashed digest yolu — caller zaten hesaplanmış digest baytlarını verir.
+     *
+     * <p>Bu yol {@link #signOnSession(ResolvedKey, byte[], SignatureAlgorithm)}'dan
+     * iki farklılıkla ayrılır:</p>
+     * <ol>
+     *   <li><b>Hash basamağı atlanır</b> &mdash; çağıran zaten hashlemiş; backend
+     *       tekrar hashlerse çıktı double-hashed olur ve doğrulayıcı reddeder.</li>
+     *   <li><b>Daima raw mekanizma kullanılır</b> &mdash; RSA için
+     *       {@code CKM_RSA_PKCS} + {@link Pkcs1DigestInfo} wrap, ECDSA için
+     *       {@code CKM_ECDSA} + raw digest. Combined mekanizmalar
+     *       ({@code CKM_<HASH>_RSA_PKCS}) HSM içinde digest aldığı için kullanılmaz.</li>
+     * </ol>
+     *
+     * <p>SMS-aile recovery (CKR=0x80000384/0x80000387) yolu mevcut
+     * {@link #signOnSession(ResolvedKey, byte[], SignatureAlgorithm)} ile birebir
+     * aynı şekilde uygulanır.</p>
+     *
+     * @param rk           token üzerindeki imzalama anahtarı için resolved handle
+     * @param digest       pre-computed hash baytları
+     * @param digestAlg    DigestInfo prefix seçimi için DSS digest algoritması
+     * @param enc          imzalama anahtarının enc tipi (RSA / ECDSA / PLAIN_ECDSA);
+     *                     DSA bu yolda <b>reddedilir</b> (raw CKM_DSA fallback path
+     *                     henüz implement edilmedi — RSA/ECDSA dışı T.C. e-imza
+     *                     pazarında pratik olarak ölü)
+     * @return JCA uyumlu imza byte'ları (RSA: PKCS#1 v1.5 padded RSA cipher
+     *         output; ECDSA: DER SEQUENCE { r, s })
+     */
+    byte[] signOnSessionRawDigest(ResolvedKey rk,
+                                   byte[] digest,
+                                   DigestAlgorithm digestAlg,
+                                   EncryptionAlgorithm enc) {
+        try {
+            return signOnSessionRawDigest(rk.privateKeyHandle, digest, digestAlg, enc);
+        } catch (io.mersel.dss.signer.api.exceptions.SignatureException sigEx) {
+            long smsErrorCode = extractSmsFamilyErrorCode(sigEx);
+            if (smsErrorCode == 0L) {
+                throw sigEx;
+            }
+            LOGGER.warn("L2 SMS-aile hata yakalandı (raw-digest path, CKR=0x{}, alias='{}'); "
+                + "module reinit + tek-shot retry deniyor.",
+                Long.toHexString(smsErrorCode), rk.alias);
+            ResolvedKey refreshed;
+            try {
+                refreshed = reinitializeForSmsRecovery(rk.alias, null);
+            } catch (Exception reinitEx) {
+                LOGGER.error("L2 reinit başarısız (raw-digest path, alias='{}'): {}; orijinal SMS "
+                    + "hatası propagate ediliyor.", rk.alias, reinitEx.getMessage());
+                throw sigEx;
+            }
+            rk.privateKeyHandle = refreshed.privateKeyHandle;
+            rk.certificate = refreshed.certificate;
+            rk.certificateChain = refreshed.certificateChain;
+            LOGGER.info("L2 reinit tamam (raw-digest path), retry atılıyor (alias='{}', "
+                + "yeni handle=0x{}).", rk.alias, Long.toHexString(rk.privateKeyHandle));
+            return signOnSessionRawDigest(rk.privateKeyHandle, digest, digestAlg, enc);
+        }
+    }
+
+    private byte[] signOnSessionRawDigest(long privateKeyHandle,
+                                           byte[] digest,
+                                           DigestAlgorithm digestAlg,
+                                           EncryptionAlgorithm enc) {
+        ensureTokenOpen();
+        if (enc == EncryptionAlgorithm.DSA) {
+            throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                "DSA pre-hashed digest imzalama bu kod yolunda implement edilmedi. "
+                + "Lütfen RSA veya ECDSA anahtarı kullanın.");
+        }
+        if (enc == EncryptionAlgorithm.RSASSA_PSS) {
+            throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                "RSA-PSS pre-hashed digest imzalama bu kod yolunda implement edilmedi. "
+                + "PSS salt + MGF parametreleri için ayrı bir akış gerekir; "
+                + "şu an PKCS#1 v1.5 (RSA) ve ECDSA destekleniyor.");
+        }
+        Mechanism rawMech = (enc == EncryptionAlgorithm.ECDSA || enc == EncryptionAlgorithm.PLAIN_ECDSA)
+            ? IaikSignatureMechanisms.fallbackToRawEcdsa()
+            : IaikSignatureMechanisms.fallbackToRawRsaPkcs();
+        byte[] inputData = (enc == EncryptionAlgorithm.RSA)
+            ? Pkcs1DigestInfo.wrap(digest, digestAlg)
+            : digest;
+        // invokeSign yalnızca normalize + logging için SignatureAlgorithm bekler;
+        // enc + digest kombinasyonundan tek doğru DSS algoritması üretilir.
+        SignatureAlgorithm dssAlg = SignatureAlgorithm.getAlgorithm(enc, digestAlg);
+        try {
+            return invokeSign(rawMech, privateKeyHandle, inputData, dssAlg, digest.length);
+        } catch (PKCS11Exception ckEx) {
+            throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                "HSM raw-digest imza başarısız (CKR=0x"
+                    + Long.toHexString(ckEx.getErrorCode()) + "): " + ckEx.getMessage(), ckEx);
+        } catch (Exception e) {
+            throw new io.mersel.dss.signer.api.exceptions.SignatureException(
+                "HSM raw-digest imza başarısız", e);
+        }
     }
 
     byte[] signOnSession(long privateKeyHandle,

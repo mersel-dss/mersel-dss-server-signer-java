@@ -1,6 +1,7 @@
 package io.mersel.dss.signer.api.models;
 
 import eu.europa.esig.dss.model.x509.CertificateToken;
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
 
@@ -105,6 +106,14 @@ public final class SigningMaterial {
 
     public byte[] sign(byte[] dataToSign, SignatureAlgorithm signatureAlgorithm) {
         return signingBackend.sign(dataToSign, signatureAlgorithm);
+    }
+
+    /**
+     * Pre-hashed digest yolu shortcut'u; backend digest'i tekrar hash'lemez.
+     * Detaylı sözleşme: {@link SigningBackend#signDigest(byte[], DigestAlgorithm)}.
+     */
+    public byte[] signDigest(byte[] digest, DigestAlgorithm digestAlgorithm) {
+        return signingBackend.signDigest(digest, digestAlgorithm);
     }
 
     public X509Certificate getSigningCertificate() {

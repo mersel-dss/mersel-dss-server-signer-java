@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 
 import java.security.cert.X509Certificate;
@@ -42,4 +43,22 @@ public interface Pkcs11Signer {
      *         bekleyen formatlar dönüşümü kendi katmanında yapar.
      */
     byte[] sign(byte[] dataToSign, SignatureAlgorithm signatureAlgorithm);
+
+    /**
+     * Pre-hashed digest'i HSM'de imzalar; HSM digest'i <em>tekrar hash'lemez</em>.
+     *
+     * <p>RSA için raw {@code CKM_RSA_PKCS} mekanizması kullanılır: {@link Pkcs1DigestInfo}
+     * ile DigestInfo wrap'i bu sınır içinde yapılır. ECDSA için raw {@code CKM_ECDSA}
+     * kullanılır; çıktı DER SEQUENCE { r, s }'e {@link Pkcs11EcdsaSignatureEncoder}
+     * tarafından normalize edilir.</p>
+     *
+     * <p>Combined mekanizmalar ({@code CKM_<HASH>_RSA_PKCS}) HSM içinde digest
+     * alacağı için <b>kullanılmaz</b> — caller zaten hashlenmiş veriyi gönderiyor.</p>
+     *
+     * @param digest pre-computed hash baytları
+     * @param digestAlgorithm RSA path'inde DigestInfo prefix seçimi için DSS
+     *                        digest algoritması
+     * @return JCA uyumlu imza byte'ları
+     */
+    byte[] signDigest(byte[] digest, DigestAlgorithm digestAlgorithm);
 }
