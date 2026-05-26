@@ -1,5 +1,7 @@
 package io.mersel.dss.signer.api.services.keystore.iaik;
 
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
+import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 
 import java.security.cert.X509Certificate;
@@ -46,6 +48,21 @@ final class IaikPkcs11Signer implements Pkcs11Signer {
         // üzerinden fresh okunur. Reinit sonrası in-place refresh edilen
         // handle'ı bir sonraki sign otomatik kullanır; cascade transparent.
         return module.signOnSession(resolvedKey, dataToSign, signatureAlgorithm);
+    }
+
+    @Override
+    public byte[] signDigest(byte[] digest, DigestAlgorithm digestAlgorithm) {
+        if (digest == null || digest.length == 0) {
+            throw new IllegalArgumentException("signDigest: digest null veya boş olamaz");
+        }
+        if (digestAlgorithm == null) {
+            throw new IllegalArgumentException("signDigest: digestAlgorithm null olamaz");
+        }
+        // EncryptionAlgorithm sertifikanın public key'inden çözülür; mevcut
+        // sertifika imzalama için kullanılan key ile birebir bağlı (HSM-resident
+        // key handle bu cert'in private partner'ı).
+        EncryptionAlgorithm enc = EncryptionAlgorithm.forKey(resolvedKey.certificate.getPublicKey());
+        return module.signOnSessionRawDigest(resolvedKey, digest, digestAlgorithm, enc);
     }
 
     /**

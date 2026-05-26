@@ -1,17 +1,11 @@
 package io.mersel.dss.signer.api.controllers;
 
-import eu.europa.esig.dss.enumerations.DigestAlgorithm;
-import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
-import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
-import io.mersel.dss.signer.api.dtos.SignHashDto;
-import io.mersel.dss.signer.api.dtos.SignHashResponseDto;
 import io.mersel.dss.signer.api.dtos.SignWsSecurityDto;
 import io.mersel.dss.signer.api.dtos.SignXadesDto;
 import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
-import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
 import io.mersel.dss.signer.api.util.Utilities;
@@ -25,10 +19,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RestController;
 import org.w3c.dom.Document;
 
-import java.util.Base64;
 import java.util.UUID;
 
 /**
@@ -46,19 +43,17 @@ public class XadesController {
     private final SigningMaterial signingMaterial;
     private final String signingAlias;
     private final char[] signingPin;
-    private final DigestAlgorithmResolverService digestAlgorithmResolverService;
 
     public XadesController(XAdESSignatureService xadesSignatureService,
-                           WsSecuritySignatureService wsSecuritySignatureService,
-                           SigningMaterial signingMaterial,
-                           String signingAlias,
-                           char[] signingPin, DigestAlgorithmResolverService digestAlgorithmResolverService) {
+                          WsSecuritySignatureService wsSecuritySignatureService,
+                          SigningMaterial signingMaterial,
+                          String signingAlias,
+                          char[] signingPin) {
         this.xadesSignatureService = xadesSignatureService;
         this.wsSecuritySignatureService = wsSecuritySignatureService;
         this.signingMaterial = signingMaterial;
         this.signingAlias = signingAlias;
         this.signingPin = signingPin;
-        this.digestAlgorithmResolverService = digestAlgorithmResolverService;
     }
 
     @Operation(
@@ -182,40 +177,6 @@ public class XadesController {
             LOGGER.error("WS-Security imzası oluşturulurken hata", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
-        }
-    }
-
-    @Operation(
-            summary = "Hash değerini imzalar",
-            description = "Hash imzalar(özellikle e-defter digest value için kullanılabilir)"
-    )
-    @RequestMapping(
-            value = "/v1/hashsign",
-            method = RequestMethod.POST,
-            consumes = {MediaType.APPLICATION_JSON_VALUE},
-            produces = {MediaType.APPLICATION_JSON_VALUE})
-    @ApiResponses({
-            @ApiResponse(responseCode = "200",
-                    content = @Content(schema = @Schema(type = "string", format = "binary"))),
-            @ApiResponse(responseCode = "400",
-                    content = @Content(schema = @Schema(implementation = ErrorModel.class))),
-            @ApiResponse(responseCode = "500")
-    })
-    public ResponseEntity<?> signHash(@RequestBody SignHashDto dto) {
-        try {
-            byte[] decoded = Base64.getDecoder().decode(dto.getBase64EncodedDataToSign());
-            DigestAlgorithm digestAlg = digestAlgorithmResolverService.resolveDigestAlgorithm(signingMaterial.getSigningCertificate());
-            EncryptionAlgorithm encAlg = EncryptionAlgorithm.forKey(signingMaterial.getSigningCertificate().getPublicKey());
-            SignatureAlgorithm sigAlg = SignatureAlgorithm.getAlgorithm(encAlg, digestAlg);
-            byte[] signed = signingMaterial.getSigningBackend().sign(decoded, sigAlg);
-            SignHashResponseDto result = new SignHashResponseDto(Base64.getEncoder().encodeToString(signed));
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(result);
-        } catch (Exception e) {
-            LOGGER.error("XAdES imzası oluşturulurken hata", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         }
     }
 }

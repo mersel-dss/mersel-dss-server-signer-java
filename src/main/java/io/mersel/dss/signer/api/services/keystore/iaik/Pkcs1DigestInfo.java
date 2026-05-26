@@ -24,7 +24,7 @@ import eu.europa.esig.dss.enumerations.DigestAlgorithm;
  * <p>Her digest algoritması için DigestInfo prefix'i (algorithm identifier +
  * OCTET STRING tag + length) sabittir; sadece digest payload'u değişir.</p>
  */
-final class Pkcs1DigestInfo {
+public final class Pkcs1DigestInfo {
 
     /** SHA-1   OID = 1.3.14.3.2.26 */
     private static final byte[] PREFIX_SHA1 = {
@@ -61,7 +61,7 @@ final class Pkcs1DigestInfo {
      * DigestInfo prefix'ini ekler. Sonuç {@code session.sign()}'a raw
      * {@code CKM_RSA_PKCS} mekanizmasıyla geçirilebilir.
      */
-    static byte[] wrap(byte[] digest, DigestAlgorithm digestAlgorithm) {
+    public static byte[] wrap(byte[] digest, DigestAlgorithm digestAlgorithm) {
         byte[] prefix;
         switch (digestAlgorithm) {
             case SHA1:   prefix = PREFIX_SHA1;   break;

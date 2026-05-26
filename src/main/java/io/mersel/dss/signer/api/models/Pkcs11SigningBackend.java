@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.models;
 
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
@@ -39,6 +40,19 @@ public final class Pkcs11SigningBackend implements SigningBackend {
             throw e;
         } catch (Exception e) {
             throw new SignatureException("HSM imzası oluşturulamadı", e);
+        }
+    }
+
+    @Override
+    public byte[] signDigest(byte[] digest, DigestAlgorithm digestAlgorithm) {
+        try {
+            return signer.signDigest(digest, digestAlgorithm);
+        } catch (SignatureException e) {
+            throw e;
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new SignatureException("HSM digest imzası oluşturulamadı", e);
         }
     }
 
