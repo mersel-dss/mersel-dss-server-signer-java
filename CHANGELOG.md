@@ -7,6 +7,103 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **Signer event bildirim altyapısı — Slack + generic HTTP webhook.**
+  Operatörün imza akışındaki iki kritik olay sınıfını dış sistemlere
+  push edebilmesi için tam bir notification stack'i eklendi:
+  - **Tetiklenen olaylar (iki sınıf, 6 alt-tip)**:
+    - `signature-failure` — 6 imza endpoint'inde (XAdES, CAdES, PAdES,
+      WS-Security, Hash, Timestamp) yakalanan tüm exception'lar.
+      `IllegalArgumentException` (4xx kullanıcı hatası) ve
+      `/api/timestamp/validate` / `/api/timestamp/status` (okuma
+      operasyonu) bilinçli olarak dışarıda — operasyonel gürültü
+      kontrolü.
+    - `heartbeat-*` — HSM heartbeat scheduler'ın 5 state transition'ı:
+      `heartbeat-failed`, `heartbeat-recovered`,
+      `heartbeat-reinit-triggered`, `heartbeat-reinit-success`,
+      `heartbeat-reinit-failed`. Üretimden öğrenilmiş gürültü kontrolü
+      ile: her tick'te değil, yalnız ilk failure (`consecutive==1`),
+      ERROR eşik aşımının ilk anı (`consecutive==5`) ve transition'larda
+      bildirim üretir.
+  - **Dispatch kanalları (her biri bağımsız aktivasyon, sıralı
+    aktivasyon zorunluluğu yok)**:
+    - **Generic HTTP webhook** — operatörün kendi alert/ticket/SIEM
+      sistemine JSON POST. HMAC-SHA256 (Stripe-style `"{ts}.{rawBody}"`
+      signing string), replay protection için
+      `X-Mersel-Webhook-Id` (UUID) + `X-Mersel-Webhook-Timestamp`
+      (epoch-sec) header'ları. Receiver tarafında constant-time HMAC
+      doğrulama örnekleri Node.js / Python / Java olarak rehbere
+      eklendi.
+    - **Slack incoming webhook** — Block Kit ile renk-kodlu attachment:
+      kırmızı (`#A30200`) = signature-failure, turuncu (`#D97706`) =
+      heartbeat alarm (FAILED / REINIT_TRIGGERED / REINIT_FAILED),
+      yeşil (`#2EB67D`) = heartbeat recovery (RECOVERED /
+      REINIT_SUCCESS). Operatör bir bakışta event tipini ayırt eder.
+    - **Slack-only inline base64** — tek-URL deployment modu. İmzalanmaya
+      çalışılan dosya base64 + code-fence olarak doğrudan Slack mesajının
+      *içine* gömülür. Default 8KB cap, ~28KB güvenli üst sınır (Slack
+      mesaj 40k char + Block Kit 3000 char/section limitiyle uyumlu).
+      Bot token / external storage kuramayan kurumsal IT politikası
+      altındaki dağıtımlar için.
+    - **Slack bot file upload** — yeni 3-adımlı API
+      (`files.getUploadURLExternal` → raw octet-stream POST →
+      `files.completeUploadExternal`). `files.upload` Kasım 2025'te
+      sunset edildiği için zorunlu yeni flow. `files.slack.com`
+      üzerinde 1GB'a kadar; PDF imzalı faturalar (>50KB) ve UBL
+      paketleri (>250KB) için tek doğru yol.
+  - **`x-log-*` korelasyon header'ları**: Request thread'inde
+    `LogHeadersFilter` tarafından MDC'ye konulan tüm `x-log-*` prefix'li
+    header'lar webhook HTTP header'ına, payload `logHeaders` alanına ve
+    Slack mesajındaki korelasyon bloğuna **otomatik pass-through**
+    edilir. Heartbeat scheduler thread'inde request bağlamı olmadığı
+    için heartbeat event'lerinde bu alan boş döner (kontrat gereği,
+    null bırakılır — yapay değer üretilmez).
+  - **Olay seviyesi anahtarlar**: Operatör sadece heartbeat alarmı
+    isteyip signature-failure'ı (veya tersini) kapatabilir
+    (`SIGNER_NOTIFICATION_SIGNATURE_FAILURE_ENABLED=false`,
+    `SIGNER_NOTIFICATION_HEARTBEAT_ENABLED=false`); master switch
+    (`SIGNER_NOTIFICATION_ENABLED=false`) topyekun susturur.
+  - **Çalışma modeli**: async + best-effort, OkHttp `enqueue()` ile
+    arka plana atılır. Bildirim hatası imza akışını ASLA bozmaz —
+    yalnız WARN log düşer. Receiver 500 dönse, URL ölü olsa, token
+    yanlış olsa: hep akış devam.
+  - **Gerçek sıfır overhead garanti**: `SIGNER_NOTIFICATION_ENABLED=false`
+    veya hiçbir destination env var'ı set edilmemişse `@PostConstruct`
+    OkHttpClient bile yaratmaz (dispatcher thread pool yok, connection
+    pool yok). Notification kapalıyken servisin steady-state heap
+    kullanımı bu modülden etkilenmez.
+  - **PII koruması**: `SIGNER_NOTIFICATION_INCLUDE_CONTENT=false` ile
+    Mali Mühür PDF içindeki VKN / TCKN gibi hassas alanları taşımayan
+    "metadata-only" dispatch'e geçilebilir. SHA-256 hash her zaman
+    dolu gelir — receiver dosyayı kendi arşivinden eşleştirebilir.
+  - **Operatör runbook'u**: `docs/notifications/HOW_TO_USE.md` (14
+    bölüm) — App Manifest YAML (kopyala-yapıştır Slack bot kurulumu),
+    kanal ID bulma 3 yöntem, `auth.test` smoke test, HMAC doğrulama
+    örnekleri (Node.js + Python + Java), boyut bazlı karar matrisi
+    (8KB / 28KB / 250KB / 10MB threshold'ları), sorun giderme tabloları
+    (webhook / Slack webhook / Slack bot / heartbeat / x-log-*) ve
+    pazardaki yerleşik çözümlerle karşılaştırma.
+  - **Yeni env değişkenleri**:
+    `SIGNER_NOTIFICATION_ENABLED`,
+    `SIGNER_NOTIFICATION_SIGNATURE_FAILURE_ENABLED`,
+    `SIGNER_NOTIFICATION_HEARTBEAT_ENABLED`,
+    `SIGNER_WEBHOOK_URL`, `SIGNER_WEBHOOK_SECRET`,
+    `SIGNER_SLACK_WEBHOOK_URL`,
+    `SIGNER_SLACK_BOT_TOKEN`, `SIGNER_SLACK_CHANNEL`,
+    `SIGNER_SLACK_INLINE_BASE64_ENABLED`,
+    `SIGNER_SLACK_INLINE_BASE64_MAX_BYTES`,
+    `SIGNER_NOTIFICATION_INCLUDE_CONTENT`,
+    `SIGNER_NOTIFICATION_MAX_CONTENT_SIZE_BYTES`,
+    `SIGNER_NOTIFICATION_CONNECT_TIMEOUT_MS`,
+    `SIGNER_NOTIFICATION_READ_TIMEOUT_MS`. Aynı isim uzayı
+    `application.properties` üzerinden `notification.signer.*`
+    formuyla da set edilebilir. Tüm değişkenler defaultlu — mevcut
+    deployment'lar değişiklik yapmadan çalışmaya devam eder (no-op).
+  - **Geri uyumluluk**: Sıfır API kontratı kırılması; hiçbir mevcut
+    endpoint imza/yanıt şekli değişmedi. Yeni feature opt-in bir
+    operasyonel kanaldır.
+
 ## [0.9.2] - 2026-05-26
 
 ### Fixed
