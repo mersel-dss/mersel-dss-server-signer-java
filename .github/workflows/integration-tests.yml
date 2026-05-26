@@ -66,11 +66,15 @@ name: Integration Tests
 #     `auto`: PR/scheduled koşumlarında GHCR'dan, manuel tetiklemede tercihe
 #     göre.
 #
-#   - pkcs11-integration: SoftHSM2 + OpenSC + Docker kullanarak iki test sınıfını
-#     birden koşturur (her ikisinin de @Tag("pkcs11-integration") etiketi var):
-#       1) SoftHsm2Pkcs11IntegrationTest        → 5 parametrize iterasyon
-#          (raw imza, her PfxTestKey için)
-#       2) XadesSoftHsmVerifierE2ETest          → 20 parametrize iterasyon
+#   - pkcs11-integration: SoftHSM2 + OpenSC + Docker kullanarak üç test sınıfını
+#     birden koşturur (üçünün de @Tag("pkcs11-integration") etiketi var):
+#       1) SoftHsm2Pkcs11IntegrationTest        → 6 parametrize iterasyon
+#          (5 raw imza + 1 H1 paralel sign kontrat testi, her PfxTestKey için)
+#       2) HashSignSoftHsm2IntegrationTest      → 7 parametrize iterasyon
+#          (5 pre-hashed digest roundtrip + 2 validation; /v1/hashsign yolunu
+#          gerçek SoftHSM2 + IAIK PKCS#11 + libsofthsm2 stack'inde doğrular —
+#          mock fixture'larla atlanan CKM_RSA_PKCS / CKM_ECDSA mekanizma yolu).
+#       3) XadesSoftHsmVerifierE2ETest          → 20 parametrize iterasyon
 #          (5 PFX × 4 XAdES fixture, gerçek HSM + DSS verifier API roundtrip).
 #          NOT: 0.7.0'da EARSIV_RAPORU TSA bağımlılığı nedeniyle
 #          XadesDocumentFixture.standardFixtures()'tan çıkarıldı; 5 → 4.
@@ -367,6 +371,37 @@ jobs:
             exit 1
           fi
           echo "✅ SoftHsm2Pkcs11IntegrationTest: $expected iterasyon, hepsi koştu"
+
+      - name: Verify HashSignSoftHsm2IntegrationTest (7 pre-hashed digest iterations)
+        run: |
+          set -euo pipefail
+          report="target/surefire-reports/io.mersel.dss.signer.api.services.keystore.iaik.HashSignSoftHsm2IntegrationTest.txt"
+          if [ ! -f "$report" ]; then
+            echo "❌ Surefire raporu bulunamadı: $report"
+            ls -la target/surefire-reports/ 2>/dev/null || true
+            exit 1
+          fi
+          echo "===== $report ====="
+          cat "$report"
+          echo "==================="
+
+          # 5 PfxTestKey × 1 roundtrip + 2 PfxTestKey × 1 validation = 7 iterasyon.
+          # /v1/hashsign endpoint'inin gerçek SoftHSM2 + IAIK PKCS#11 + libsofthsm2
+          # stack'inde çalıştığını bire bir doğrular (mock fixture'larla atlanan
+          # CKM_RSA_PKCS / CKM_ECDSA mekanizma yolunu kapsar).
+          expected=7
+          actual_run=$(grep -oE 'Tests run: [0-9]+' "$report" | head -1 | grep -oE '[0-9]+' || echo "0")
+          actual_skipped=$(grep -oE 'Skipped: [0-9]+' "$report" | head -1 | grep -oE '[0-9]+' || echo "0")
+
+          if [ "$actual_run" != "$expected" ]; then
+            echo "❌ Beklenen: $expected (5 roundtrip + 2 validation) iterasyonu, Gerçek: $actual_run"
+            exit 1
+          fi
+          if [ "$actual_skipped" != "0" ]; then
+            echo "❌ $actual_skipped test atlandı; softhsm2-util / pkcs11-tool / libsofthsm2 eksik?"
+            exit 1
+          fi
+          echo "✅ HashSignSoftHsm2IntegrationTest: $expected iterasyon, hepsi koştu"
 
       - name: Verify XadesSoftHsmVerifierE2ETest (20 HSM+verifier iterations)
         run: |

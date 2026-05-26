@@ -1,8 +1,11 @@
 package io.mersel.dss.signer.api.testsupport;
 
+import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
+import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs1DigestInfo;
 
+import javax.crypto.Cipher;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.cert.X509Certificate;
@@ -62,6 +65,29 @@ public final class PfxBackedPkcs11Signer implements Pkcs11Signer {
             return signature.sign();
         } catch (Exception e) {
             throw new IllegalStateException("PFX destekli PKCS#11 test signer imza atamadı", e);
+        }
+    }
+
+    @Override
+    public byte[] signDigest(byte[] digest, DigestAlgorithm digestAlgorithm) {
+        signCount.incrementAndGet();
+        try {
+            String keyAlg = privateKey.getAlgorithm();
+            if ("RSA".equalsIgnoreCase(keyAlg)) {
+                byte[] digestInfo = Pkcs1DigestInfo.wrap(digest, digestAlgorithm);
+                Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                cipher.init(Cipher.ENCRYPT_MODE, privateKey);
+                return cipher.doFinal(digestInfo);
+            }
+            if ("EC".equalsIgnoreCase(keyAlg) || "ECDSA".equalsIgnoreCase(keyAlg)) {
+                Signature signature = Signature.getInstance("NONEwithECDSA");
+                signature.initSign(privateKey);
+                signature.update(digest);
+                return signature.sign();
+            }
+            throw new IllegalStateException("Desteklenmeyen anahtar algoritması: " + keyAlg);
+        } catch (Exception e) {
+            throw new IllegalStateException("PFX destekli PKCS#11 test signer digest imza atamadı", e);
         }
     }
 

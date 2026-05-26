@@ -4,7 +4,6 @@ import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
 import io.mersel.dss.signer.api.models.enums.XadesSignatureLevel;
-import io.mersel.dss.signer.api.services.crypto.DigestAlgorithmResolverService;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
 import io.qameta.allure.Epic;
@@ -39,9 +38,6 @@ class XadesControllerTest {
     @Mock
     private WsSecuritySignatureService wsSecuritySignatureService;
 
-    @Mock
-    private DigestAlgorithmResolverService digestAlgorithmResolverService;
-
     private SigningMaterial signingMaterial = null; // SigningMaterial final class - mock edilemiyor
 
     private XadesController controller;
@@ -54,8 +50,7 @@ class XadesControllerTest {
             wsSecuritySignatureService,
             signingMaterial,
             "testAlias",
-            "testPin".toCharArray(),
-                digestAlgorithmResolverService
+            "testPin".toCharArray()
         );
     }
 

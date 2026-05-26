@@ -222,6 +222,11 @@ class WsSecuritySignatureServiceTest {
                 public byte[] sign(byte[] dataToSign, SignatureAlgorithm signatureAlgorithm) {
                     throw new RuntimeException("Simulated HSM session timeout");
                 }
+                @Override
+                public byte[] signDigest(byte[] digest,
+                                         eu.europa.esig.dss.enumerations.DigestAlgorithm digestAlgorithm) {
+                    throw new RuntimeException("Simulated HSM session timeout");
+                }
             };
             SigningMaterial material = new SigningMaterial(failing, rsaCert,
                 Collections.singletonList(rsaCert));
@@ -390,6 +395,28 @@ class WsSecuritySignatureServiceTest {
                 return sig.sign();
             } catch (Exception e) {
                 throw new RuntimeException("FakePkcs11Signer failure", e);
+            }
+        }
+
+        @Override
+        public byte[] signDigest(byte[] digest,
+                                 eu.europa.esig.dss.enumerations.DigestAlgorithm digestAlgorithm) {
+            callCount.incrementAndGet();
+            try {
+                String keyAlg = keyPair.getPrivate().getAlgorithm();
+                if ("RSA".equalsIgnoreCase(keyAlg)) {
+                    byte[] digestInfo = io.mersel.dss.signer.api.services.keystore.iaik.Pkcs1DigestInfo
+                        .wrap(digest, digestAlgorithm);
+                    javax.crypto.Cipher cipher = javax.crypto.Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                    cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, keyPair.getPrivate());
+                    return cipher.doFinal(digestInfo);
+                }
+                Signature sig = Signature.getInstance("NONEwithECDSA");
+                sig.initSign(keyPair.getPrivate());
+                sig.update(digest);
+                return sig.sign();
+            } catch (Exception e) {
+                throw new RuntimeException("FakePkcs11Signer signDigest failure", e);
             }
         }
     }
