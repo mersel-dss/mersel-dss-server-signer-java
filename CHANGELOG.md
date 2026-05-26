@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-05-26
+
 ### Added
 
 - **Signer event bildirim altyapısı — Slack + generic HTTP webhook.**

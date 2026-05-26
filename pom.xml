@@ -12,7 +12,7 @@
     </parent>
     <groupId>io.mersel.dss</groupId>
     <artifactId>mersel-dss-signer-api</artifactId>
-    <version>0.9.2</version>
+    <version>1.0.0</version>
     <name>mersel-dss-signer-api</name>
     <description>Mersel DSS Signer API - Türkiye e-imza standartlarına uygun dijital imza servisi</description>
 
