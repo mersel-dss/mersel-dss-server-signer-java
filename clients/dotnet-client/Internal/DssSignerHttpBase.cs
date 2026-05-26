@@ -164,9 +164,14 @@ internal abstract class DssSignerHttpBase
                || trimmed.StartsWith("[", StringComparison.Ordinal);
     }
 
+    // Not: HttpContent.ReadAs*Async(CancellationToken) overload'ları .NET 5+
+    // ile geldi. netstandard2.0 surface'ında yalnızca parametresiz overload var,
+    // bu yolda token sadece request fazında onurlandırılır; stream-read fazında
+    // ignored olur (kabul edilebilir bir trade-off — bkz. README "Desteklenen
+    // Platformlar" bölümü).
     private static async Task<string> ReadStringAsync(HttpContent content, CancellationToken ct)
     {
-#if NET6_0_OR_GREATER
+#if !NETSTANDARD2_0
         return await content.ReadAsStringAsync(ct).ConfigureAwait(false);
 #else
         return await content.ReadAsStringAsync().ConfigureAwait(false);
@@ -175,7 +180,7 @@ internal abstract class DssSignerHttpBase
 
     private static async Task<byte[]> ReadByteArrayAsync(HttpContent content, CancellationToken ct)
     {
-#if NET6_0_OR_GREATER
+#if !NETSTANDARD2_0
         return await content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
 #else
         return await content.ReadAsByteArrayAsync().ConfigureAwait(false);
@@ -194,7 +199,10 @@ internal abstract class DssSignerHttpBase
     /// </summary>
     private async Task<T> ReadJsonAsync<T>(HttpResponseMessage response, string path, CancellationToken ct)
     {
-#if NET6_0_OR_GREATER
+        // netstandard2.0'da Stream IAsyncDisposable'ı implemente etmez;
+        // 'await using' compile etmez. Senkron 'using' yeterli — DisposeAsync
+        // overhead'i zaten in-memory MemoryStream'lerde no-op.
+#if !NETSTANDARD2_0
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
 #else
         using var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);

@@ -2,7 +2,7 @@
 
 [mersel-dss-server-signer-java](https://github.com/mersel-dss/mersel-dss-server-signer-java) mikroservisini HTTP üzerinden çağıran **istemci SDK'sı**.
 
-`net6.0`, `net7.0`, `net8.0` ve `net9.0` hedeflerini destekler. Tek satır DI kaydıyla tüm imzalama (XAdES, WS-Security, PAdES, CAdES), zaman damgası (RFC 3161 + TÜBİTAK ESYA) ve sertifika operasyonlarını uygulamanıza entegre edin. Servis stateless'tir; istemcide herhangi bir özel state tutulmaz, paket güvenle çoklu instance ile kullanılabilir.
+**.NET Framework 4.6.1'den .NET 10 LTS'e kadar tek paket** olarak çalışır (multi-targeting: `netstandard2.0` + `net8.0`). Tek satır DI kaydıyla tüm imzalama (XAdES, WS-Security, PAdES, CAdES), zaman damgası (RFC 3161 + TÜBİTAK ESYA) ve sertifika operasyonlarını uygulamanıza entegre edin. Servis stateless'tir; istemcide herhangi bir özel state tutulmaz, paket güvenle çoklu instance ile kullanılabilir.
 
 ## Kurulum
 
@@ -224,9 +224,34 @@ builder.Services.AddHttpClient(DssSignerClientOptions.HttpClientName)
         .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt))));
 ```
 
+## Desteklenen Platformlar
+
+| Runtime | Durum | Çekilen `lib/` | Notlar |
+|---|---|---|---|
+| **.NET 8 LTS** | ✅ Birinci sınıf | `lib/net8.0/` | Inbox `HttpClient.ReadAs*Async(ct)`, `IAsyncDisposable`, `SocketsHttpHandler` (HTTP/2, TLS 1.3) |
+| **.NET 9 (STS)** | ✅ Çalışır (roll-forward) | `lib/net8.0/` | net8 binary'si net9 runtime'da sorunsuz koşar |
+| **.NET 10 LTS** | ✅ Çalışır (roll-forward) | `lib/net8.0/` | net8 binary'si net10 runtime'da sorunsuz koşar |
+| **.NET 6 / 7 (EOL)** | ✅ Çalışır (fallback) | `lib/netstandard2.0/` | Polyfill DLL'leri (`System.Text.Json`, `Microsoft.Bcl.AsyncInterfaces`) sürüklenir; stream-read fazında `CancellationToken` honor edilmez (marjinal) |
+| **.NET Framework 4.6.1 – 4.8.1** | ✅ Çalışır | `lib/netstandard2.0/` | TLS notunu aşağıda okuyun |
+| **Mono 5.4+, Xamarin, Unity** | ✅ Çalışır | `lib/netstandard2.0/` | — |
+
+> `Microsoft.Extensions.Http 8.0.x` tüm bu runtime'larda inbox `IHttpClientFactory` ile çalışır; ASP.NET Core bağımlılığı **yoktur**.
+
+### .NET Framework için TLS 1.2 / 1.3 Notu
+
+.NET Framework 4.6.1 – 4.8.x üzerinde TLS 1.2 default **değildir**. DSS Signer mikroservisi HTTPS bir reverse-proxy / API Gateway arkasındaysa, uygulama başlangıcında **bir kez** aşağıdaki ayarı yapın:
+
+```csharp
+// Program.cs / Application_Start / Main
+ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12
+                                     | SecurityProtocolType.Tls13;
+```
+
+> HTTP üzerinden (örn. internal Kubernetes service) çalışıyorsanız bu ayar gereksizdir.
+
 ## Gereksinimler
 
-- .NET 6.0, 7.0, 8.0 veya 9.0
+- Yukarıdaki tabloda listelenen runtime'lardan biri
 - Çalışan bir [mersel-dss-server-signer-java](https://github.com/mersel-dss/mersel-dss-server-signer-java) mikroservisi
 
 ## Bağlantılar

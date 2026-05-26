@@ -12,7 +12,9 @@ name: NuGet Publish
 #       * dry_run=false          → pack + push (NUGET_API_KEY gerekli)
 #
 # Çıktılar:
-#   - MERSEL.Services.DssSigner.Client.<VERSION>.nupkg  (multi-target net6/7/8/9)
+#   - MERSEL.Services.DssSigner.Client.<VERSION>.nupkg  (multi-target
+#     netstandard2.0 + net8.0 → .NET Framework 4.6.1+ ile .NET 10 LTS dahil
+#     tüm modern .NET runtime'larını roll-forward ile kapsar)
 #   - MERSEL.Services.DssSigner.Client.<VERSION>.snupkg (symbols + SourceLink)
 #   - GitHub Actions artifact (90 gün saklanır)
 #   - nuget.org'a push (--skip-duplicate ile idempotent; aynı tag re-run'da hata
@@ -122,14 +124,13 @@ jobs:
           echo "is_prerelease=${IS_PRE}"        >> "$GITHUB_OUTPUT"
           echo "package_name=${PACKAGE_NAME}"   >> "$GITHUB_OUTPUT"
 
-      - name: Set up .NET SDK
+      # .NET 8 LTS SDK; netstandard2.0 TFM'i de bu SDK ile derlenir (multi-target
+      # build için tek SDK yeterli — Microsoft.Extensions.Http 8.x kendi içinde
+      # netstandard2.0 lib'i de barındırdığından restore tek geçişte tamamlanır).
+      - name: Set up .NET 8 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            6.0.x
-            7.0.x
-            8.0.x
-            9.0.x
+          dotnet-version: 8.0.x
 
       - name: Show dotnet info
         run: dotnet --info

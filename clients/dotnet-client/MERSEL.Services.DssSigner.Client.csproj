@@ -1,7 +1,19 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <!--
+      Hedef framework stratejisi: "netstandard2.0 + tek modern LTS" hibrit.
+      - netstandard2.0  → .NET Framework 4.6.1+, Mono, Xamarin ve EOL'e yakın
+                          .NET 6 / .NET 7 tüketicileri tek facade ile yakalar
+                          (legacy ön muhasebe / ERP entegratörleri).
+      - net8.0          → .NET 8 LTS ve roll-forward ile net9 / net10 / net11
+                          tüketicilerine inbox API'lerle (SocketsHttpHandler,
+                          HttpContent.ReadAs*Async(ct), IAsyncDisposable native
+                          Stream desteği) optimum binary'i sunar.
+      Yeni LTS (.NET 12, Kas 2027) çıktığında bu satır tek değişiklikle
+      `netstandard2.0;net12.0` yapılır; başka hiçbir yere dokunulmaz.
+    -->
+    <TargetFrameworks>netstandard2.0;net8.0</TargetFrameworks>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -23,8 +35,8 @@
     <Authors>MERSEL</Authors>
     <Company>MERSEL</Company>
     <Product>MERSEL DSS Server Signer</Product>
-    <Description>MERSEL DSS Server Signer (Java) mikroservisini HTTP üzerinden çağıran istemci SDK'sı. XAdES, WS-Security, PAdES, CAdES imzalama; RFC 3161 zaman damgası alma/doğrulama; TÜBİTAK kontör sorgulama ve keystore sertifika listeleme operasyonlarını tek satır DI kaydıyla uygulamanıza entegre edin.</Description>
-    <PackageTags>mersel;dss;signer;xades;cades;pades;wssecurity;timestamp;rfc3161;tubitak;e-imza;e-fatura;client;sdk</PackageTags>
+    <Description>MERSEL DSS Server Signer (Java) mikroservisini HTTP üzerinden çağıran istemci SDK'sı. XAdES, WS-Security, PAdES, CAdES imzalama; RFC 3161 zaman damgası alma/doğrulama; TÜBİTAK kontör sorgulama ve keystore sertifika listeleme operasyonlarını tek satır DI kaydıyla uygulamanıza entegre edin. .NET Framework 4.6.1+ ve .NET 8 LTS / .NET 9 / .NET 10 üzerinde tek paket olarak çalışır.</Description>
+    <PackageTags>mersel;dss;signer;xades;cades;pades;wssecurity;timestamp;rfc3161;tubitak;e-imza;e-fatura;client;sdk;netstandard;netframework</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/mersel-dss/mersel-dss-server-signer-java</PackageProjectUrl>
@@ -41,31 +53,16 @@
     <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
-  <!-- Per-TFM aligned Microsoft.Extensions.* versions to keep transitive
-       dependencies minimal for each consumer. -->
-  <ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
-    <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.1" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="6.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="6.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="6.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="6.0.0" />
-    <!-- Inbox System.Text.Json 6.x has known security advisories; pin a patched cross-target version. -->
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net7.0'">
-    <PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="7.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="7.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="7.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="7.0.0" />
-    <!-- System.Text.Json 7.x has known security advisories; override with patched cross-target version. -->
-    <PackageReference Include="System.Text.Json" Version="8.0.5" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+  <!--
+    Ortak runtime bağımlılıkları: her iki TFM'de aynı sürümlere pinlenir.
+    .NET 8 LTS paketleri (8.0.x):
+      - netstandard2.0 ile uyumlu (Microsoft TFM compat matrix)
+      - net6 / net7 / net8 / net9 / net10 runtime'larında roll-forward çalışır
+      - net48 üzerinde de inbox HttpClientFactory ile sorunsuz işler
+    Bu yaklaşım Microsoft'un Microsoft.Extensions.Http 8.x paketinin kendi
+    izlediği "tek major, çok runtime" stratejisiyle birebir aynıdır.
+  -->
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="8.0.0" />
@@ -74,13 +71,18 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="8.0.0" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="9.0.0" />
+  <!--
+    Yalnızca netstandard2.0 path'i için ek bağımlılıklar:
+    - System.Text.Json   : inbox değil; net6/net7 inbox sürümlerinde de CVE
+                           (GHSA-hh2w-p6rv-4g7w vb.) olduğu için 8.0.5'e pinli.
+    - Microsoft.Bcl.AsyncInterfaces : IAsyncDisposable tipini sağlar
+                           (Microsoft.Extensions.Http transitive olarak da
+                           çeker; explicit eklemek future-proof).
+    net8.0 path'inde her ikisi inbox olduğu için tekrar referans gerekmez.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0" />
   </ItemGroup>
 
 </Project>

@@ -7,6 +7,40 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Changed
+
+- **.NET istemci SDK (`MERSEL.Services.DssSigner.Client`) hedef framework
+  konsolidasyonu**: Multi-target `net6.0;net7.0;net8.0;net9.0` yerine
+  **`netstandard2.0;net8.0`** hibrit hedeflemeye geçildi.
+  - **Genişleme**: Artık **.NET Framework 4.6.1+**, **Mono 5.4+**, **Xamarin**
+    ve **Unity** tüketicileri tek paketle desteklenir. Legacy ön muhasebe /
+    ERP / e-Belge entegratör senaryolarında migration olmadan istemci adoption
+    yapılabilir.
+  - **Modern .NET'te değişiklik yok**: .NET 8 LTS kullanıcıları aynı inbox
+    `lib/net8.0/` binary'sini almaya devam eder; .NET 9 / .NET 10 / .NET 11
+    kullanıcıları NuGet roll-forward ile `lib/net8.0/` binary'sini optimum
+    şekilde tüketir.
+  - **EOL runtime'lar için fallback**: .NET 6 (EOL Kas 2024) ve .NET 7
+    (EOL May 2024) tüketicileri `lib/netstandard2.0/` binary'sini çeker;
+    `System.Text.Json 8.0.5` ve `Microsoft.Bcl.AsyncInterfaces 8.0.0`
+    polyfill'leri otomatik gelir. Public API yüzeyi **birebir aynı** —
+    kaynak kod değişikliği gerekmez.
+  - **Marjinal davranış farkı**: netstandard2.0 fallback yolunda
+    `HttpContent.ReadAs*Async(CancellationToken)` overload'ları olmadığı
+    için `CancellationToken` yalnızca request fazında onurlandırılır,
+    stream-read fazında ignored olur. HSM bekleyişi olan uzun çağrılarda
+    cancel davranışı modern .NET'e göre marjinal değişebilir.
+  - **Paket bağımlılığı sürüm hizalaması**: Her TFM için ayrı
+    `Microsoft.Extensions.*` sürüm ItemGroup'u kaldırıldı; tek major
+    (`8.0.x`) tüm hedeflerde paylaşılıyor. Bu, Microsoft'un kendi
+    `Microsoft.Extensions.Http 8.x` paketinin izlediği "tek major, çok
+    runtime" stratejisiyle birebir aynıdır.
+  - **CI / pack ergonomisi**: `nuget.yml` workflow'unda SDK matrix
+    `6.0.x;7.0.x;8.0.x;9.0.x` yerine yalnızca `8.0.x` kuruluyor; pack
+    süresi ve `.snupkg` boyutu yarıya düştü.
+- **README.md** içine "Desteklenen Platformlar" tablosu ve .NET Framework
+  için TLS 1.2 / 1.3 etkinleştirme notu eklendi.
+
 ## [0.9.0] - 2026-05-26
 
 ### Added
