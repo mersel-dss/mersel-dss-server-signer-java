@@ -42,7 +42,8 @@ internal sealed class XadesSigner : DssSignerHttpBase, IXadesSigner
         // sunucu Java enum'u ile birebir eşleşir (XADES_BES / XADES_A).
         AddStringPart(form, "signatureLevel", request.SignatureLevel.ToString());
 
-        using var response = await PostMultipartBinaryAsync("/v1/xadessign", form, ct).ConfigureAwait(false);
+        using var response = await PostMultipartBinaryAsync(
+            "/v1/xadessign", form, ct, request.Headers).ConfigureAwait(false);
         return await BuildSignResultAsync(response, ct).ConfigureAwait(false);
     }
 
@@ -65,7 +66,8 @@ internal sealed class XadesSigner : DssSignerHttpBase, IXadesSigner
         AddFilePart(form, "document", request.Document, request.FileName, "application/xml");
         AddStringPart(form, "soap1Dot2", request.Soap1Dot2 ? "true" : "false");
 
-        using var response = await PostMultipartBinaryAsync("/v1/wssecuritysign", form, ct).ConfigureAwait(false);
+        using var response = await PostMultipartBinaryAsync(
+            "/v1/wssecuritysign", form, ct, request.Headers).ConfigureAwait(false);
         return await BuildSignResultAsync(response, ct).ConfigureAwait(false);
     }
 

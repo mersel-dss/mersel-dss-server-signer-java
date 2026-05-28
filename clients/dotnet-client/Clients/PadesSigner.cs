@@ -43,7 +43,8 @@ internal sealed class PadesSigner : DssSignerHttpBase, IPadesSigner
             AddStringPart(form, "attachmentFileName", attachmentName);
         }
 
-        using var response = await PostMultipartBinaryAsync("/v1/padessign", form, ct).ConfigureAwait(false);
+        using var response = await PostMultipartBinaryAsync(
+            "/v1/padessign", form, ct, request.Headers).ConfigureAwait(false);
         var bytes = await ReadResponseBytesAsync(response, ct).ConfigureAwait(false);
 
         return new SignResult

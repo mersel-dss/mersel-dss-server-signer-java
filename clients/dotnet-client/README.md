@@ -40,26 +40,94 @@ builder.Services.AddDssSignerClient("http://dss-signer:8088");
 }
 ```
 
-> **Not — Authentication:** Sunucu kendisi authentication uygulamaz (bkz. [SECURITY.md](https://github.com/mersel-dss/mersel-dss-server-signer-java/blob/main/SECURITY.md) — "internal kullanım / API Gateway arkasında çalıştırın"). API Gateway, reverse proxy veya başka bir auth katmanı arkasında çalıştırıyorsanız ekstra header'ları (örn. `X-API-Key`, `Authorization`) standart `IHttpClientFactory` zincirinden ekleyin:
->
-> ```csharp
-> builder.Services.AddHttpClient(DssSignerClientOptions.HttpClientName)
->     .ConfigureHttpClient(http =>
->     {
->         http.DefaultRequestHeaders.Add("X-API-Key", "gateway-secret");
->     });
-> // veya: .AddHttpMessageHandler<MyAuthDelegatingHandler>();
-> ```
+> **Not — Authentication:** Sunucu kendisi authentication uygulamaz (bkz. [SECURITY.md](https://github.com/mersel-dss/mersel-dss-server-signer-java/blob/main/SECURITY.md) — "internal kullanım / API Gateway arkasında çalıştırın"). API Gateway, reverse proxy veya başka bir auth katmanı arkasında çalıştırıyorsanız header'ları aşağıdaki **Custom Header** bölümünde gösterilen yöntemlerden biriyle ekleyin.
 
 DI kaydı sonrası tüketicide:
 
 - `IDssSignerClient` — tüm domain'lere erişen birleşik cephe
-- `IXadesSigner`, `ICadesSigner`, `IPadesSigner` — imzalama
+- `IXadesSigner`, `ICadesSigner`, `IPadesSigner`, `IHashSigner` — imzalama
 - `ITimestampClient` — RFC 3161 timestamp
 - `ITubitakClient` — TÜBİTAK ESYA kontör sorgu
 - `ICertificateInfoClient` — sertifika listeleme/keystore meta
 
 inject edilebilir.
+
+## Custom Header Gönderme
+
+İstemci, hem **default header'lar** (her istekte gönderilen) hem de **per-request header'lar** (tek bir çağrıya özel) için birinci sınıf destek sunar. Tipik kullanımlar:
+
+- API Gateway / reverse-proxy auth header'ları (`X-API-Key`, `Authorization`, `X-Tenant-Id`)
+- Sunucu observability özelliği `x-log-*` header'ları — bu prefix'le gönderilen tüm header'lar sunucu loglarına JSON olarak yansır (örn. `x-log-correlation-id`, `x-log-tenant`, `x-log-user`)
+- Custom tracing / B3 / W3C TraceContext header'ları
+
+### 1) Default header'lar — her istekte gönderilir
+
+`appsettings.json` üzerinden:
+
+```json
+{
+  "Services": {
+    "DssSigner": {
+      "BaseUrl": "http://dss-signer:8088",
+      "Timeout": "00:02:00",
+      "DefaultHeaders": {
+        "X-API-Key": "gateway-secret",
+        "X-Tenant-Id": "mersel-prod"
+      }
+    }
+  }
+}
+```
+
+Veya kod ile:
+
+```csharp
+builder.Services.AddDssSignerClient(o =>
+{
+    o.BaseUrl = "http://dss-signer:8088";
+    o.DefaultHeaders["X-API-Key"]   = "gateway-secret";
+    o.DefaultHeaders["X-Tenant-Id"] = "mersel-prod";
+});
+```
+
+### 2) Per-request header — istek bazında override / dinamik değer
+
+Tüm imzalama / timestamp / hashsign çağrılarında request DTO'sunun `Headers` alanını kullanın. Bu sözlük default header'lar üzerine binder ve aynı isimli alanı **override** eder:
+
+```csharp
+var correlationId = Guid.NewGuid().ToString("N");
+
+await signer.Xades.SignAsync(new SignXadesRequest
+{
+    Document     = ublXml,
+    DocumentType = DocumentType.UblDocument,
+    Headers = new Dictionary<string, string>
+    {
+        ["x-log-correlation-id"] = correlationId,
+        ["x-log-tenant"]         = "acme-corp",
+        ["x-log-user"]           = "user-42"
+        // Sunucu bu header'ları MDC'ye alır ve tüm log satırlarına JSON olarak yansır.
+    }
+});
+```
+
+Tubitak / Certificates gibi DTO'suz çağrılarda da overload mevcuttur:
+
+```csharp
+await signer.Tubitak.GetCreditAsync(
+    new Dictionary<string, string> { ["x-log-correlation-id"] = correlationId });
+```
+
+### 3) `DelegatingHandler` ile dinamik header (her isteğe değişken değer)
+
+Correlation id'nin `IHttpContextAccessor` üzerinden gelmesi gibi DI bağımlı senaryolarda standart `IHttpClientFactory` zincirini kullanın:
+
+```csharp
+builder.Services.AddDssSignerClient(builder.Configuration);
+builder.Services.AddTransient<CorrelationIdHandler>();
+builder.Services.AddHttpClient(DssSignerClientOptions.HttpClientName)
+    .AddHttpMessageHandler<CorrelationIdHandler>();
+```
 
 ## Kullanım
 
@@ -135,6 +203,39 @@ var detached = await signer.Cades.SignAsync(byteIcerigi, detached: true);
 // Attached imza — CMS zarfı orijinal içeriği de gömer
 var attached = await signer.Cades.SignAsync(byteIcerigi);
 ```
+
+### Pre-hashed Digest İmzalama (e-Defter / manuel SignedInfo)
+
+`POST /v1/hashsign` endpoint'i, caller'ın kendisi hesaplamış olduğu bir digest'i sunucuda imzalatmak için kullanılır. Sunucu digest'i **tekrar hash'lemez**: RSA için PKCS#1 v1.5 padding, ECDSA için raw eğri imzalama uygular. Tipik kullanım: e-Defter mali mührü ve manuel XAdES `<ds:SignedInfo>` digest imzalama.
+
+```csharp
+// 1) Ham byte digest ile kısa yol
+byte[] digest = SHA256.HashData(canonicalSignedInfoBytes);
+var imza = await signer.Hash.SignAsync(digest, HashDigestAlgorithm.SHA256);
+string base64 = imza.Base64EncodedSignature!;
+// → <ds:SignatureValue> elementine yazılabilir
+
+// 2) Request DTO ile (header override / SHA-512 vs.)
+var imza2 = await signer.Hash.SignAsync(new SignHashRequest
+{
+    Base64EncodedDigest = Convert.ToBase64String(digest),
+    DigestAlgorithm     = HashDigestAlgorithm.SHA256,
+    Headers = new Dictionary<string, string>
+    {
+        ["x-log-correlation-id"] = "edefter-202605-001"
+    }
+});
+
+byte[] signatureBytes = imza2.ToSignatureBytes();
+```
+
+> **Validation**: Decoded digest uzunluğu seçtiğiniz algoritma ile eşleşmelidir
+> (SHA-1: 20, SHA-224: 28, SHA-256: 32, SHA-384: 48, SHA-512: 64 byte). Uyumsuzluk
+> sunucu tarafında HTTP 400 + `INVALID_INPUT` döndürür.
+
+> **Güvenlik**: `/v1/hashsign` bir signing oracle'dır; private network içinde
+> (gateway arkasında) tüketin. Public exposure senaryosunda API gateway katmanında
+> auth + rate limit + audit log uygulayın.
 
 ### RFC 3161 Zaman Damgası
 

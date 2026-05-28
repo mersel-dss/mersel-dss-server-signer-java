@@ -22,6 +22,9 @@ public sealed class DssSignerClient : IDssSignerClient
     public IPadesSigner Pades { get; }
 
     /// <inheritdoc />
+    public IHashSigner Hash { get; }
+
+    /// <inheritdoc />
     public ITimestampClient Timestamp { get; }
 
     /// <inheritdoc />
@@ -34,6 +37,7 @@ public sealed class DssSignerClient : IDssSignerClient
         IXadesSigner xades,
         ICadesSigner cades,
         IPadesSigner pades,
+        IHashSigner hash,
         ITimestampClient timestamp,
         ITubitakClient tubitak,
         ICertificateInfoClient certificates)
@@ -41,6 +45,7 @@ public sealed class DssSignerClient : IDssSignerClient
         Xades = xades ?? throw new ArgumentNullException(nameof(xades));
         Cades = cades ?? throw new ArgumentNullException(nameof(cades));
         Pades = pades ?? throw new ArgumentNullException(nameof(pades));
+        Hash = hash ?? throw new ArgumentNullException(nameof(hash));
         Timestamp = timestamp ?? throw new ArgumentNullException(nameof(timestamp));
         Tubitak = tubitak ?? throw new ArgumentNullException(nameof(tubitak));
         Certificates = certificates ?? throw new ArgumentNullException(nameof(certificates));

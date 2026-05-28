@@ -18,4 +18,10 @@ public sealed class GetTimestampRequest
 
     /// <summary>İsteğe konacak multipart dosya adı.</summary>
     public string FileName { get; set; } = "document.bin";
+
+    /// <summary>
+    /// Bu çağrıya özel HTTP header'ları
+    /// (<see cref="DssSignerClientOptions.DefaultHeaders"/> override'ı için).
+    /// </summary>
+    public IDictionary<string, string>? Headers { get; set; }
 }

@@ -22,4 +22,11 @@ public sealed class SignPadesRequest
 
     /// <summary>İsteğe konacak multipart dosya adı.</summary>
     public string FileName { get; set; } = "document.pdf";
+
+    /// <summary>
+    /// Bu çağrıya özel HTTP header'ları
+    /// (<see cref="DssSignerClientOptions.DefaultHeaders"/> override'ı için).
+    /// Tipik kullanım: <c>x-log-correlation-id</c>, gateway auth header'ı.
+    /// </summary>
+    public IDictionary<string, string>? Headers { get; set; }
 }

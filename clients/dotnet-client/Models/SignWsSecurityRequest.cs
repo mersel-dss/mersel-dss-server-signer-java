@@ -16,4 +16,11 @@ public sealed class SignWsSecurityRequest
 
     /// <summary>İsteğe konacak multipart dosya adı (yalnızca log/metadata).</summary>
     public string FileName { get; set; } = "envelope.xml";
+
+    /// <summary>
+    /// Bu çağrıya özel HTTP header'ları
+    /// (<see cref="DssSignerClientOptions.DefaultHeaders"/> override'ı için).
+    /// Tipik kullanım: <c>x-log-correlation-id</c>, gateway auth header'ı.
+    /// </summary>
+    public IDictionary<string, string>? Headers { get; set; }
 }

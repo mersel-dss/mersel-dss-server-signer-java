@@ -18,4 +18,8 @@ internal sealed class TubitakClient : DssSignerHttpBase, ITubitakClient
     /// <inheritdoc />
     public Task<TubitakCreditResult> GetCreditAsync(CancellationToken ct = default)
         => GetJsonAsync<TubitakCreditResult>("/api/tubitak/credit", ct);
+
+    /// <inheritdoc />
+    public Task<TubitakCreditResult> GetCreditAsync(IDictionary<string, string> headers, CancellationToken ct = default)
+        => GetJsonAsync<TubitakCreditResult>("/api/tubitak/credit", ct, headers);
 }

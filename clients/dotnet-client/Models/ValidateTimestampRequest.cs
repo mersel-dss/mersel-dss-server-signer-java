@@ -19,4 +19,10 @@ public sealed class ValidateTimestampRequest
 
     /// <summary>Orijinal belge için multipart dosya adı.</summary>
     public string OriginalDocumentFileName { get; set; } = "document.bin";
+
+    /// <summary>
+    /// Bu çağrıya özel HTTP header'ları
+    /// (<see cref="DssSignerClientOptions.DefaultHeaders"/> override'ı için).
+    /// </summary>
+    public IDictionary<string, string>? Headers { get; set; }
 }

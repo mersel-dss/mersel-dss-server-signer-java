@@ -7,6 +7,48 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`clients/dotnet-client`: `/v1/hashsign` endpoint'i için tam .NET istemci
+  kapsaması.** Pre-hashed digest imzalama akışı (e-Defter mali mührü, manuel
+  XAdES `<ds:SignedInfo>` digest imzalama) artık SDK'dan tek satırla
+  tüketilebilir.
+  - **Yeni tipler**: `IHashSigner` arayüzü, `HashSigner` implementasyonu,
+    `SignHashRequest` / `SignHashResult` DTO'ları, `HashDigestAlgorithm` enum'u
+    (`SHA1`, `SHA224`, `SHA256`, `SHA384`, `SHA512` — sunucu Java
+    `eu.europa.esig.dss.enumerations.DigestAlgorithm` enum sabitleri ile birebir).
+  - **`IDssSignerClient.Hash` property'si** birleşik cephe arayüzüne eklendi;
+    `services.AddDssSignerClient(...)` çağrısı `IHashSigner`'ı transient olarak
+    kaydeder. Mevcut `Xades`/`Cades`/`Pades`/`Timestamp`/`Tubitak`/`Certificates`
+    domain'leri etkilenmez.
+  - **Kısa yol overload'ları**: `Hash.SignAsync(byte[] digest, HashDigestAlgorithm,
+    CancellationToken)` ham digest baytlarını base64 encoding'e gerek kalmadan
+    kabul eder; `SignHashResult.ToSignatureBytes()` yanıttaki base64 imzayı
+    decode eder. Kullanıcılar `SignHashRequest` üzerinden `Headers` ile
+    per-request observability header'ı (örn. `x-log-correlation-id`) geçirebilir.
+- **`clients/dotnet-client`: First-class custom HTTP header desteği.**
+  Sunucudaki `x-log-*` observability header akışı, gateway auth header'ları
+  (`X-API-Key`, `Authorization`, `X-Tenant-Id`) ve dağıtık tracing header'ları
+  (B3 / W3C TraceContext) için iki katmanlı API:
+  - **Default header'lar (her istekte)** — `DssSignerClientOptions.DefaultHeaders`
+    sözlüğü `appsettings.json`'dan veya kod ile doldurulabilir; `OrdinalIgnoreCase`
+    karşılaştırma anahtarı. `ConfigureHttpClient` callback'i bu sözlüğü
+    `HttpClient.DefaultRequestHeaders`'a `TryAddWithoutValidation` ile yansıtır
+    (BCL'in restricted-set parser'ına takılmaz).
+  - **Per-request header'lar (override)** — Tüm imzalama / timestamp / hashsign
+    DTO'larına (`SignXadesRequest`, `SignWsSecurityRequest`, `SignPadesRequest`,
+    `SignCadesRequest`, `SignHashRequest`, `GetTimestampRequest`,
+    `ValidateTimestampRequest`) `IDictionary<string,string>? Headers` property'si
+    eklendi. DTO'suz endpoint'lerde (`Tubitak.GetCreditAsync`,
+    `Certificates.{ListAsync,GetInfoAsync,GetSigningCertificateAsync}`) ek
+    overload'lar eklendi. Per-request değerler `DefaultHeaders` üzerine binder ve
+    aynı isimli alanı override eder.
+  - **Internal mimari**: `DssSignerHttpBase` artık `HttpRequestMessage` tabanlı
+    çalışır (`PostAsync`/`GetAsync` shortcut'ları yerine `SendAsync`); yeni
+    `ApplyHeaders` helper'ı request-level vs entity-level header routing'i
+    otomatik yönetir. Yeni `PostJsonAsync<TReq,TRes>` helper'ı JSON gövdeli
+    `/v1/hashsign` çağrısını destekler.
+
 ## [1.0.0] - 2026-05-26
 
 ### Added

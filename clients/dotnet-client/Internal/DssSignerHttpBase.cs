@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using MERSEL.Services.DssSigner.Client.Exceptions;
 using MERSEL.Services.DssSigner.Client.Models;
@@ -8,7 +9,8 @@ namespace MERSEL.Services.DssSigner.Client.Internal;
 
 /// <summary>
 /// Tüm sub-client'ların paylaştığı HTTP/multipart yardımcı tabanı.
-/// Hata gövdesi parse, multipart inşa ve JSON deserialize işlemleri burada toplandı.
+/// Hata gövdesi parse, multipart inşa, JSON deserialize ve per-request
+/// custom header injection işlemleri burada toplandı.
 /// </summary>
 internal abstract class DssSignerHttpBase
 {
@@ -64,9 +66,14 @@ internal abstract class DssSignerHttpBase
     /// <summary>
     /// JSON yanıtı bekleyen GET istekleri için yardımcı.
     /// </summary>
-    protected async Task<T> GetJsonAsync<T>(string path, CancellationToken ct)
+    protected async Task<T> GetJsonAsync<T>(
+        string path,
+        CancellationToken ct,
+        IDictionary<string, string>? extraHeaders = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        ApplyHeaders(request, extraHeaders);
+
         using var response = await HttpClient.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
 
@@ -75,14 +82,49 @@ internal abstract class DssSignerHttpBase
     }
 
     /// <summary>
+    /// JSON gövdeli POST → JSON yanıt.
+    /// </summary>
+    protected async Task<TResponse> PostJsonAsync<TRequest, TResponse>(
+        string path,
+        TRequest body,
+        CancellationToken ct,
+        IDictionary<string, string>? extraHeaders = null)
+    {
+        // System.Text.Json ile content inşa ediyoruz; null değerli alanlar
+        // JsonOptions.DefaultIgnoreCondition gereği serialize'a girmez.
+        var json = JsonSerializer.Serialize(body, JsonOptions);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        ApplyHeaders(request, extraHeaders);
+
+        using var response = await HttpClient.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
+        await EnsureSuccessAsync(response, path, ct).ConfigureAwait(false);
+        return await ReadJsonAsync<TResponse>(response, path, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
     /// JSON yanıtı bekleyen POST(multipart) istekleri için yardımcı.
     /// </summary>
     protected async Task<T> PostMultipartJsonAsync<T>(
         string path,
         MultipartFormDataContent content,
-        CancellationToken ct)
+        CancellationToken ct,
+        IDictionary<string, string>? extraHeaders = null)
     {
-        using var response = await HttpClient.PostAsync(path, content, ct).ConfigureAwait(false);
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = content
+        };
+        ApplyHeaders(request, extraHeaders);
+
+        using var response = await HttpClient.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
         await EnsureSuccessAsync(response, path, ct).ConfigureAwait(false);
         return await ReadJsonAsync<T>(response, path, ct).ConfigureAwait(false);
     }
@@ -94,9 +136,22 @@ internal abstract class DssSignerHttpBase
     protected async Task<HttpResponseMessage> PostMultipartBinaryAsync(
         string path,
         MultipartFormDataContent content,
-        CancellationToken ct)
+        CancellationToken ct,
+        IDictionary<string, string>? extraHeaders = null)
     {
-        var response = await HttpClient.PostAsync(path, content, ct).ConfigureAwait(false);
+        var request = new HttpRequestMessage(HttpMethod.Post, path)
+        {
+            Content = content
+        };
+        ApplyHeaders(request, extraHeaders);
+
+        // SendAsync'in içine atılan request, response döndüğünde dispose edilmemeli;
+        // çünkü çağıran kod yanıtı hâlâ stream olarak okuyacak. Request mesajını
+        // ResponseHeadersRead aşamasından sonra disposable çubuğun dışında tutmuyoruz —
+        // .NET HttpClient tüm request lifecycle'ı kendisi yönetir.
+        var response = await HttpClient.SendAsync(
+            request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+
         try
         {
             await EnsureSuccessAsync(response, path, ct).ConfigureAwait(false);
@@ -106,6 +161,61 @@ internal abstract class DssSignerHttpBase
         {
             response.Dispose();
             throw;
+        }
+        finally
+        {
+            // HttpRequestMessage'i burada dispose etmek güvenli — content stream'i
+            // SendAsync sonrası HttpClient referansı altında tutuluyor; request body
+            // multipart ise zaten transmit edildi.
+            request.Dispose();
+        }
+    }
+
+    // ── Header inject ───────────────────────────────────────────────
+
+    /// <summary>
+    /// İsteğe per-request custom header'ları ekler. Aynı isimli mevcut
+    /// (default) header varsa kaldırılıp yenisi ile değiştirilir; bu sayede
+    /// <see cref="DssSignerClientOptions.DefaultHeaders"/> üzerine yazılabilir.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="HttpHeaders.TryAddWithoutValidation(string,string?)"/> kullanılır;
+    /// böylece <c>x-log-*</c> gibi non-standard header'lar BCL'in restricted-set
+    /// kontrolüne takılmaz.
+    /// </para>
+    /// <para>
+    /// <c>Content-Type</c> ve <c>Content-Length</c> gibi entity-header'lar
+    /// burada <c>request.Headers</c>'a değil <c>request.Content.Headers</c>'a
+    /// gider; HttpClient bunu otomatik route eder.
+    /// </para>
+    /// </remarks>
+    protected static void ApplyHeaders(
+        HttpRequestMessage request,
+        IDictionary<string, string>? extraHeaders)
+    {
+        if (extraHeaders is null || extraHeaders.Count == 0) return;
+
+        foreach (var kv in extraHeaders)
+        {
+            if (string.IsNullOrEmpty(kv.Key)) continue;
+
+            // Override semantiği: aynı isimli default header set edilmişse temizle.
+            request.Headers.Remove(kv.Key);
+            if (request.Content is not null)
+            {
+                request.Content.Headers.Remove(kv.Key);
+            }
+
+            // Önce request-level header'a koymayı dener; entity header'sa BCL
+            // burayı reddeder ve content header'a düşeriz.
+            if (!request.Headers.TryAddWithoutValidation(kv.Key, kv.Value))
+            {
+                if (request.Content is not null)
+                {
+                    request.Content.Headers.TryAddWithoutValidation(kv.Key, kv.Value);
+                }
+            }
         }
     }
 

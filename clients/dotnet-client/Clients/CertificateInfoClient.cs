@@ -20,10 +20,22 @@ internal sealed class CertificateInfoClient : DssSignerHttpBase, ICertificateInf
         => GetJsonAsync<CertificateListResult>("/api/certificates/list", ct);
 
     /// <inheritdoc />
+    public Task<CertificateListResult> ListAsync(IDictionary<string, string> headers, CancellationToken ct = default)
+        => GetJsonAsync<CertificateListResult>("/api/certificates/list", ct, headers);
+
+    /// <inheritdoc />
     public Task<KeystoreInfo> GetInfoAsync(CancellationToken ct = default)
         => GetJsonAsync<KeystoreInfo>("/api/certificates/info", ct);
 
     /// <inheritdoc />
+    public Task<KeystoreInfo> GetInfoAsync(IDictionary<string, string> headers, CancellationToken ct = default)
+        => GetJsonAsync<KeystoreInfo>("/api/certificates/info", ct, headers);
+
+    /// <inheritdoc />
     public Task<CertificateInfo> GetSigningCertificateAsync(CancellationToken ct = default)
         => GetJsonAsync<CertificateInfo>("/api/certificates/signingCertificate", ct);
+
+    /// <inheritdoc />
+    public Task<CertificateInfo> GetSigningCertificateAsync(IDictionary<string, string> headers, CancellationToken ct = default)
+        => GetJsonAsync<CertificateInfo>("/api/certificates/signingCertificate", ct, headers);
 }

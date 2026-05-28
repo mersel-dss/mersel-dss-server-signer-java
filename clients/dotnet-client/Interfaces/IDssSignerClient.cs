@@ -4,8 +4,8 @@ namespace MERSEL.Services.DssSigner.Client.Interfaces;
 /// MERSEL DSS Server Signer mikroservisinin tüm domain'lerini tek bir cephe (facade)
 /// arkasından erişilebilir kılan birleşik istemci sözleşmesi.
 /// <para>
-/// Tek bir bağımlılık enjeksiyonu ile tüm imzalama (XAdES, WS-Security, PAdES, CAdES),
-/// zaman damgası ve sertifika operasyonlarına erişebilirsiniz.
+/// Tek bir bağımlılık enjeksiyonu ile tüm imzalama (XAdES, WS-Security, PAdES, CAdES,
+/// pre-hashed digest), zaman damgası ve sertifika operasyonlarına erişebilirsiniz.
 /// İhtiyacınız tek bir alan ise ilgili sub-interface'i (<see cref="IXadesSigner"/>,
 /// <see cref="ICadesSigner"/> vb.) doğrudan da inject edebilirsiniz.
 /// </para>
@@ -20,6 +20,11 @@ public interface IDssSignerClient
 
     /// <summary>PAdES operasyonları.</summary>
     IPadesSigner Pades { get; }
+
+    /// <summary>
+    /// Pre-hashed digest imzalama operasyonları (e-Defter / manuel SignedInfo akışları).
+    /// </summary>
+    IHashSigner Hash { get; }
 
     /// <summary>RFC 3161 zaman damgası operasyonları.</summary>
     ITimestampClient Timestamp { get; }

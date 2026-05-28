@@ -45,4 +45,19 @@ public sealed class SignXadesRequest
     /// </para>
     /// </remarks>
     public XadesSignatureLevel SignatureLevel { get; set; } = XadesSignatureLevel.XADES_BES;
+
+    /// <summary>
+    /// Bu çağrıya özel HTTP header'ları. Yaygın kullanım:
+    /// <see cref="DssSignerClientOptions.DefaultHeaders"/> üzerine yazma,
+    /// <c>x-log-correlation-id</c>, <c>x-log-tenant</c> gibi observability
+    /// header'larıyla istek bazında MDC zenginleştirme veya gateway authorization
+    /// header'ı override etme.
+    /// </summary>
+    /// <remarks>
+    /// Bu sözlükteki anahtarlar <see cref="DssSignerClientOptions.DefaultHeaders"/>
+    /// ile aynı isimli alanları override eder. Karşılaştırma büyük/küçük harf
+    /// duyarsız tutulmalıdır (HTTP header semantiği). <c>null</c> ise hiçbir ek
+    /// header eklenmez.
+    /// </remarks>
+    public IDictionary<string, string>? Headers { get; set; }
 }

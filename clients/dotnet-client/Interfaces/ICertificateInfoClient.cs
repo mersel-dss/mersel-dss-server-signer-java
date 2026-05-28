@@ -15,9 +15,19 @@ public interface ICertificateInfoClient
     Task<CertificateListResult> ListAsync(CancellationToken ct = default);
 
     /// <summary>
+    /// Per-request HTTP header'ları ile sertifika listeleme.
+    /// </summary>
+    Task<CertificateListResult> ListAsync(IDictionary<string, string> headers, CancellationToken ct = default);
+
+    /// <summary>
     /// Yapılandırılmış keystore'un genel bilgisini (tip, yol, slot vb.) döner.
     /// </summary>
     Task<KeystoreInfo> GetInfoAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Per-request HTTP header'ları ile keystore meta bilgisini sorgular.
+    /// </summary>
+    Task<KeystoreInfo> GetInfoAsync(IDictionary<string, string> headers, CancellationToken ct = default);
 
     /// <summary>
     /// Aktif imza yapılandırmasındaki imzacı sertifikayı, base64 encoded biçimde de
@@ -39,4 +49,9 @@ public interface ICertificateInfoClient
     /// </para>
     /// </remarks>
     Task<CertificateInfo> GetSigningCertificateAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Per-request HTTP header'ları ile imzacı sertifika sorgusu.
+    /// </summary>
+    Task<CertificateInfo> GetSigningCertificateAsync(IDictionary<string, string> headers, CancellationToken ct = default);
 }

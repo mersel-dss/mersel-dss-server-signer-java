@@ -113,6 +113,7 @@ public static class DependencyInjection
         services.TryAddTransient<IXadesSigner>(sp => CreateClient<XadesSigner>(sp));
         services.TryAddTransient<ICadesSigner>(sp => CreateClient<CadesSigner>(sp));
         services.TryAddTransient<IPadesSigner>(sp => CreateClient<PadesSigner>(sp));
+        services.TryAddTransient<IHashSigner>(sp => CreateClient<HashSigner>(sp));
         services.TryAddTransient<ITimestampClient>(sp => CreateClient<TimestampClient>(sp));
         services.TryAddTransient<ITubitakClient>(sp => CreateClient<TubitakClient>(sp));
         services.TryAddTransient<ICertificateInfoClient>(sp => CreateClient<CertificateInfoClient>(sp));
@@ -152,8 +153,9 @@ public static class DependencyInjection
             : TimeSpan.FromMinutes(2);
 
         // Authentication: Sunucu auth yapmaz (SECURITY.md → "internal/gateway arkası" mimari).
-        // Kullanıcı API gateway arkasına koyduğunda ekstra header'ları kendi
-        // ConfigureHttpClient / AddHttpMessageHandler zincirinde ekler.
+        // Kullanıcı gateway anahtarı / tenant id / tracing header'larını
+        // DssSignerClientOptions.DefaultHeaders üzerinden veya AddHttpMessageHandler
+        // zincirinde ekleyebilir.
 
         // User-Agent: paket adı + sürüm.
         var userAgent = options.UserAgent ?? BuildDefaultUserAgent();
@@ -169,6 +171,23 @@ public static class DependencyInjection
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json", 0.9));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream", 0.8));
         http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("*/*", 0.1));
+
+        // Default header'lar — her istekte gönderilir. Per-request override
+        // request DTO'sundaki Headers property'si ile yapılır (DssSignerHttpBase.ApplyHeaders).
+        // TryAddWithoutValidation kullanılır çünkü Authorization, X-API-Key,
+        // x-log-* gibi non-standard / restricted header'lar BCL'in strict
+        // parser'ına takılmasın.
+        if (options.DefaultHeaders is not null)
+        {
+            foreach (var kv in options.DefaultHeaders)
+            {
+                if (string.IsNullOrEmpty(kv.Key)) continue;
+                // User-Agent zaten yukarıda set edildi; double-add ile karışmasın diye
+                // çakışma varsa kaldır → yeniden ekle (kullanıcının değeri kazanır).
+                http.DefaultRequestHeaders.Remove(kv.Key);
+                http.DefaultRequestHeaders.TryAddWithoutValidation(kv.Key, kv.Value);
+            }
+        }
     }
 
     private static string BuildDefaultUserAgent()

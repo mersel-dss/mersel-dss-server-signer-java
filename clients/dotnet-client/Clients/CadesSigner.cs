@@ -34,7 +34,8 @@ internal sealed class CadesSigner : DssSignerHttpBase, ICadesSigner
         AddFilePart(form, "document", request.Document, request.FileName);
         AddStringPart(form, "detached", request.Detached ? "true" : "false");
 
-        using var response = await PostMultipartBinaryAsync("/v1/cadessign", form, ct).ConfigureAwait(false);
+        using var response = await PostMultipartBinaryAsync(
+            "/v1/cadessign", form, ct, request.Headers).ConfigureAwait(false);
         var bytes = await ReadResponseBytesAsync(response, ct).ConfigureAwait(false);
 
         // x-signature-value header'ı sadece detached modda set edilir.

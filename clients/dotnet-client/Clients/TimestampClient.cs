@@ -37,7 +37,8 @@ internal sealed class TimestampClient : DssSignerHttpBase, ITimestampClient
 
         var path = $"/api/timestamp/get?hashAlgorithm={Uri.EscapeDataString(request.HashAlgorithm)}";
 
-        using var response = await PostMultipartBinaryAsync(path, form, ct).ConfigureAwait(false);
+        using var response = await PostMultipartBinaryAsync(
+            path, form, ct, request.Headers).ConfigureAwait(false);
         var bytes = await ReadResponseBytesAsync(response, ct).ConfigureAwait(false);
 
         return new TimestampResult
@@ -75,7 +76,7 @@ internal sealed class TimestampClient : DssSignerHttpBase, ITimestampClient
         }
 
         return await PostMultipartJsonAsync<TimestampValidationResult>(
-            "/api/timestamp/validate", form, ct).ConfigureAwait(false);
+            "/api/timestamp/validate", form, ct, request.Headers).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
