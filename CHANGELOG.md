@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-05-28
+
 ### Added
 
 - **`clients/dotnet-client`: `/v1/hashsign` endpoint'i için tam .NET istemci
