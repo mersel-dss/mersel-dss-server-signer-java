@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-05-31
+
 ## [1.0.1] - 2026-05-28
 
 ### Added
