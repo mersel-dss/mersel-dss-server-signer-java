@@ -42,8 +42,7 @@ devops/
 ├── windows-service/                 # Windows servisi (WinSW + NSSM alt.)
 │   ├── mersel-dss-signer.xml        # WinSW XML şablonu
 │   ├── mersel-dss-signer.env.example
-│   ├── Install-Service.ps1          # WinSW indirir, env inject eder, kurar
-│   ├── Uninstall-Service.ps1        # -KeepLogs, -Purge bayrakları
+│   ├── Install-Service.ps1          # Tek-dosyalı kur/kaldır (-Action Install|Uninstall)
 │   └── README.md
 │
 ├── monitoring/                      # Observability stack

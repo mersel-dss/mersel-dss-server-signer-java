@@ -7,6 +7,25 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Changed
+
+- **`devops/windows-service`: tek-dosyalı kur/kaldır akışı.** `Install-Service.ps1`
+  ve `Uninstall-Service.ps1` tek bir dosyada birleştirildi (`Install-Service.ps1`
+  içinde `-Action Install|Uninstall` switch'i). Default `-Action Install` olduğu
+  için splat ile çağıran mevcut otomasyon scriptleri (`.\Install-Service.ps1
+  @installArgs`) **harfi harfine geri uyumlu**. Kaldırma için yeni paterne
+  geç: `.\Install-Service.ps1 -Action Uninstall -ServiceName <name> -InstallDir
+  <path>` (`-KeepLogs`, `-Purge` bayrakları korundu). Operatörün tek dosyayla
+  uğraşması, multi-tenant senaryolarda `Install-Service.ps1` + tenant başına
+  splat hash'i paterninin temiz çalışması hedefleniyor.
+
+### Removed
+
+- **`devops/windows-service/Uninstall-Service.ps1`** dosyası kaldırıldı; tüm
+  uninstall akışı `Install-Service.ps1 -Action Uninstall` üzerinden yapılır.
+  Eski script'lerini buna göre güncelle (mevcut bayraklar `-KeepLogs`, `-Purge`,
+  `-InstallDir`, `-ServiceName` aynen kabul edilir).
+
 ## [1.0.2] - 2026-05-31
 
 ## [1.0.1] - 2026-05-28

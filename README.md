@@ -140,7 +140,9 @@ mvn clean package -DskipTests
 cd .\devops\windows-service
 Copy-Item .\mersel-dss-signer.env.example .\mersel-dss-signer.env
 notepad .\mersel-dss-signer.env                          # PIN / PFX / TSP
-.\Install-Service.ps1
+.\Install-Service.ps1                                    # kur (default -Action Install)
+# Kaldırmak için aynı dosya:
+# .\Install-Service.ps1 -Action Uninstall
 ```
 
 WinSW (Windows Service Wrapper) ile JAR sarmalanır; restart-on-failure, Event Viewer entegrasyonu, NTFS ACL ile XML kilitli. Detay: [`devops/windows-service/`](devops/windows-service/).

@@ -1,6 +1,6 @@
 # Windows Servisi
 
-> **TL;DR** — JAR'ı build et, `.env`'i doldur, `Install-Service.ps1` çalıştır (admin PowerShell). Tamam.
+> **TL;DR** — JAR'ı build et, `.env`'i doldur, `Install-Service.ps1` çalıştır (admin PowerShell). Kaldırmak için aynı dosya `-Action Uninstall` ile. Tamam.
 
 Mersel DSS Signer API'yi Windows Server (2019 / 2022) veya Windows 10/11 üzerinde **otomatik başlayan, restart-on-failure ve Event Viewer'a düşen** bir Windows servisi olarak çalıştırmak içindir.
 
@@ -34,10 +34,13 @@ Mersel DSS Signer API'yi Windows Server (2019 / 2022) veya Windows 10/11 üzerin
 devops/windows-service/
 ├── mersel-dss-signer.xml            # WinSW yapılandırma şablonu
 ├── mersel-dss-signer.env.example    # Env şablonu (CRLF satır sonu)
-├── Install-Service.ps1              # Otomatik kurulum (WinSW indirir, XML inject eder)
-├── Uninstall-Service.ps1            # Temiz kaldırma (-KeepLogs, -Purge)
+├── Install-Service.ps1              # Tek-dosyalı kur/kaldır (-Action Install|Uninstall)
 └── README.md                        # Bu dosya
 ```
+
+> **Tek dosya prensibi**: kurulum ve kaldırma aynı script üzerinden yapılır.
+> `-Action Install` (default) kurar, `-Action Uninstall` kaldırır. Eski iki-dosyalı
+> akıştan (`Uninstall-Service.ps1`) geliyorsan otomasyon scriptlerini güncelle.
 
 ---
 
@@ -79,11 +82,26 @@ notepad .\mersel-dss-signer.env
 
 # 3) Servisi kur (admin PowerShell şart)
 .\Install-Service.ps1
+# default -Action Install — yazmaya gerek yok
 
 # 4) Sağlık kontrolü
 Get-Service mersel-dss-signer
 Invoke-WebRequest http://localhost:8085/actuator/health -UseBasicParsing |
     Select-Object -ExpandProperty Content
+```
+
+### Tenant başına izole kurulum (splat ile)
+
+```powershell
+# TENANT_A tenant'ı
+$installArgs = @{
+    JarPath     = "C:\mersel-dss\mersel-dss-signer-api.jar"
+    InstallDir  = "C:\mersel-dss\TENANT_A\Installed"
+    ServiceName = "MERSEL-DSS-Signer-Api-TENANT_A"
+    EnvFile     = "C:\mersel-dss\TENANT_A\mersel-dss-signer.env"
+    JavaHome    = "C:\Program Files\Java\jre1.8.0_281"
+}
+.\Install-Service.ps1 @installArgs
 ```
 
 Script otomatik olarak:
@@ -216,6 +234,7 @@ Get-EventLog -LogName Application -Source "mersel-dss-signer" -Newest 50
 
 # Env değişikliği yaptın → Install scriptini yeniden çalıştır:
 .\Install-Service.ps1
+# (idempotent — çalışan servisi durdurup yeniden install eder)
 ```
 
 ---
@@ -453,16 +472,31 @@ Get-PnpDevice -Class SmartCardReader
 
 ## 12. Kaldırma
 
+Kurulum ve kaldırma aynı dosya üzerinden yapılır — `-Action Uninstall` ile:
+
 ```powershell
 # Default — install dizini silinir, ProgramData korunur
-.\Uninstall-Service.ps1
+.\Install-Service.ps1 -Action Uninstall
 
 # Logları post-mortem için %TEMP%'e yedekle
-.\Uninstall-Service.ps1 -KeepLogs
+.\Install-Service.ps1 -Action Uninstall -KeepLogs
 
 # Komple temizlik — env + cert dizini DAHİL
-.\Uninstall-Service.ps1 -Purge
+.\Install-Service.ps1 -Action Uninstall -Purge
 ```
+
+### Tenant servisini kaldır (splat ile)
+
+```powershell
+$uninstallArgs = @{
+    InstallDir  = "C:\mersel-dss\TENANT_A\Installed"
+    ServiceName = "MERSEL-DSS-Signer-Api-TENANT_A"
+}
+.\Install-Service.ps1 -Action Uninstall @uninstallArgs
+```
+
+> **Not**: `Uninstall-Service.ps1` artık ayrı bir dosya değil. Eski script'lerini
+> `.\Install-Service.ps1 -Action Uninstall` çağrısına güncelle.
 
 ---
 
