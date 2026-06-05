@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-06-05
+
 ### Changed
 
 - **WS-Security `<wsu:Timestamp>` TTL artık ortam değişkeninden okunuyor.**
