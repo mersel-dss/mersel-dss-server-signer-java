@@ -15,6 +15,7 @@ import org.apache.xml.security.Init;
 import org.apache.xml.security.c14n.Canonicalizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -83,6 +84,15 @@ public class WsSecuritySignatureService {
             Init.init();
         }
     }
+
+    /**
+     * WS-Security {@code <wsu:Timestamp>} elemanının yaşam süresi (saniye).
+     * {@code Expires = Created + ttl}. Ortam değişkeni
+     * {@code WSSECURITY_TIMESTAMP_TTL_SECONDS} ile override edilebilir;
+     * set edilmediğinde varsayılan 60 saniyedir.
+     */
+    @Value("${WSSECURITY_TIMESTAMP_TTL_SECONDS:60}")
+    private long timestampTtlSeconds = 60L;
 
     private final Semaphore semaphore;
     private final DigestAlgorithmResolverService digestAlgorithmResolver;
@@ -214,7 +224,7 @@ public class WsSecuritySignatureService {
         timestampElement.appendChild(createdElement);
 
         Element expiresElement = document.createElementNS(XmlConstants.NS_WSU, "wsu:Expires");
-        java.time.Instant expires = now.plusSeconds(30);
+        java.time.Instant expires = now.plusSeconds(timestampTtlSeconds);
         expiresElement.setTextContent(expires.toString());
         timestampElement.appendChild(expiresElement);
 

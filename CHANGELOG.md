@@ -9,6 +9,14 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ### Changed
 
+- **WS-Security `<wsu:Timestamp>` TTL artık ortam değişkeninden okunuyor.**
+  Önceden sabit kodlanmış 30 saniyelik `Expires = Created + 30s` penceresi,
+  `WSSECURITY_TIMESTAMP_TTL_SECONDS` ortam değişkeni ile ayarlanabilir hale
+  getirildi; **varsayılan değer 60 saniye**. Yüksek ağ gecikmeli KamuSM/GİB
+  entegrasyonlarında veya saat senkronizasyonu (clock skew) sorunlarında
+  operatör pencereyi esnetebilir. `WsSecuritySignatureService` kurucusu
+  değişmediği için mevcut çağıranlar geri uyumlu (field injection + default
+  60 sn).
 - **`devops/windows-service`: tek-dosyalı kur/kaldır akışı.** `Install-Service.ps1`
   ve `Uninstall-Service.ps1` tek bir dosyada birleştirildi (`Install-Service.ps1`
   içinde `-Action Install|Uninstall` switch'i). Default `-Action Install` olduğu
