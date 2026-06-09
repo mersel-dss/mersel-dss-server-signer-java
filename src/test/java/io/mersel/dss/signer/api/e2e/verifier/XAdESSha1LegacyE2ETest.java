@@ -31,34 +31,32 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Legacy <b>SHA-1</b> ile imzalanmış bir XAdES belgenin verifier
- * tarafından <em>crypto policy gereği</em> reddedildiğini veya en
- * azından açık bir <em>uyarıyla</em> raporlandığını test eder.
+ * tarafından <em>crypto policy gereği</em> kabul edildiğini test eder.
  *
  * <h3>Niye signer servisini bypass ediyoruz?</h3>
  * <p>Bu repo'nun ana <code>XAdESSignatureService</code>'i SHA-1 üretmez
  * (ürün davranışı zaten modern SHA-256+). Yani "signer SHA-1 üretirse..."
  * gibi bir senaryo <em>üretemeyiz</em>. Test ettiğimiz şey farklı:
  * <b>"Üçüncü taraf bir sistem SHA-1 imzalı bir XAdES gönderirse,
- * verifier-api'mizin crypto policy'si bunu yakalıyor mu?"</b>
- * Bu, ürünün son güvenlik halkasıdır — saldırgan eski/kırık bir
- * algoritma ile sahte imza üretirse verifier deflect etmeli.</p>
+ * verifier-api'mizin crypto policy'si bunu kabul ediyor mu?"</b>
+ * Türkiye'de hâlâ dolaşımda olan eski/legacy imzalarla geriye dönük
+ * uyumluluk için verifier SHA-1'i kabul etmelidir.</p>
  *
  * <p>SHA-1 fixture'ını üretmek için DSS {@link XAdESService} API'sini
  * <em>doğrudan</em> ve <em>kasten</em> SHA-1 ile çağırıyoruz; bu sadece
  * test scope'unda yapılır, production kodunda bu çağrı yok.</p>
  *
  * <h3>Verifier davranış matrisi</h3>
- * <p>Verifier'ın crypto policy'si "signer-strict" profile kullanır
- * (default). SHA-1 sonucunda iki olası kabul edilebilir yanıt vardır:</p>
+ * <p>Verifier'ın crypto policy'si artık SHA-1'i kabul eder. Beklenen
+ * sonuç:</p>
  * <ol>
- *   <li><code>valid=false</code> (SHA-1 outright reject) — istenen sıkı
- *       davranış, modern bir validator için tercih edilen.</li>
- *   <li><code>valid=true</code> ama <code>warnings</code> içinde SHA-1
- *       uyarısı (policy uyum şart koşulmamış, ama operator görmeli).</li>
+ *   <li><code>valid=true</code> — SHA-1 legacy imza geriye dönük
+ *       uyumluluk gereği kabul edilir. Uyarı eşlik etse de etmese de
+ *       sorun yok.</li>
  * </ol>
- * <p>Üçüncü senaryo — <code>valid=true</code> ve hiç warning yok —
- * <b>kabul edilemez</b>; SHA-1 sessizce trust ediliyor demektir,
- * regresyon. Test bu üçüncü duruma fail eder.</p>
+ * <p><code>valid=false</code> (SHA-1 reddi) artık <b>kabul edilemez</b>;
+ * çünkü kabul ettiğimiz politikaya göre bu bir regresyon. Test bu
+ * durumda fail eder.</p>
  *
  * <h3>Tag stratejisi</h3>
  * <p>{@code "verifier-e2e"} — Docker tabanlı verifier-api gerekli;
@@ -83,8 +81,8 @@ class XAdESSha1LegacyE2ETest extends AbstractVerifierE2ETest {
     }
 
     @Test
-    @DisplayName("SHA-1 ile imzalanmış XAdES verifier policy tarafından reddedilir veya uyarılır")
-    void sha1XadesIsRejectedOrWarnedByPolicy() {
+    @DisplayName("SHA-1 ile imzalanmış XAdES verifier policy tarafından kabul edilir")
+    void sha1XadesIsAcceptedByPolicy() {
         // 1) SHA-1 ile XAdES-BES üret. Bu code path SADECE bu test'te;
         //    production XAdESSignatureService'i SHA-1 üretmez.
         byte[] sha1Signed = signWithSha1();
@@ -108,34 +106,29 @@ class XAdESSha1LegacyE2ETest extends AbstractVerifierE2ETest {
         }
         assertNotNull(result, "verifier yanıtı null");
 
-        // 3) Üç olası senaryo:
-        //    a) valid=false → SHA-1 outright reject (en güçlü davranış).
-        //    b) valid=true + warning'lerde SHA-1 mention → policy zayıf ama
-        //       operator görmeli (acceptable, log ile yetinilir).
-        //    c) valid=true + warning yok → SESSIZ TRUST → fail (regresyon).
-        boolean rejected = !result.isValid();
-        boolean warnedAboutSha1 = mentionsSha1(result);
-
-        if (rejected) {
-            LOGGER.info("SHA-1 imzalı XAdES verifier tarafından outright REDDEDİLDİ "
-                            + "(indication={}, sub={}, errors={}). En güçlü davranış.",
-                    result.getSignatures().isEmpty() ? "—" : result.getSignatures().get(0).getIndication(),
-                    result.getSignatures().isEmpty() ? "—" : result.getSignatures().get(0).getSubIndication(),
-                    extractErrors(result));
+        // 3) Beklenen davranış: SHA-1 legacy imza geriye dönük uyumluluk
+        //    gereği KABUL edilir (valid=true). Uyarı eşlik etse de etmese
+        //    de sorun yok; reddedilmesi ise regresyondur.
+        if (result.isValid()) {
+            boolean warnedAboutSha1 = mentionsSha1(result);
+            if (warnedAboutSha1) {
+                LOGGER.info("SHA-1 imzalı XAdES verifier tarafından KABUL edildi "
+                                + "(valid=true), warning'de SHA-1 mention var. warnings={}",
+                        extractWarnings(result));
+            } else {
+                LOGGER.info("SHA-1 imzalı XAdES verifier tarafından KABUL edildi "
+                        + "(valid=true), uyarısız. Beklenen davranış.");
+            }
             return;
         }
 
-        if (warnedAboutSha1) {
-            LOGGER.warn("SHA-1 imzalı XAdES verifier'da VALID dönüyor ANCAK warning'de "
-                            + "SHA-1 mention var (acceptable, ama policy katılaştırılması "
-                            + "önerilir). warnings={}",
-                    extractWarnings(result));
-            return;
-        }
-
-        fail("SHA-1 imzalı XAdES verifier'da SESSİZCE TRUST EDİLDİ — "
-                + "ne reject ne warning. Bu, crypto policy regresyonu. response="
-                + result);
+        fail("SHA-1 imzalı XAdES verifier tarafından REDDEDİLDİ — "
+                + "ancak artık SHA-1 kabul ediyoruz, bu bir crypto policy "
+                + "regresyonu. indication=" + (result.getSignatures().isEmpty() ? "—"
+                : result.getSignatures().get(0).getIndication())
+                + ", sub=" + (result.getSignatures().isEmpty() ? "—"
+                : result.getSignatures().get(0).getSubIndication())
+                + ", errors=" + extractErrors(result));
     }
 
     /**
