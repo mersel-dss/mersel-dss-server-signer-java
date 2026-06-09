@@ -1,6 +1,7 @@
 package io.mersel.dss.signer.api.wiring;
 
 import io.mersel.dss.signer.api.controllers.HashSignatureController;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.raw.RawHashSignatureService;
 import io.qameta.allure.Epic;
@@ -86,6 +87,15 @@ class HashSignatureWiringTest {
      */
     @MockBean
     private SignerNotifier signerNotifier;
+
+    /**
+     * SignatureMetrics bağımlılığı — controller artık imza iş metriklerini
+     * (signer_signatures_total / boyut / süre) buraya kaydediyor. WebMvcTest
+     * slice'ı {@code @Component}'leri scan etmediğinden mock olarak sağlanır;
+     * bu wiring testi endpoint'i çağırmaz (yalnız bean + mapping doğrular).
+     */
+    @MockBean
+    private SignatureMetrics signatureMetrics;
 
     /**
      * Controller bean'i context'te kayıtlı mı?
