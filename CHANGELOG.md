@@ -7,7 +7,24 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
-## [1.0.5] - 2026-06-09
+## [1.0.6] - 2026-06-09
+
+### Changed
+
+- **Verifier crypto policy artık legacy SHA-1 imzaları kabul ediyor.**
+  **Neden:** Türkiye'de hâlâ dolaşımda olan eski mali mühür / e-belge
+  imzalarının bir kısmı SHA-1 digest ile üretilmiş durumda. Verifier'ın
+  bu imzaları sessizce reddetmesi, geriye dönük uyumluluğu kırıyor ve
+  geçmiş arşiv belgelerinin doğrulanamamasına yol açıyordu. Politika,
+  SHA-1 imzalı XAdES belgelerini `valid=true` olarak ele alacak şekilde
+  güncellendi (uyarı eşlik edebilir). Modern imzalama yolu (signer
+  servisi) hâlâ yalnızca SHA-256+ üretir; bu değişiklik sadece
+  doğrulama (verify) tarafını ve geriye dönük kabulü kapsar.
+  - **Test hizalaması** (`XAdESSha1LegacyE2ETest`): SHA-1 imzalı XAdES
+    fixture'ı artık verifier tarafından **kabul edilmesi** beklenir;
+    reddedilmesi (`valid=false`) bir crypto policy regresyonu olarak
+    raporlanır. Önceki "sessiz trust → fail" mantığı yeni politikaya göre
+    tersine çevrildi.
 
 ## [1.0.4] - 2026-06-09
 
