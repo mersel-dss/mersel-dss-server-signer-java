@@ -89,7 +89,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>This product includes software developed by IAIK of Graz University of
  * Technology.</p>
  */
-public class IaikPkcs11Module implements InitializingBean, DisposableBean {
+public class IaikPkcs11Module implements InitializingBean, DisposableBean, Pkcs11ModulePort {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(IaikPkcs11Module.class);
 

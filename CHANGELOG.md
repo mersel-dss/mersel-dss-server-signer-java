@@ -7,6 +7,208 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **İmza iş metrikleri (SignatureMetrics) + zenginleştirilmiş Grafana dashboard.**
+  **Neden:** Mevcut Grafana dashboard'unda toplam imza hacmi yalnızca PKCS#11
+  köprüsünün düşük seviye `pkcs11_bridge_successful_operations_total` sayacından
+  okunuyordu; bu sayaç yalnız **remote köprü modunda** üretiliyor ve format /
+  belge tipi / boyut kırılımı sunmuyordu. Artık uygulama seviyesinde,
+  modtan bağımsız (HSM/PFX, in-process/remote) iş metrikleri yayınlanıyor.
+  - **Yeni bileşen** `…services.metrics.SignatureMetrics` (koşulsuz `@Component`):
+    Micrometer üzerinden 4 yeni metrik yayınlar —
+    `signer_signatures_total{format,document_type,profile,outcome}` (sayaç),
+    `signer_document_bytes{format,document_type}` ve `signer_signed_bytes{format}`
+    (DistributionSummary; 1 KB…200 MB SLO kovaları → histogram/heatmap + ortalama),
+    `signer_signature_duration_seconds{format,document_type,outcome}` (Timer,
+    percentile-histogram). Etiket değerleri sınırlı kümelerden gelir (serbest
+    metin yok) → kardinalite kontrollü.
+  - **Tüm imza uçları enstrümante edildi**: CAdES, PAdES, XAdES, WS-Security,
+    Timestamp, Hash (digest) ve TestKurum counter-signature controller'ları
+    başarı/hata yolunda ölçüm kaydeder; başarı yolunda ek IO/heap maliyeti yok.
+  - **Grafana dashboard** (`monitoring/grafana-dashboard.json`): yeni
+    **"İmza İş Metrikleri"** bölümü — toplam/başarı/hata stat'ları, başarı oranı,
+    format dağılımı (donut), profil bar-gauge, format ve belge tipi bazında imza
+    hızı, başarı/hata trendleri, girdi belge boyutu heatmap'i ve p50/p95,
+    imza süresi p95, ortalama boyut, işlenen veri hacmi (byte/s) ve
+    format×belge tipi×profil kırılım tablosu.
+  - **Prometheus alarmları** (`monitoring/pkcs11-bridge.rules.yml`): `signer-business`
+    grubu — `SignerSignatureFailures`, `SignerSignatureFailureRatioHigh` (>%5),
+    `SignerNoSignatureTraffic`.
+  - **Yapılandırma** (`application.properties`): `signer.signature.duration` için
+    percentile-histogram ve doğrudan p50/p95/p99 serileri etkinleştirildi.
+
+- **PKCS#11 out-of-process köprüsü — 32-bit native DLL ↔ 64-bit JVM bit'lik
+  uyumsuzluğunun kalıcı çözümü.**
+
+  **Problem (kök neden).** PKCS#11 imzalama, üreticinin verdiği bir native
+  paylaşımlı kütüphane üzerinden yapılır (Windows'ta `.dll`, Linux'ta `.so`,
+  macOS'ta `.dylib`). İşletim sistemi/JNI'ın demir kuralı gereği bir native
+  kütüphane **yalnızca kendisiyle aynı bit'likteki** process'e yüklenebilir:
+  64-bit JVM bir 32-bit DLL'i yükleyemez (tersi de geçerli) ve denenirse
+  `UnsatisfiedLinkError` / Windows'ta *"%1 is not a valid Win32 application"*
+  hatası alınır. Sahadaki bazı kurumların mali mühür / akıllı kart sürücüsü
+  **yalnızca 32-bit DLL** olarak geliyor; üreticinin 64-bit muadili yok.
+
+  **Neden 32-bit JVM tek başına çözüm değil.** Akla gelen kolay yol "o zaman
+  tüm uygulamayı 32-bit JVM'de çalıştıralım"dır. Ancak 32-bit process **~2 GB**
+  (Windows'ta pratikte ~1.3–1.6 GB) kullanıcı adres alanıyla sınırlıdır. İmza
+  pipeline'ımız DSS ile **belgenin tamamını** belleğe alır; DOM parse,
+  canonicalization (c14n) ve referans digest hesabı bunun katlarına çıkan geçici
+  bellek ister. Büyük e-Arşiv raporları / PDF'lerde bu dar adres alanı
+  `OutOfMemoryError` ile patlar. Yani 32-bit JVM bir yandan native uyumu
+  sağlarken diğer yandan asıl iş yükünü öldürür — kabul edilemez.
+
+  **Çözüm: bit'liği işten ayır.** Köprü, native DLL'i **kendi bit'liğinde**
+  çalışan ayrı bir **helper process** içinde yükler. Ağır iş (belge IO, DOM,
+  c14n, digest) geniş heap'li **64-bit ana process'te** kalır; helper'a loopback
+  IPC ile yalnızca **küçük veri** geçer. Böylece adres alanı darlığı helper'da
+  sorun olmaz, çünkü helper hiçbir zaman koca belgeyi görmez:
+
+  ```
+  64-bit ANA JVM (büyük heap)                     32-bit HELPER (native DLL)
+  ─────────────────────────────                   ──────────────────────────
+  belge oku → DOM parse → c14n
+  → SignedInfo / signedAttributes
+  → 32 byte digest  ───── IPC (küçük) ─────►        PKCS#11 C_Sign
+                                                    (private key HSM/kart'ta)
+  imzayı belgeye göm ◄──── IPC (küçük) ─────        imza değeri (ör. RSA-2048
+                                                    → 256 byte)
+  ```
+
+  Köprüden geçen şey büyük belge değil; imzalanacak digest / `<ds:SignedInfo>` /
+  CMS `signedAttributes` (genelde birkaç yüz byte) gidip imza değeri dönüyor.
+  Asıl `C_Sign` helper'da, private key hiçbir zaman ana process'e taşınmadan
+  HSM/kart üzerinde gerçekleşir.
+
+  - **Yeni paket** `…keystore.iaik.bridge`: `NativeArchitecture` (PE/ELF/Mach-O
+    header'ından bit'lik tespiti), minimal binary `Pkcs11WireProtocol`,
+    `Pkcs11HelperMain`/`Pkcs11HelperServer` (helper tarafı), `Pkcs11HelperProcess`
+    (spawn + crash→restart supervizör), `RemotePkcs11Module`/`RemotePkcs11Signer`
+    (IPC istemcisi), `HelperHeartbeat` (helper içinde, DLL'e bitişik SMS-recovery)
+    ve `Pkcs11BridgeDecision`/`Pkcs11BridgeConditions` (strateji kararı).
+  - **Yeni `Pkcs11ModulePort` arayüzü**: `findSigner` / `listCertificates` /
+    `invalidateKeyCache` / `destroy` yüzeyini soyutlar; `IaikPkcs11Module`
+    (in-process) ve `RemotePkcs11Module` (remote) ortak sözleşmesi.
+  - **Yeni yapılandırma**: `PKCS11_BRIDGE_MODE` (`auto` | `in-process` | `remote`,
+    default `auto`), `PKCS11_HELPER_JAVA`, `PKCS11_HELPER_JVM_OPTS`,
+    `PKCS11_HELPER_CLASSPATH`, `PKCS11_HELPER_LAUNCHER`, `PKCS11_BRIDGE_HOST`,
+    `PKCS11_HELPER_READY_TIMEOUT_MS`, `PKCS11_HELPER_CONNECT_TIMEOUT_MS`,
+    `PKCS11_HELPER_READ_TIMEOUT_MS` (bkz. `application.properties`).
+  - **Gözlemlenebilirlik (log)**: remote modda `RemotePkcs11Module` köprü
+    sağlığını durum-geçişli loglar — ilk başarılı IPC round-trip'inde **"köprü
+    çalışır durumda DOĞRULANDI"**, dejenerasyonda bir kez `ERROR`, toparlanmada
+    bir kez `INFO` ve sağlıklı kaldıkça en fazla 5 dk'da bir "sağlıklı" sinyali
+    (log gürültüsü yaratmadan). `Pkcs11HelperProcess` helper başlat/hazır/
+    beklenmedik çıkış/restart olaylarını ayrıca loglar.
+  - **Gözlemlenebilirlik (Actuator)**: yeni `Pkcs11BridgeHealthIndicator`
+    `/actuator/health` altında `components.pkcs11Bridge` olarak köprü sağlığını
+    raporlar. **Aktif** kontrol — helper'a hafif `OP_PING` round-trip'i atar
+    (sadece "ayakta" değil "yanıt veriyor" mu onu doğrular; native DLL'e
+    dokunmaz, imzayı etkilemez). Köprü `DOWN` olunca genel health `DOWN` olur →
+    load balancer instance'ı rotasyon dışına alabilir; helper restart sonrası
+    `UP`'a döner. Yalnızca remote modda devreye girer — in-process/PFX
+    dağıtımlarındaki health çıktısı değişmez.
+  - **Gözlemlenebilirlik (Actuator teşhis ucu)**: yeni salt-okunur
+    `Pkcs11BridgeEndpoint` → `GET /actuator/pkcs11bridge`. Health'in UP/DOWN
+    özetine ek olarak **helper heartbeat sayaçlarını** on-demand açar:
+    `successCount`/`failureCount`, `consecutiveFailures`, Cryptoki reinit
+    istatistikleri (`reinitAttempts`/`reinitSuccesses`/`reinitFailures`),
+    `lastErrorMessage`, `lastSuccessAt` + yaş, ve aktif `OP_PING` probe sonucu.
+    Operatör Slack/webhook alarmını beklemeden köprü + HSM keep-alive durumunu
+    anlık sorgulayabilir. Yalnızca remote modda oluşur (in-process/PFX'te 404);
+    salt-okunur, native DLL'e dokunmaz (yalnız `OP_PING`+`OP_HEARTBEAT_STATUS`
+    IPC), imzayı etkilemez. `management.endpoints.web.exposure.include`'a
+    `pkcs11bridge` eklendi.
+  - **Gözlemlenebilirlik (Prometheus/Grafana metrikleri)**: yeni
+    `Pkcs11BridgeMetrics` köprü durumunu Micrometer gauge/counter olarak
+    `/actuator/prometheus`'a yayar — `pkcs11_bridge_helper_alive`,
+    `pkcs11_bridge_ipc_healthy`, `pkcs11_bridge_successful_operations_total`,
+    ve heartbeat sayaçları (`pkcs11_bridge_heartbeat_enabled`,
+    `..._consecutive_failures`, `..._reinit_attempts/successes/failures`).
+    Ucuz değerler her scrape'te yerel okunur; heartbeat sayaçları 30 sn'de bir
+    tek IPC ile önbelleğe alınır (scrape başına IPC yok). Yalnızca remote modda
+    oluşur (in-process/PFX'te bean yok, sıfır ek yük); salt-okuma, imza yoluna
+    dokunmaz. Böylece köprü + HSM keep-alive Grafana'da panel + alert'e bağlanabilir.
+
+### Changed
+
+- **Bu değişiklik HTTP API ve runtime davranışı açısından GERİYE UYUMLUDUR —
+  bilinçli olarak _non-breaking_ tasarlandı.** Mevcut canlı kurulumlar (PKCS#11
+  bit'liği zaten JVM ile uyumlu, in-process çalışan) `auto` modda **birebir
+  eskisi gibi** IN_PROCESS yolundan devam eder. **Fail-safe garantisi:** `auto`
+  modda bit'lik tespiti beklenmedik şekilde başarısız olursa _veya_ uyumsuzluk
+  bulunsa bile `PKCS11_HELPER_JAVA` tanımlı değilse, karar **IN_PROCESS'e düşer**
+  (köprü öncesi davranışla aynı; native loader gerçek hatayı eskisi gibi verir).
+  Köprü yalnızca operatör açıkça `PKCS11_BRIDGE_MODE=remote` derse ya da `auto`
+  modda gerçek bir uyumsuzluk + hazır helper varken devreye girer.
+- **İç Java API imza genişlemesi (yalnızca kod düzeyinde, kaynak-uyumluluk
+  notu).** `CertificateInfoService`, `SigningMaterialFactory.createPkcs11SigningContext`
+  ve `SignatureConfiguration#signingContext` artık somut `IaikPkcs11Module`
+  yerine `Pkcs11ModulePort` arayüzünü alır (polimorfizm için). `IaikPkcs11Module`
+  bu arayüzü implement ettiğinden mevcut bean'ler ve davranış değişmez;
+  `CertificateInfoService`'in geriye dönük kurucuları korunmuştur. Doğrudan bu
+  somut tipe bağlı _harici_ Java tüketicisi varsa (uygulama içi; HTTP API veya
+  .NET istemcisi etkilenmez) referansını `Pkcs11ModulePort`'a güncellemelidir.
+- **HSM heartbeat her iki modda da çalışır; operatör-alarm paritesi sağlandı.**
+  `HsmHeartbeatScheduler` (zengin: bildirim + exponential backoff + metrik)
+  yalnızca **in-process** modda aktiftir — `module.heartbeatSign` ve
+  `reinitializeForSmsRecovery` native key handle'a/Cryptoki state'ine dokunur,
+  bu da DLL'i tutan process'te olmak zorundadır. **Remote** modda keep-alive +
+  Cryptoki reinit DLL'e bitişik şekilde helper içindeki `HelperHeartbeat`'te
+  yürür; bu sınıf artık in-process ile **aynı exponential backoff** çizelgesine
+  (60s→5dk→15dk→30dk) ve zengin sayaçlara sahiptir. Yeni `RemoteHsmHeartbeatMonitor`
+  (ana process, `@Conditional(Remote)`) helper'ın heartbeat durumunu
+  `OP_HEARTBEAT_STATUS` IPC çağrısıyla periyodik sorar ve **durum geçişlerinde**
+  in-process ile birebir aynı `HeartbeatEventType` bildirimlerini (FAILED /
+  RECOVERED / REINIT_TRIGGERED / REINIT_SUCCESS / REINIT_FAILED) Slack/webhook'a
+  yayar. Helper restart'ında sayaç sıfırlanmasını algılayıp sahte alarm üretmez.
+  Böylece HSM heartbeat alarmları artık **remote modda da** akar.
+
+### Fixed
+
+- **XAdES — paylaşılan `CertificateVerifier`'da eş zamanlılık yarışı.**
+  **Sorun:** `certificateVerifier` singleton bean'dir ve tüm imza yollarınca
+  paylaşılır. `XAdESSignatureService.addSigningCertificateChainToVerifier()`
+  imzalama zincirini verifier'ın **adjunct** kaynağına yazıyordu; bu yazma
+  `signatureSemaphore` kritik bölgesinin **dışında** (acquire'dan önce)
+  gerçekleşiyor ve permits &gt; 1 olduğundan eş zamanlı isteklerde
+  `setAdjunctCertSources` birbirini **eziyordu** — bir istek başka bir isteğin
+  zincirini okuyabiliyor, -LT/-LTA seviye yükseltmesinde eksik zincir / hata
+  riski doğuyordu. **Çözüm:** yeni `ThreadLocalAdjunctCertificateSource` ile
+  adjunct kaynağı artık **thread-izole**dir (her istek yalnızca kendi zincirini
+  görür); verifier'a tek seferlik (lazy + senkron) kurulur ve istek bitiminde
+  `finally` içinde temizlenir (thread-pool yeniden kullanımında sızıntı / başka
+  istek tipine bulaşma yok). Yalnızca DSS'in herkese açık `CertificateSource`
+  API'si kullanılır; kara-kutu iç duruma dokunulmaz. HTTP API ve baseline imza
+  davranışı değişmez.
+- **İmza hata yolunda büyük dosyanın belleğe ikinci kez yüklenmesi (OOM
+  amplifikasyonu).** `XadesController` (XAdES + WS-Security), `PadesController`,
+  `CadesController` ve `TimestampController` hata anında bildirim için
+  `MultipartFile.getBytes()` çağırarak tüm dosyayı (200MB'a kadar) yeniden
+  belleğe alıyordu. HSM kesintisi gibi **korele** hatalarda eş zamanlı tüm
+  istekler bunu aynı anda yapıp OOM'a yol açabiliyordu. Yeni
+  `SignerNotifier.shouldReadContentForFailure(size)` yardımcısı ile artık
+  `getBytes()` **yalnızca** bildirim etkin + içerik ekleme açık + boyut
+  `max-content-size` eşiğinin altındaysa çağrılır; aksi halde alarm yine gönderilir
+  (yalnız içerik eklenmez). Bildirim kapalıyken hata yolunda hiç ekstra IO/heap
+  oluşmaz.
+
+### Security
+
+- **Test-only endpoint için kill-switch (`/v1/testusercountersign`).** GİB test
+  ortamı counter-signature controller'ı önceden production binary'de **koşulsuz**
+  aktifti (yalnızca reverse-proxy ACL'una güveniliyordu). Artık
+  `@ConditionalOnProperty(mersel.signer.test-endpoints.enabled)` ile kontrol
+  edilir. **Geriye dönük uyumluluk için varsayılan AÇIK** (property verilmezse
+  endpoint çalışır → mevcut test ortamları kırılmaz); `false` verildiğinde bean
+  hiç oluşturulmaz ve endpoint 404 döner. **Production deployment'larında
+  `TEST_ENDPOINTS_ENABLED=false` / `mersel.signer.test-endpoints.enabled=false`
+  yapılması şiddetle önerilir.** Not: bu endpoint zaten Kamu SM'in
+  publicly-published test sertifikalarıyla imza üretir (GİB üretimde reddeder) ve
+  production HSM/key'lerine erişmez; bu nedenle değişiklik defense-in-depth
+  amaçlıdır.
+
 ## [1.0.3] - 2026-06-05
 
 ### Changed

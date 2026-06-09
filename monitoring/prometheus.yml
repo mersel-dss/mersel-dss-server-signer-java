@@ -1,0 +1,21 @@
+# Mersel DSS Signer — Prometheus scrape yapılandırması
+# Windows native kurulum: bu dosyayı prometheus.exe'nin yanına koyup
+#   prometheus.exe --config.file=prometheus.yml
+# (NSSM servisi kullanıyorsan AppParameters'a --config.file=... ver).
+#
+# KRİTİK: Spring Boot metrikleri /metrics'te DEĞİL, /actuator/prometheus'tadır.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+# Alert kuralları (opsiyonel; Alertmanager kurarsan anlamlı olur).
+rule_files:
+  - "pkcs11-bridge.rules.yml"
+
+scrape_configs:
+  - job_name: 'mersel-signer'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['localhost:8085']     # SERVER_PORT değiştiyse güncelle
+        labels:
+          instance: 'signer-1'          # birden fazla instance varsa farklılaştır

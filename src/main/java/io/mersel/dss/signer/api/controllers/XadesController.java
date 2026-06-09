@@ -6,6 +6,7 @@ import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.models.enums.DocumentType;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.wssecurity.WsSecuritySignatureService;
 import io.mersel.dss.signer.api.services.signature.xades.XAdESSignatureService;
@@ -45,19 +46,22 @@ public class XadesController {
     private final String signingAlias;
     private final char[] signingPin;
     private final SignerNotifier signerNotifier;
+    private final SignatureMetrics signatureMetrics;
 
     public XadesController(XAdESSignatureService xadesSignatureService,
                           WsSecuritySignatureService wsSecuritySignatureService,
                           SigningMaterial signingMaterial,
                           String signingAlias,
                           char[] signingPin,
-                          SignerNotifier signerNotifier) {
+                          SignerNotifier signerNotifier,
+                          SignatureMetrics signatureMetrics) {
         this.xadesSignatureService = xadesSignatureService;
         this.wsSecuritySignatureService = wsSecuritySignatureService;
         this.signingMaterial = signingMaterial;
         this.signingAlias = signingAlias;
         this.signingPin = signingPin;
         this.signerNotifier = signerNotifier;
+        this.signatureMetrics = signatureMetrics;
     }
 
     @Operation(
@@ -78,6 +82,8 @@ public class XadesController {
         @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<?> signXades(@ModelAttribute SignXadesDto dto) {
+        SignatureMetrics.Sample sample = null;
+        long inputSize = -1;
         try {
             if (dto.getDocument() == null || dto.getDocumentType() == DocumentType.None) {
                 LOGGER.warn("Geçersiz istek: belge veya belge tipi eksik");
@@ -86,6 +92,10 @@ public class XadesController {
             }
 
             boolean zipped = Boolean.TRUE.equals(dto.getZipFile());
+            inputSize = dto.getDocument().getSize();
+            sample = signatureMetrics.start("XAdES",
+                    dto.getDocumentType().name(),
+                    dto.getSignatureLevel().name());
 
             // try-with-resources: MultipartFile.getInputStream() Tomcat'in
             // disk-tabanlı temp dosyasına bir FileInputStream açar. Bu stream
@@ -105,6 +115,8 @@ public class XadesController {
                 );
             }
 
+            sample.success(inputSize,
+                    result.getSignedDocument() != null ? result.getSignedDocument().length : -1);
             LOGGER.info("XAdES imzası başarıyla oluşturuldu. Belge tipi: {}", 
                 dto.getDocumentType());
 
@@ -119,6 +131,9 @@ public class XadesController {
 
         } catch (Exception e) {
             LOGGER.error("XAdES imzası oluşturulurken hata", e);
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             byte[] documentBytes = null;
             String fileName = null;
             String contentType = null;
@@ -126,7 +141,12 @@ public class XadesController {
                 if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
                     fileName = dto.getDocument().getOriginalFilename();
                     contentType = dto.getDocument().getContentType();
-                    documentBytes = dto.getDocument().getBytes();
+                    // OOM koruması: büyük dosyayı (200MB'a kadar) belleğe tekrar
+                    // yüklemeden önce boyut/eşik kontrolü yap. Eş zamanlı hatalarda
+                    // ikinci kopya amplifikasyonunu engeller.
+                    if (signerNotifier.shouldReadContentForFailure(dto.getDocument().getSize())) {
+                        documentBytes = dto.getDocument().getBytes();
+                    }
                 }
             } catch (Exception readEx) {
                 LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());
@@ -152,12 +172,16 @@ public class XadesController {
         @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<?> signWsSecurity(@ModelAttribute SignWsSecurityDto dto) {
+        SignatureMetrics.Sample sample = null;
+        long inputSize = -1;
         try {
             if (dto.getDocument() == null || dto.getDocument().isEmpty()) {
                 LOGGER.warn("Geçersiz istek: SOAP belgesi eksik");
                 return ResponseEntity.badRequest()
                     .body(new ErrorModel("INVALID_INPUT", "SOAP belgesi zorunludur"));
             }
+
+            inputSize = dto.getDocument().getSize();
 
             // try-with-resources: aynı handle-leak kontratı signXades ile;
             // SOAP parse'i InputStream'i tek-geçişte tükettiği için scope
@@ -168,7 +192,9 @@ public class XadesController {
             }
 
             boolean useSoap12 = Boolean.TRUE.equals(dto.getSoap1Dot2());
-            
+            sample = signatureMetrics.start("WS-Security", "soap",
+                    useSoap12 ? "SOAP1.2" : "SOAP1.1");
+
             LOGGER.info("WS-Security imzalama isteği - soap1Dot2 parametresi: {}, useSoap12: {}", 
                 dto.getSoap1Dot2(), useSoap12);
 
@@ -180,6 +206,8 @@ public class XadesController {
                 signingPin
             );
 
+            sample.success(inputSize,
+                    result.getSignedDocument() != null ? result.getSignedDocument().length : -1);
             LOGGER.info("WS-Security imzası başarıyla oluşturuldu (SOAP {})", useSoap12 ? "1.2" : "1.1");
 
             // SOAP envelope → text/xml (SOAP 1.1 standardı) / application/soap+xml (1.2).
@@ -193,6 +221,9 @@ public class XadesController {
 
         } catch (Exception e) {
             LOGGER.error("WS-Security imzası oluşturulurken hata", e);
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             byte[] documentBytes = null;
             String fileName = null;
             String contentType = null;
@@ -200,7 +231,12 @@ public class XadesController {
                 if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
                     fileName = dto.getDocument().getOriginalFilename();
                     contentType = dto.getDocument().getContentType();
-                    documentBytes = dto.getDocument().getBytes();
+                    // OOM koruması: büyük dosyayı (200MB'a kadar) belleğe tekrar
+                    // yüklemeden önce boyut/eşik kontrolü yap. Eş zamanlı hatalarda
+                    // ikinci kopya amplifikasyonunu engeller.
+                    if (signerNotifier.shouldReadContentForFailure(dto.getDocument().getSize())) {
+                        documentBytes = dto.getDocument().getBytes();
+                    }
                 }
             } catch (Exception readEx) {
                 LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());

@@ -19,18 +19,27 @@ import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PfxKeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
+import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11ModulePort;
+import io.mersel.dss.signer.api.services.keystore.iaik.bridge.Pkcs11BridgeConditions;
+import io.mersel.dss.signer.api.services.keystore.iaik.bridge.Pkcs11HelperProcess;
+import io.mersel.dss.signer.api.services.keystore.iaik.bridge.RemotePkcs11Module;
 import io.mersel.dss.signer.api.services.KamusmRootCertificateService;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 
+import java.io.IOException;
 import java.security.cert.X509Certificate;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
+import java.util.stream.Collectors;
 
 /**
  * İmza servisleri için ana yapılandırma.
@@ -131,7 +140,7 @@ public class SignatureConfiguration {
      * yokluğu algılar ve PFX yoluna düşer.</p>
      */
     @Bean(destroyMethod = "destroy")
-    @ConditionalOnExpression("#{T(org.springframework.util.StringUtils).hasText('${PKCS11_LIBRARY:}')}")
+    @Conditional(Pkcs11BridgeConditions.InProcess.class)
     public IaikPkcs11Module iaikPkcs11Module() {
         char[] pin = config.getCertificatePin().toCharArray();
         Long slot = sanitizeSlotConfig(config.getPkcs11Slot());
@@ -153,6 +162,84 @@ public class SignatureConfiguration {
             pin,
             config.isPkcs11NullInitArgs(),
             config.getMaxSessionCount());
+    }
+
+    /**
+     * Out-of-process PKCS#11 köprüsü — JVM ile DLL bit'liği uyuşmadığında
+     * (auto modda) veya {@code PKCS11_BRIDGE_MODE=remote} verildiğinde aktive
+     * olur. DLL'i kendi bit'liğinde yükleyen helper JVM'ini başlatır ve imza
+     * çağrılarını ona delege eden {@link RemotePkcs11Module}'ü döndürür.
+     *
+     * <p>{@link Pkcs11BridgeConditions.InProcess} ile karşılıklı dışlayan —
+     * ikisinden en fazla biri container'da bulunur; ikisi de
+     * {@link Pkcs11ModulePort} olduğu için {@link #signingContext} ayırt
+     * etmek zorunda kalmaz.</p>
+     */
+    @Bean(destroyMethod = "destroy")
+    @Conditional(Pkcs11BridgeConditions.Remote.class)
+    public RemotePkcs11Module remotePkcs11Module() {
+        String helperJava = config.getPkcs11HelperJava();
+        if (!StringUtils.hasText(helperJava)) {
+            throw new IllegalStateException(
+                "PKCS#11 köprüsü (remote mod) gerekli ama PKCS11_HELPER_JAVA ayarlı değil. "
+                + "DLL'in bit'liğine uygun bir java çalıştırılabilirinin yolunu verin "
+                + "(örn. 32-bit DLL için 32-bit JRE'nin java'sı).");
+        }
+
+        Map<String, String> env = new LinkedHashMap<>();
+        env.put("PKCS11_LIBRARY", config.getPkcs11LibraryPath());
+        env.put("CERTIFICATE_PIN", config.getCertificatePin());
+        if (config.getPkcs11Slot() != null) {
+            env.put("PKCS11_SLOT", String.valueOf(config.getPkcs11Slot()));
+        }
+        if (config.getPkcs11SlotIndex() != null) {
+            env.put("PKCS11_SLOT_LIST_INDEX", String.valueOf(config.getPkcs11SlotIndex()));
+        }
+        env.put("PKCS11_NULL_INIT_ARGS", String.valueOf(config.isPkcs11NullInitArgs()));
+        env.put("MAX_SESSION_COUNT", String.valueOf(config.getMaxSessionCount()));
+        // Sertifika seçimi + heartbeat helper'da (DLL'e bitişik) çalışır.
+        if (StringUtils.hasText(config.getCertificateAlias())) {
+            env.put("CERTIFICATE_ALIAS", config.getCertificateAlias());
+        }
+        if (StringUtils.hasText(config.getCertificateSerialNumber())) {
+            env.put("CERTIFICATE_SERIAL_NUMBER", config.getCertificateSerialNumber());
+        }
+        env.put("HSM_HEARTBEAT_ENABLED", String.valueOf(config.isHsmHeartbeatEnabled()));
+        env.put("HSM_HEARTBEAT_INTERVAL_SECONDS", String.valueOf(config.getHsmHeartbeatIntervalSeconds()));
+
+        List<String> jvmOpts = parseJvmOpts(config.getPkcs11HelperJvmOpts());
+        String classpath = StringUtils.hasText(config.getPkcs11HelperClasspath())
+            ? config.getPkcs11HelperClasspath()
+            : System.getProperty("java.class.path");
+
+        Pkcs11HelperProcess helper = new Pkcs11HelperProcess(
+            helperJava,
+            jvmOpts,
+            classpath,
+            config.getPkcs11HelperLauncher(),
+            config.getPkcs11BridgeHost(),
+            config.getPkcs11HelperReadyTimeoutMs(),
+            env);
+        try {
+            helper.start();
+        } catch (IOException e) {
+            throw new io.mersel.dss.signer.api.exceptions.KeyStoreException(
+                "PKCS#11 helper process başlatılamadı: " + e.getMessage(), e);
+        }
+        return new RemotePkcs11Module(
+            helper,
+            config.getPkcs11HelperConnectTimeoutMs(),
+            config.getPkcs11HelperReadTimeoutMs());
+    }
+
+    /** Boşlukla ayrılmış JVM opt string'ini listeye çevirir (boş token'ları eler). */
+    private static List<String> parseJvmOpts(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return new ArrayList<>();
+        }
+        return Arrays.stream(raw.trim().split("\\s+"))
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
     }
 
     /** {@code PKCS11_SLOT:-1} default convention'ını {@code null}'a normalize eder. */
@@ -195,11 +282,11 @@ public class SignatureConfiguration {
     @Bean
     public SigningContext signingContext(SigningMaterialFactory factory,
                                          KeyStoreProvider keyStoreProvider,
-                                         ObjectProvider<IaikPkcs11Module> iaikModuleProvider) {
-        IaikPkcs11Module iaikModule = iaikModuleProvider.getIfAvailable();
-        if (iaikModule != null) {
+                                         ObjectProvider<Pkcs11ModulePort> pkcs11ModuleProvider) {
+        Pkcs11ModulePort pkcs11Module = pkcs11ModuleProvider.getIfAvailable();
+        if (pkcs11Module != null) {
             return factory.createPkcs11SigningContext(
-                iaikModule,
+                pkcs11Module,
                 config.getCertificateAlias(),
                 config.getCertificateSerialNumber());
         }

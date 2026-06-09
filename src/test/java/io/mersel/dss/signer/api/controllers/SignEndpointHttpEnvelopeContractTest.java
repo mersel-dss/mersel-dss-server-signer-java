@@ -74,10 +74,13 @@ class SignEndpointHttpEnvelopeContractTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        io.mersel.dss.signer.api.services.metrics.SignatureMetrics signatureMetrics =
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
         CadesController cadesController = new CadesController(
-            cadesSignatureService, null, signerNotifier);
+            cadesSignatureService, null, signerNotifier, signatureMetrics);
         PadesController padesController = new PadesController(
-            padesSignatureService, null, signerNotifier);
+            padesSignatureService, null, signerNotifier, signatureMetrics);
 
         mockMvc = MockMvcBuilders
                 .standaloneSetup(cadesController, padesController)

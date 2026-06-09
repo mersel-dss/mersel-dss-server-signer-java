@@ -5,7 +5,7 @@ import io.mersel.dss.signer.api.exceptions.KeyStoreException;
 import io.mersel.dss.signer.api.models.SigningMaterial;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
-import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
+import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11ModulePort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,9 +24,9 @@ import java.util.List;
  *
  * <p>Üç katmanlı kaynak sırası:</p>
  * <ol>
- *   <li><b>IAIK PKCS#11</b> (container'da {@link IaikPkcs11Module} bean'i
- *       varsa) — primary kaynak. SunPKCS11'in P11KeyStore alias map'inden
- *       bağımsızdır.</li>
+ *   <li><b>PKCS#11</b> (container'da {@link Pkcs11ModulePort} bean'i
+ *       varsa — in-process veya remote köprü) — primary kaynak. SunPKCS11'in
+ *       P11KeyStore alias map'inden bağımsızdır.</li>
  *   <li><b>JCA {@link KeyStore#aliases()}</b> — PFX gibi non-HSM
  *       sağlayıcılar için.</li>
  * </ol>
@@ -36,8 +36,9 @@ public class CertificateInfoService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(CertificateInfoService.class);
 
-    /** Spring inject eder; PFX yapılandırmasında {@code null}. CLI yolunda manuel set. */
-    private final IaikPkcs11Module iaikModule;
+    /** Spring inject eder; PFX yapılandırmasında {@code null}. CLI yolunda manuel set.
+     *  In-process ({@code IaikPkcs11Module}) veya remote köprü olabilir. */
+    private final Pkcs11ModulePort iaikModule;
 
     /**
      * Aktif imza yapılandırmasındaki materyal. {@code /signingCertificate}
@@ -47,7 +48,7 @@ public class CertificateInfoService {
     private final SigningMaterial signingMaterial;
 
     @Autowired
-    public CertificateInfoService(@Autowired(required = false) IaikPkcs11Module iaikModule,
+    public CertificateInfoService(@Autowired(required = false) Pkcs11ModulePort iaikModule,
                                   @Autowired(required = false) SigningMaterial signingMaterial) {
         this.iaikModule = iaikModule;
         this.signingMaterial = signingMaterial;
@@ -55,25 +56,25 @@ public class CertificateInfoService {
 
     /**
      * CLI / non-Spring kullanımı için no-arg constructor. PKCS#11 listeleme
-     * istiyorsa {@link #CertificateInfoService(IaikPkcs11Module, SigningMaterial)} kullan.
+     * istiyorsa {@link #CertificateInfoService(Pkcs11ModulePort, SigningMaterial)} kullan.
      */
     public CertificateInfoService() {
         this(null, null);
     }
 
     /**
-     * Geriye dönük uyumluluk: yalnızca {@link IaikPkcs11Module} ile inject —
+     * Geriye dönük uyumluluk: yalnızca {@link Pkcs11ModulePort} ile inject —
      * mevcut testler ve CLI yolu için. {@code /signingCertificate} endpoint'i
      * bu yolda kullanılamaz; HSM listing'i çalışmaya devam eder.
      */
-    public CertificateInfoService(IaikPkcs11Module iaikModule) {
+    public CertificateInfoService(Pkcs11ModulePort iaikModule) {
         this(iaikModule, null);
     }
 
     /**
      * Verilen keystore provider'dan tüm sertifikaları listeler.
      *
-     * <p>Container'da {@link IaikPkcs11Module} bean'i (HSM yapılandırması)
+     * <p>Container'da {@link Pkcs11ModulePort} bean'i (HSM yapılandırması)
      * mevcutsa <b>onun</b> {@code listCertificates()}'i çağrılır — token
      * üzerinde doğrudan {@code C_FindObjects}. Aksi halde JCA
      * {@code KeyStore.aliases()} fallback'i kullanılır.</p>

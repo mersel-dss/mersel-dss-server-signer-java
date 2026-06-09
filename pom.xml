@@ -72,7 +72,7 @@
             CLI'dan -DexcludedGroups= ile boşaltıp e2e dahil edebilirsin
             (Surefire'ın native property adı 'excludedGroups').
         -->
-        <excludedGroups>verifier-e2e,pkcs11-integration</excludedGroups>
+        <excludedGroups>verifier-e2e,pkcs11-integration,bridge-memory-demo</excludedGroups>
 
         <!--
             Allure 2.27.0 + AspectJ Weaver 1.9.21: JUnit 5 annotation

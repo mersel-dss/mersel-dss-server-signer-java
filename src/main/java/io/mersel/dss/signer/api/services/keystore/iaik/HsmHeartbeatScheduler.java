@@ -4,12 +4,14 @@ import eu.europa.esig.dss.enumerations.DigestAlgorithm;
 import eu.europa.esig.dss.enumerations.EncryptionAlgorithm;
 import eu.europa.esig.dss.enumerations.SignatureAlgorithm;
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.keystore.iaik.bridge.Pkcs11BridgeConditions;
 import io.mersel.dss.signer.api.services.notification.HeartbeatEventType;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.context.annotation.Conditional;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -90,6 +92,7 @@ import java.util.concurrent.atomic.AtomicLong;
 @ConditionalOnExpression(
     "#{T(org.springframework.util.StringUtils).hasText('${PKCS11_LIBRARY:}')"
     + " && '${HSM_HEARTBEAT_ENABLED:false}' == 'true'}")
+@Conditional(Pkcs11BridgeConditions.InProcess.class)
 public class HsmHeartbeatScheduler {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(HsmHeartbeatScheduler.class);

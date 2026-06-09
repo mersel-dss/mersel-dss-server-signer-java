@@ -1,0 +1,79 @@
+# Mersel DSS Signer — PKCS#11 köprü + imza sağlık alarmları.
+# Alertmanager kurduğunda anlam kazanır; sadece Prometheus'ta da
+# Alerts sekmesinde firing/pending olarak görünür.
+groups:
+  - name: pkcs11-bridge
+    rules:
+      - alert: SignerDown
+        expr: up{job="mersel-signer"} == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "Signer scrape edilemiyor ({{ $labels.instance }})"
+          description: "Prometheus 1 dakikadır /actuator/prometheus'a ulaşamıyor."
+
+      - alert: Pkcs11HelperDown
+        expr: pkcs11_bridge_helper_alive == 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: "PKCS#11 helper process ayakta değil ({{ $labels.instance }})"
+          description: "Out-of-process köprü helper'ı düştü; imzalama kesilebilir."
+
+      - alert: Pkcs11IpcUnhealthy
+        expr: pkcs11_bridge_ipc_healthy == 0
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: "PKCS#11 köprü IPC sağlıksız ({{ $labels.instance }})"
+
+      - alert: HsmHeartbeatFailing
+        expr: pkcs11_bridge_heartbeat_consecutive_failures > 3
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "HSM heartbeat ardışık başarısız ({{ $value }} kez)"
+          description: "Token bağlantısı kopmuş olabilir; reinit denemeleri sürüyor."
+
+      - alert: SignerHttp5xx
+        expr: |
+          sum by (instance) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Signer 5xx hata üretiyor ({{ $labels.instance }})"
+
+  # İmza iş metrikleri (SignatureMetrics) tabanlı alarmlar. Bu kurallar
+  # signer_signatures_total / signer_document_bytes serileri üretildiğinde
+  # (yani en az bir imza isteği geldikten sonra) anlam kazanır.
+  - name: signer-business
+    rules:
+      - alert: SignerSignatureFailures
+        expr: |
+          sum by (instance, format) (rate(signer_signatures_total{outcome="failure"}[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "İmza hataları üretiliyor ({{ $labels.format }} @ {{ $labels.instance }})"
+          description: "Son 5 dakikada {{ $labels.format }} formatında başarısız imza var."
+
+      - alert: SignerSignatureFailureRatioHigh
+        expr: |
+          sum by (instance) (rate(signer_signatures_total{outcome="failure"}[10m]))
+          /
+          clamp_min(sum by (instance) (rate(signer_signatures_total[10m])), 1)
+          > 0.05
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: "İmza hata oranı %5'in üzerinde ({{ $labels.instance }})"
+          description: "Son 10 dakikalık imza isteklerinin %5'inden fazlası başarısız."
+
+      - alert: SignerNoSignatureTraffic
+        expr: |
+          sum by (instance) (rate(signer_signatures_total{outcome="success"}[15m])) == 0
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: "30 dakikadır başarılı imza yok ({{ $labels.instance }})"
+          description: "Trafik beklenen bir kurulumda imza akışı durmuş olabilir; isteğe bağlı kapatın."

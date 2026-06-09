@@ -38,6 +38,60 @@ public class SignatureServiceConfiguration {
     @Value("${PKCS11_NULL_INIT_ARGS:false}")
     private boolean pkcs11NullInitArgs;
 
+    // ====================================================================
+    // PKCS#11 köprü (out-of-process helper) yapılandırması
+    // --------------------------------------------------------------------
+    // JVM ile PKCS#11 DLL bit'liği uyuşmadığında (örn. 64-bit JVM + 32-bit
+    // mali mühür DLL'i) native kütüphane ana process'e yüklenemez. Bu durumda
+    // DLL'i kendi bit'liğinde yükleyen ayrı bir helper JVM başlatılır ve imza
+    // çağrıları loopback IPC ile ona iletilir. Ağır DSS belge işleme 64-bit
+    // ana process'te kaldığı için 32-bit helper'ın dar adres alanı sorun olmaz.
+    // ====================================================================
+
+    /**
+     * Köprü stratejisi: {@code auto} (default; bit'lik karşılaştır),
+     * {@code in-process} (her zaman ana JVM'e yükle) veya {@code remote}
+     * (her zaman helper kullan).
+     */
+    @Value("${PKCS11_BRIDGE_MODE:auto}")
+    private String pkcs11BridgeMode;
+
+    /**
+     * Helper process'i başlatacak {@code java} çalıştırılabilirinin yolu —
+     * DLL'in bit'liğine uygun olmalı (örn. 32-bit DLL için 32-bit JRE'nin
+     * {@code java.exe}'si). Remote moda düşülür ve bu boşsa startup fail-fast.
+     */
+    @Value("${PKCS11_HELPER_JAVA:}")
+    private String pkcs11HelperJava;
+
+    /** Helper JVM argümanları (boşlukla ayrılmış). Default dar heap. */
+    @Value("${PKCS11_HELPER_JVM_OPTS:-Xmx256m}")
+    private String pkcs11HelperJvmOpts;
+
+    /** Helper classpath'i. Boşsa ana process'in {@code java.class.path}'i kullanılır (fat-jar). */
+    @Value("${PKCS11_HELPER_CLASSPATH:}")
+    private String pkcs11HelperClasspath;
+
+    /** Helper başlatma yöntemi: {@code auto} | {@code propertieslauncher} | {@code direct}. */
+    @Value("${PKCS11_HELPER_LAUNCHER:auto}")
+    private String pkcs11HelperLauncher;
+
+    /** Loopback bind host'u (helper + client). Default güvenli loopback. */
+    @Value("${PKCS11_BRIDGE_HOST:127.0.0.1}")
+    private String pkcs11BridgeHost;
+
+    /** Helper'ın READY vermesi için beklenecek azami süre (ms). */
+    @Value("${PKCS11_HELPER_READY_TIMEOUT_MS:30000}")
+    private int pkcs11HelperReadyTimeoutMs;
+
+    /** Helper'a bağlanma timeout'u (ms). */
+    @Value("${PKCS11_HELPER_CONNECT_TIMEOUT_MS:5000}")
+    private int pkcs11HelperConnectTimeoutMs;
+
+    /** Helper'dan yanıt okuma timeout'u (ms) — HSM round-trip + reinit penceresi için cömert. */
+    @Value("${PKCS11_HELPER_READ_TIMEOUT_MS:60000}")
+    private int pkcs11HelperReadTimeoutMs;
+
     @Value("${CERTIFICATE_PIN}")
     private String certificatePin;
 
@@ -209,6 +263,42 @@ public class SignatureServiceConfiguration {
 
     public boolean isPkcs11NullInitArgs() {
         return pkcs11NullInitArgs;
+    }
+
+    public String getPkcs11BridgeMode() {
+        return pkcs11BridgeMode;
+    }
+
+    public String getPkcs11HelperJava() {
+        return pkcs11HelperJava;
+    }
+
+    public String getPkcs11HelperJvmOpts() {
+        return pkcs11HelperJvmOpts;
+    }
+
+    public String getPkcs11HelperClasspath() {
+        return pkcs11HelperClasspath;
+    }
+
+    public String getPkcs11HelperLauncher() {
+        return pkcs11HelperLauncher;
+    }
+
+    public String getPkcs11BridgeHost() {
+        return pkcs11BridgeHost;
+    }
+
+    public int getPkcs11HelperReadyTimeoutMs() {
+        return pkcs11HelperReadyTimeoutMs;
+    }
+
+    public int getPkcs11HelperConnectTimeoutMs() {
+        return pkcs11HelperConnectTimeoutMs;
+    }
+
+    public int getPkcs11HelperReadTimeoutMs() {
+        return pkcs11HelperReadTimeoutMs;
     }
 
     public String getIssuerCertificatePath() {

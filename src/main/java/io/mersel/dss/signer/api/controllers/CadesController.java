@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.controllers;
 import java.util.UUID;
 
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.cades.CAdESSignatureService;
 import org.slf4j.Logger;
@@ -57,6 +58,7 @@ public class CadesController {
     private final CAdESSignatureService cadesSignatureService;
     private final SigningMaterial signingMaterial;
     private final SignerNotifier signerNotifier;
+    private final SignatureMetrics signatureMetrics;
 
     /**
      * @param cadesSignatureService CAdES imza oluşturma işlemlerini gerçekleştiren servis
@@ -68,10 +70,12 @@ public class CadesController {
      */
     public CadesController(CAdESSignatureService cadesSignatureService,
                            SigningMaterial signingMaterial,
-                           SignerNotifier signerNotifier) {
+                           SignerNotifier signerNotifier,
+                           SignatureMetrics signatureMetrics) {
         this.cadesSignatureService = cadesSignatureService;
         this.signingMaterial = signingMaterial;
         this.signerNotifier = signerNotifier;
+        this.signatureMetrics = signatureMetrics;
     }
 
     /**
@@ -102,6 +106,8 @@ public class CadesController {
             @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<?> signCades(@ModelAttribute SignCadesDto dto) {
+        SignatureMetrics.Sample sample = null;
+        long inputSize = -1;
         try {
             if (dto.getDocument() == null || dto.getDocument().isEmpty()) {
                 LOGGER.warn("Geçersiz istek: belge eksik");
@@ -110,12 +116,16 @@ public class CadesController {
             }
 
             boolean detached = Boolean.TRUE.equals(dto.getDetached());
+            inputSize = dto.getDocument().getSize();
+            sample = signatureMetrics.start("CAdES", "binary", detached ? "detached" : "attached");
 
             SignResponse result;
             try (java.io.InputStream is = dto.getDocument().getInputStream()) {
                 result = cadesSignatureService.signData(is, detached, signingMaterial);
             }
 
+            sample.success(inputSize,
+                    result.getSignedDocument() != null ? result.getSignedDocument().length : -1);
             LOGGER.info("CAdES imzası başarıyla oluşturuldu (detached: {})", detached);
 
             // Attached imzada CMS zarfı orijinal belgeyi de içerdiğinden Base64 hali
@@ -131,6 +141,9 @@ public class CadesController {
 
         } catch (Exception e) {
             LOGGER.error("CAdES imzası oluşturulurken hata", e);
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             // Best-effort bildirim: dosya bytes'ını yalnız hata anında oku
             // (başarılı imza yolu sıfır ekstra IO/heap). MultipartFile.getBytes()
             // disk-backed temp dosyasını yeniden okuyacak; success path'i kirletmez.
@@ -141,7 +154,11 @@ public class CadesController {
                 if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
                     fileName = dto.getDocument().getOriginalFilename();
                     contentType = dto.getDocument().getContentType();
-                    documentBytes = dto.getDocument().getBytes();
+                    // OOM koruması: getBytes() ile ikinci kopya oluşturmadan önce
+                    // boyut/eşik kontrolü.
+                    if (signerNotifier.shouldReadContentForFailure(dto.getDocument().getSize())) {
+                        documentBytes = dto.getDocument().getBytes();
+                    }
                 }
             } catch (Exception readEx) {
                 LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());

@@ -62,7 +62,9 @@ class PadesControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        controller = new PadesController(padesSignatureService, signingMaterial, signerNotifier);
+        controller = new PadesController(padesSignatureService, signingMaterial, signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Nested

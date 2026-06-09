@@ -51,7 +51,9 @@ class HashSignatureControllerTest {
     void setUp() {
         service = mock(RawHashSignatureService.class);
         signerNotifier = mock(SignerNotifier.class);
-        controller = new HashSignatureController(service, signerNotifier);
+        controller = new HashSignatureController(service, signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test

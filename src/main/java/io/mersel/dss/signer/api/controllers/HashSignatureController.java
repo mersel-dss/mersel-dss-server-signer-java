@@ -4,6 +4,7 @@ import io.mersel.dss.signer.api.dtos.SignHashDto;
 import io.mersel.dss.signer.api.dtos.SignHashResponseDto;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.raw.RawHashSignatureService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,11 +54,14 @@ public class HashSignatureController {
 
     private final RawHashSignatureService rawHashSignatureService;
     private final SignerNotifier signerNotifier;
+    private final SignatureMetrics signatureMetrics;
 
     public HashSignatureController(RawHashSignatureService rawHashSignatureService,
-                                   SignerNotifier signerNotifier) {
+                                   SignerNotifier signerNotifier,
+                                   SignatureMetrics signatureMetrics) {
         this.rawHashSignatureService = rawHashSignatureService;
         this.signerNotifier = signerNotifier;
+        this.signatureMetrics = signatureMetrics;
     }
 
     @Operation(
@@ -97,19 +101,25 @@ public class HashSignatureController {
                 .body(new ErrorModel("INVALID_INPUT", "base64EncodedDigest geçerli bir base64 değil: " + e.getMessage()));
         }
 
+        SignatureMetrics.Sample sample = signatureMetrics.start(
+                "Hash", "digest",
+                dto.getDigestAlgorithm() != null ? dto.getDigestAlgorithm().name() : null);
         try {
             byte[] signed = rawHashSignatureService.signDigest(digest, dto.getDigestAlgorithm());
             String base64 = Base64.getEncoder().encodeToString(signed);
+            sample.success(digest.length, signed != null ? signed.length : -1);
             return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(new SignHashResponseDto(base64));
         } catch (IllegalArgumentException e) {
             LOGGER.warn("Hash imzalama validasyon hatası: {}", e.getMessage());
+            sample.failure(digest.length);
             // IllegalArgumentException kullanıcı hatası (4xx) — bildirim göndermiyoruz,
             // operasyonel alarm gürültüsü olmasın. SIGNATURE_FAILED kontratı 5xx için.
             return ResponseEntity.badRequest()
                 .body(new ErrorModel("INVALID_INPUT", e.getMessage()));
         } catch (SignatureException e) {
+            sample.failure(digest.length);
             LOGGER.error("Hash imzası oluşturulamadı (errorCode={}): {}",
                 e.getErrorCode(), e.getMessage(), e);
             // Hash imzasında "dosya" digest'in kendisi — operatör forensik için bytes'ı
@@ -119,6 +129,7 @@ public class HashSignatureController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
         } catch (Exception e) {
+            sample.failure(digest.length);
             LOGGER.error("Hash imzası oluşturulurken beklenmedik hata", e);
             signerNotifier.notifyOnSignatureFailure(
                     "/v1/hashsign", "Hash", e, digest, "digest.bin", "application/octet-stream");

@@ -4,6 +4,7 @@ import io.mersel.dss.signer.api.dtos.TestUserCounterSignatureDto;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
 import io.mersel.dss.signer.api.models.ErrorModel;
 import io.mersel.dss.signer.api.models.SignResponse;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.signature.xades.TestUserCounterSignatureService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -13,6 +14,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -54,6 +56,11 @@ import java.util.UUID;
  *       test sertifikalarıdır; gerçek e-Belge gönderiminde GİB reddeder.</li>
  *   <li>Üretim ortamlarında reverse-proxy / web ACL seviyesinde kapatılması
  *       önerilir.</li>
+ *   <li><strong>Kill-switch:</strong> {@code mersel.signer.test-endpoints.enabled=false}
+ *       verildiğinde bu controller bean'i hiç oluşturulmaz (endpoint 404 döner).
+ *       Geriye dönük uyumluluk için property verilmezse endpoint <em>açık</em>
+ *       kalır (mevcut test ortamları kırılmaz); production deployment'larında
+ *       açıkça {@code false} yapılması <strong>şiddetle önerilir</strong>.</li>
  * </ul>
  *
  * <h3>Tipik akış</h3>
@@ -71,6 +78,10 @@ import java.util.UUID;
  * @see TestUserCounterSignatureService
  */
 @RestController
+@ConditionalOnProperty(
+        name = "mersel.signer.test-endpoints.enabled",
+        havingValue = "true",
+        matchIfMissing = true)
 @Tag(name = "TestUserCounterSignature",
         description = "GİB test ortamı için Kamu SM RSA test kurum sertifikası ile "
                 + "entegratör tarafından imzalanmış XAdES belgesine counter signature ekler. "
@@ -86,10 +97,13 @@ public class TestUserCounterSignatureController {
     private static final String ENDPOINT_PATH = "/v1/testusercountersign";
 
     private final TestUserCounterSignatureService counterSignatureService;
+    private final SignatureMetrics signatureMetrics;
 
     public TestUserCounterSignatureController(
-            TestUserCounterSignatureService counterSignatureService) {
+            TestUserCounterSignatureService counterSignatureService,
+            SignatureMetrics signatureMetrics) {
         this.counterSignatureService = counterSignatureService;
+        this.signatureMetrics = signatureMetrics;
     }
 
     @Operation(
@@ -140,6 +154,9 @@ public class TestUserCounterSignatureController {
                                     + "(TestKurum1 / TestKurum2 / TestKurum3)"));
         }
 
+        long inputSize = dto.getDocument().getSize();
+        SignatureMetrics.Sample sample = signatureMetrics.start(
+                "CounterSignature", "xades", dto.getTestCompany().name());
         try {
             // try-with-resources: MultipartFile.getInputStream() Tomcat'in
             // disk-tabanlı temp dosyasına bir FileInputStream açar; XadesController
@@ -149,6 +166,8 @@ public class TestUserCounterSignatureController {
                 result = counterSignatureService.counterSign(is, dto.getTestCompany());
             }
 
+            sample.success(inputSize,
+                    result.getSignedDocument() != null ? result.getSignedDocument().length : -1);
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_XML)
                     .header("x-signature-value", result.getSignatureValue())
@@ -157,6 +176,7 @@ public class TestUserCounterSignatureController {
                     .body(result.getSignedDocument());
 
         } catch (SignatureException e) {
+            sample.failure(inputSize);
             String code = e.getErrorCode();
             if ("INVALID_INPUT".equals(code)
                     || "NO_PARENT_SIGNATURE".equals(code)
@@ -171,6 +191,7 @@ public class TestUserCounterSignatureController {
                     .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));
 
         } catch (Exception e) {
+            sample.failure(inputSize);
             LOGGER.error("TestKurum counter-signature oluşturulurken beklenmedik hata", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(new ErrorModel("SIGNATURE_FAILED", e.getMessage()));

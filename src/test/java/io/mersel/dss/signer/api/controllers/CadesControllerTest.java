@@ -40,7 +40,9 @@ class CadesControllerTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        controller = new CadesController(cadesSignatureService, signingMaterial, signerNotifier);
+        controller = new CadesController(cadesSignatureService, signingMaterial, signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Nested

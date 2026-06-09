@@ -7,7 +7,7 @@ import io.mersel.dss.signer.api.services.certificate.CertificateChainBuilderServ
 import io.mersel.dss.signer.api.services.certificate.CertificateValidatorService;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreLoaderService;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
-import io.mersel.dss.signer.api.services.keystore.iaik.IaikPkcs11Module;
+import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11ModulePort;
 import io.mersel.dss.signer.api.services.keystore.iaik.Pkcs11Signer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,9 +25,10 @@ import java.util.List;
  * <ul>
  *   <li>{@link #createPfxSigningContext} — JCA {@link KeyStore} +
  *       {@link PrivateKey} kullanır. PFX/PKCS#12 dosyaları için ideal.</li>
- *   <li>{@link #createPkcs11SigningContext} — {@link IaikPkcs11Module}
- *       üzerinden HSM'de C_FindObjects + C_Sign çağırır; SunPKCS11'in
- *       P11KeyStore alias-mapping katmanını tamamen by-pass eder.</li>
+ *   <li>{@link #createPkcs11SigningContext} — {@link Pkcs11ModulePort}
+ *       üzerinden HSM'de C_FindObjects + C_Sign çağırır (in-process veya
+ *       out-of-process köprü); SunPKCS11'in P11KeyStore alias-mapping
+ *       katmanını tamamen by-pass eder.</li>
  * </ul>
  *
  * <p>İki yol da {@link SigningContext} döner; çağıran kod
@@ -87,11 +88,11 @@ public class SigningMaterialFactory {
     }
 
     /**
-     * HSM / PKCS#11 yolunda IAIK üzerinden {@link SigningContext} üretir.
-     * {@link IaikPkcs11Module#findSigner} ile token'da private key + cert
-     * çözülür; private key referansı HSM'de kalır.
+     * HSM / PKCS#11 yolunda {@link SigningContext} üretir.
+     * {@link Pkcs11ModulePort#findSigner} ile token'da private key + cert
+     * çözülür; private key referansı HSM'de (veya helper process'te) kalır.
      */
-    public SigningContext createPkcs11SigningContext(IaikPkcs11Module module,
+    public SigningContext createPkcs11SigningContext(Pkcs11ModulePort module,
                                                      String certificateAlias,
                                                      String certificateSerialNumber) {
         try {

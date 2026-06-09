@@ -18,8 +18,12 @@ package io.mersel.dss.signer.api.services.notification;
  *   FAILED|REINIT_*  --(C_Sign ok)-> RECOVERED
  * </pre>
  *
- * <p>Tüm event'ler {@link io.mersel.dss.signer.api.services.keystore.iaik.HsmHeartbeatScheduler}
- * tarafından üretilir; başka bir kaynağı yoktur.</p>
+ * <p>Event üreticileri: in-process modda
+ * {@link io.mersel.dss.signer.api.services.keystore.iaik.HsmHeartbeatScheduler};
+ * remote (köprü) modunda
+ * {@code io.mersel.dss.signer.api.services.keystore.iaik.bridge.RemoteHsmHeartbeatMonitor}
+ * (helper içindeki heartbeat'in durumunu IPC ile gözleyip aynı event tiplerini
+ * yayar). Her iki modda da operatör bildirim akışı (Slack/webhook) aynıdır.</p>
  */
 public enum HeartbeatEventType {
 

@@ -3,6 +3,7 @@ package io.mersel.dss.signer.api.controllers;
 import java.util.UUID;
 
 import io.mersel.dss.signer.api.models.SigningMaterial;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.signature.pades.PAdESSignatureService;
 import org.slf4j.Logger;
@@ -38,13 +39,16 @@ public class PadesController {
     private final PAdESSignatureService padesSignatureService;
     private final SigningMaterial signingMaterial;
     private final SignerNotifier signerNotifier;
+    private final SignatureMetrics signatureMetrics;
 
     public PadesController(PAdESSignatureService padesSignatureService,
                           SigningMaterial signingMaterial,
-                          SignerNotifier signerNotifier) {
+                          SignerNotifier signerNotifier,
+                          SignatureMetrics signatureMetrics) {
         this.padesSignatureService = padesSignatureService;
         this.signingMaterial = signingMaterial;
         this.signerNotifier = signerNotifier;
+        this.signatureMetrics = signatureMetrics;
     }
 
     @Operation(
@@ -61,6 +65,8 @@ public class PadesController {
         @ApiResponse(responseCode = "500")
     })
     public ResponseEntity<?> signPades(@ModelAttribute SignPadesDto dto) {
+        SignatureMetrics.Sample sample = null;
+        long inputSize = -1;
         try {
             if (dto.getDocument() == null) {
                 LOGGER.warn("Geçersiz istek: PDF belgesi eksik");
@@ -69,6 +75,8 @@ public class PadesController {
             }
 
             boolean appendMode = Boolean.TRUE.equals(dto.getAppendMode());
+            inputSize = dto.getDocument().getSize();
+            sample = signatureMetrics.start("PAdES", "pdf", appendMode ? "append" : "replace");
             byte[] attachment = dto.getAttachment() != null && !dto.getAttachment().isEmpty() 
                 ? dto.getAttachment().getBytes() 
                 : null;
@@ -89,6 +97,8 @@ public class PadesController {
                 );
             }
 
+            sample.success(inputSize,
+                    result.getSignedDocument() != null ? result.getSignedDocument().length : -1);
             LOGGER.info("PAdES imzası başarıyla oluşturuldu (ekleme modu: {})", appendMode);
 
             // Content-Type açıkça set ediliyor — Spring default'ta byte[] body için
@@ -102,6 +112,9 @@ public class PadesController {
 
         } catch (Exception e) {
             LOGGER.error("PAdES imzası oluşturulurken hata", e);
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             byte[] documentBytes = null;
             String fileName = null;
             String contentType = null;
@@ -109,7 +122,11 @@ public class PadesController {
                 if (dto.getDocument() != null && !dto.getDocument().isEmpty()) {
                     fileName = dto.getDocument().getOriginalFilename();
                     contentType = dto.getDocument().getContentType();
-                    documentBytes = dto.getDocument().getBytes();
+                    // OOM koruması: getBytes() ile ikinci kopya oluşturmadan önce
+                    // boyut/eşik kontrolü.
+                    if (signerNotifier.shouldReadContentForFailure(dto.getDocument().getSize())) {
+                        documentBytes = dto.getDocument().getBytes();
+                    }
                 }
             } catch (Exception readEx) {
                 LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());

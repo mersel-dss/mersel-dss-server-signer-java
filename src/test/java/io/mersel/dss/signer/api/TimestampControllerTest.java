@@ -52,7 +52,9 @@ public class TimestampControllerTest {
     @BeforeEach
     void setUp() {
         timestampController = new TimestampController(
-            timestampService, timestampConfigurationService, signerNotifier);
+            timestampService, timestampConfigurationService, signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
     }
 
     @Test

@@ -5,6 +5,7 @@ import io.mersel.dss.signer.api.dtos.TimestampStatusDto;
 import io.mersel.dss.signer.api.dtos.TimestampValidationResponseDto;
 import io.mersel.dss.signer.api.exceptions.TimestampException;
 import io.mersel.dss.signer.api.models.ErrorModel;
+import io.mersel.dss.signer.api.services.metrics.SignatureMetrics;
 import io.mersel.dss.signer.api.services.notification.SignerNotifier;
 import io.mersel.dss.signer.api.services.timestamp.TimestampConfigurationService;
 import io.mersel.dss.signer.api.services.timestamp.TimestampService;
@@ -37,14 +38,17 @@ public class TimestampController {
     private final TimestampService timestampService;
     private final TimestampConfigurationService timestampConfigurationService;
     private final SignerNotifier signerNotifier;
+    private final SignatureMetrics signatureMetrics;
 
     public TimestampController(
             TimestampService timestampService,
             TimestampConfigurationService timestampConfigurationService,
-            SignerNotifier signerNotifier) {
+            SignerNotifier signerNotifier,
+            SignatureMetrics signatureMetrics) {
         this.timestampService = timestampService;
         this.timestampConfigurationService = timestampConfigurationService;
         this.signerNotifier = signerNotifier;
+        this.signatureMetrics = signatureMetrics;
     }
 
     @Operation(
@@ -90,7 +94,9 @@ public class TimestampController {
                 example = "SHA256"
             )
             String hashAlgorithm) {
-        
+
+        SignatureMetrics.Sample sample = null;
+        long inputSize = document != null ? document.getSize() : -1;
         try {
             LOGGER.info("Zaman damgası alma isteği alındı. Dosya: {}, Hash: {}", 
                     document.getOriginalFilename(), hashAlgorithm);
@@ -106,6 +112,8 @@ public class TimestampController {
                     ));
             }
 
+            sample = signatureMetrics.start("Timestamp", "binary", hashAlgorithm);
+
             // Dosyayı byte array'e çevir
             byte[] documentBytes = document.getBytes();
             
@@ -115,7 +123,9 @@ public class TimestampController {
             
             // Timestamp token'ı binary olarak dön, metadata header'larda
             byte[] timestampToken = java.util.Base64.getDecoder().decode(response.getTimestampToken());
-            
+
+            sample.success(inputSize, timestampToken != null ? timestampToken.length : -1);
+
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .header("Content-Disposition", "attachment; filename=timestamp.tst")
@@ -128,6 +138,9 @@ public class TimestampController {
 
         } catch (TimestampException e) {
             LOGGER.error("Zaman damgası alma hatası: {}", e.getMessage());
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             notifyTimestampFailure(document, e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -135,6 +148,9 @@ public class TimestampController {
 
         } catch (Exception e) {
             LOGGER.error("Beklenmeyen hata", e);
+            if (sample != null) {
+                sample.failure(inputSize);
+            }
             notifyTimestampFailure(document, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -156,7 +172,11 @@ public class TimestampController {
             if (document != null && !document.isEmpty()) {
                 fileName = document.getOriginalFilename();
                 contentType = document.getContentType();
-                documentBytes = document.getBytes();
+                // OOM koruması: getBytes() ile ikinci kopya oluşturmadan önce
+                // boyut/eşik kontrolü.
+                if (signerNotifier.shouldReadContentForFailure(document.getSize())) {
+                    documentBytes = document.getBytes();
+                }
             }
         } catch (Exception readEx) {
             LOGGER.debug("Notifier için dosya bytes okunamadı: {}", readEx.getMessage());

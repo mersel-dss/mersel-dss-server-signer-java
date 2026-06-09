@@ -19,7 +19,7 @@ import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.validation.CertificateVerifier;
 import eu.europa.esig.dss.spi.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.spi.x509.CertificateSource;
-import eu.europa.esig.dss.spi.x509.CommonCertificateSource;
+import eu.europa.esig.dss.spi.x509.ListCertificateSource;
 import eu.europa.esig.dss.validation.SignedDocumentValidator;
 import eu.europa.esig.dss.xades.XAdESSignatureParameters;
 import eu.europa.esig.dss.xades.reference.DSSReference;
@@ -160,6 +160,10 @@ public class XAdESSignatureService {
         } catch (Exception e) {
             LOGGER.error("XAdES imzası oluşturulurken hata", e);
             throw new SignatureException("XAdES imzası oluşturulamadı", e);
+        } finally {
+            // Thread-local adjunct sertifikalarını temizle (thread-pool yeniden
+            // kullanımında sızıntı / başka isteğe bulaşma olmasın).
+            clearThreadLocalAdjunct();
         }
     }
 
@@ -273,32 +277,97 @@ public class XAdESSignatureService {
     }
 
     /**
+     * Paylaşılan singleton verifier'a {@link ThreadLocalAdjunctCertificateSource}
+     * kurulurken oluşabilecek install yarışını engellemek için kilit.
+     */
+    private final Object adjunctInstallLock = new Object();
+
+    /**
      * İmzalama sertifika zincirini doğrulayıcının yardımcı kaynağına ekler.
      * Bu, DSS doğrulayıcısının zinciri çevrimiçi bulabilmesini sağlar.
+     *
+     * <p><strong>Eş zamanlılık:</strong> {@code certificateVerifier} paylaşılan
+     * singleton'dır ve {@code signatureSemaphore} birden fazla eş zamanlı imzaya
+     * izin verir. Bu yüzden zincir, verifier'a {@link ThreadLocalAdjunctCertificateSource}
+     * üzerinden <em>thread-izole</em> yazılır — eş zamanlı istekler birbirinin
+     * adjunct kaynağını ezmez. Kaynak gerekirse tek seferlik (lazy, senkron)
+     * kurulur; istek bitiminde {@link #clearThreadLocalAdjunct()} ile temizlenir.</p>
      */
     private void addSigningCertificateChainToVerifier(SigningMaterial material) {
-        if (!(certificateVerifier instanceof CommonCertificateVerifier)) {
+        ThreadLocalAdjunctCertificateSource adjunct = resolveThreadLocalAdjunct();
+        if (adjunct == null) {
             return;
         }
 
-        CommonCertificateVerifier commonVerifier = (CommonCertificateVerifier) certificateVerifier;
-        CertificateSource adjunctSource = commonVerifier.getAdjunctCertSources();
-
-        CommonCertificateSource adjunct;
-        if (adjunctSource instanceof CommonCertificateSource) {
-            adjunct = (CommonCertificateSource) adjunctSource;
-        } else {
-            adjunct = new CommonCertificateSource();
-            commonVerifier.setAdjunctCertSources(adjunct);
-        }
-
-        // İmzalama zincirindeki tüm sertifikaları ekle
+        // Aynı thread'de önceki bir isteğin artığı kalmasın
+        adjunct.resetForCurrentThread();
         for (CertificateToken cert : material.getCertificateTokens()) {
             adjunct.addCertificate(cert);
         }
 
-        LOGGER.debug("Doğrulayıcıya {} adet sertifika eklendi",
+        LOGGER.debug("Doğrulayıcıya {} adet sertifika eklendi (thread-local)",
                 material.getCertificateTokens().size());
+    }
+
+    /**
+     * İstek bitiminde geçerli thread'in adjunct sertifikalarını temizler.
+     * Thread-pool yeniden kullanımında bellek tutulmasını ve başka istek
+     * tiplerine (CAdES / doğrulama) sertifika sızmasını önler.
+     */
+    private void clearThreadLocalAdjunct() {
+        if (!(certificateVerifier instanceof CommonCertificateVerifier)) {
+            return;
+        }
+        ListCertificateSource adjunctSources =
+                ((CommonCertificateVerifier) certificateVerifier).getAdjunctCertSources();
+        if (adjunctSources == null) {
+            return;
+        }
+        for (CertificateSource src : adjunctSources.getSources()) {
+            if (src instanceof ThreadLocalAdjunctCertificateSource) {
+                ((ThreadLocalAdjunctCertificateSource) src).resetForCurrentThread();
+            }
+        }
+    }
+
+    /**
+     * Paylaşılan verifier'daki {@link ThreadLocalAdjunctCertificateSource}'u bulur;
+     * yoksa tek seferlik kurar. Verifier {@code CommonCertificateVerifier} değilse
+     * (beklenmez) {@code null} döner ve zincir ekleme atlanır — baseline imza
+     * bundan etkilenmez.
+     */
+    private ThreadLocalAdjunctCertificateSource resolveThreadLocalAdjunct() {
+        if (!(certificateVerifier instanceof CommonCertificateVerifier)) {
+            return null;
+        }
+        CommonCertificateVerifier commonVerifier = (CommonCertificateVerifier) certificateVerifier;
+
+        ThreadLocalAdjunctCertificateSource existing = findThreadLocalAdjunct(commonVerifier);
+        if (existing != null) {
+            return existing;
+        }
+        synchronized (adjunctInstallLock) {
+            existing = findThreadLocalAdjunct(commonVerifier);
+            if (existing != null) {
+                return existing;
+            }
+            ThreadLocalAdjunctCertificateSource installed = new ThreadLocalAdjunctCertificateSource();
+            commonVerifier.addAdjunctCertSources(installed);
+            return installed;
+        }
+    }
+
+    private ThreadLocalAdjunctCertificateSource findThreadLocalAdjunct(CommonCertificateVerifier verifier) {
+        ListCertificateSource adjunctSources = verifier.getAdjunctCertSources();
+        if (adjunctSources == null) {
+            return null;
+        }
+        for (CertificateSource src : adjunctSources.getSources()) {
+            if (src instanceof ThreadLocalAdjunctCertificateSource) {
+                return (ThreadLocalAdjunctCertificateSource) src;
+            }
+        }
+        return null;
     }
 
     /**

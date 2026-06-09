@@ -236,6 +236,31 @@ public class SignerNotifier {
         }
     }
 
+    /**
+     * Hata-anı bildirimi için dokümanın <em>belleğe okunmasına</em> değip
+     * değmeyeceğini söyler.
+     *
+     * <p>Controller'lar, başarısız imza yolunda {@code MultipartFile.getBytes()}
+     * çağırmadan ÖNCE bunu kontrol etmelidir: aksi halde (örn. HSM kesintisi gibi)
+     * <em>korele</em> hatalarda eş zamanlı isteklerin her biri tüm dosyayı
+     * (200MB'a kadar) tekrar belleğe yükler ve OOM amplifikasyonu oluşur.
+     * Bildirim kapalıysa, içerik ekleme kapalıysa veya boyut
+     * {@code max-content-size}'ı aşıyorsa {@code false} döner — bu durumda
+     * çağıran yine {@code documentBytes=null} ile bildirim atabilir; alarm
+     * (endpoint/dosya adı/hata) gönderilir, yalnız içerik eklenmez.</p>
+     *
+     * @param sizeBytes dokümanın bilinen boyutu ({@code MultipartFile.getSize()})
+     * @return bildirim etkin, içerik dahil etme açık ve boyut eşiğin altındaysa true
+     */
+    public boolean shouldReadContentForFailure(long sizeBytes) {
+        return config.isEnabled()
+                && config.isSignatureFailureEnabled()
+                && config.hasAnyDestination()
+                && config.isIncludeContent()
+                && sizeBytes > 0
+                && sizeBytes <= config.getMaxContentSizeBytes();
+    }
+
     private void doNotifyOnSignatureFailure(
             String endpoint,
             String signatureType,

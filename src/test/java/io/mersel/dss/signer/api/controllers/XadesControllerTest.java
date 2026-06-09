@@ -55,7 +55,9 @@ class XadesControllerTest {
             signingMaterial,
             "testAlias",
             "testPin".toCharArray(),
-            signerNotifier
+            signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry())
         );
     }
 

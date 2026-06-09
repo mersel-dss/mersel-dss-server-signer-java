@@ -76,7 +76,9 @@ class MultipartLimitHttpContractTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         CadesController cadesController = new CadesController(
-            cadesSignatureService, null, signerNotifier);
+            cadesSignatureService, null, signerNotifier,
+            new io.mersel.dss.signer.api.services.metrics.SignatureMetrics(
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         // Interceptor — her request'i intercept eder ve içinde
         // MaxUploadSizeExceededException atar. Spring DispatcherServlet
