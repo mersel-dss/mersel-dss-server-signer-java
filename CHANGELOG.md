@@ -7,6 +7,8 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-11-11
+
 ### Added
 
 - **`POST /v1/usercountersign` — entegratör seri imzası (counter signature).**
