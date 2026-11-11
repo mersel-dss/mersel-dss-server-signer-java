@@ -233,11 +233,7 @@ public class TestUserCounterSignatureService {
             keyStore.load(in, pin);
         }
 
-        String alias = testCompany.getAlias();
-        if (!keyStore.isKeyEntry(alias)) {
-            throw new SignatureException("TEST_CERT_NOT_FOUND",
-                    "Alias '" + alias + "' PFX içinde key entry değil: " + pfxPath);
-        }
+        String alias = resolveKeyAlias(keyStore, testCompany.getAlias(), pfxPath);
         KeyStore.PrivateKeyEntry entry = (KeyStore.PrivateKeyEntry)
                 keyStore.getEntry(alias, new KeyStore.PasswordProtection(pin));
         if (entry == null) {
@@ -245,6 +241,35 @@ public class TestUserCounterSignatureService {
                     "Alias '" + alias + "' için PrivateKeyEntry alınamadı: " + pfxPath);
         }
         return entry;
+    }
+
+    /**
+     * PFX içindeki key entry alias'ını çözer. Kamu SM convention'ı alias
+     * {@code "1"}'dir; ancak aynı JVM'de daha önce
+     * {@code KeyStoreLoaderService} çalışıp BouncyCastle'ı priority 1
+     * kurduysa PKCS12 reader friendlyName yerine localKeyId hex'ini alias
+     * yapar (bkz. E2eSigningMaterialFactory notu). Test PFX'lerinde tek key
+     * entry olduğundan bilinen alias bulunamazsa iterasyonla ilk key entry
+     * kullanılır — provider sırasından bağımsız sağlamlık.
+     */
+    private static String resolveKeyAlias(KeyStore keyStore, String preferredAlias, Path pfxPath)
+            throws Exception {
+        if (keyStore.isKeyEntry(preferredAlias)) {
+            return preferredAlias;
+        }
+
+        java.util.Enumeration<String> aliases = keyStore.aliases();
+        while (aliases.hasMoreElements()) {
+            String alias = aliases.nextElement();
+            if (keyStore.isKeyEntry(alias)) {
+                LOGGER.debug("Tercih edilen alias '{}' bulunamadı; PFX içindeki tek key entry "
+                        + "alias'ı kullanılıyor: '{}' ({})", preferredAlias, alias, pfxPath);
+                return alias;
+            }
+        }
+
+        throw new SignatureException("TEST_CERT_NOT_FOUND",
+                "PFX içinde key entry bulunamadı: " + pfxPath);
     }
 
     /* ================================================================== */

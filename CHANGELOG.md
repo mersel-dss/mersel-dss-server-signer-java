@@ -7,6 +7,20 @@ ve bu proje [Semantic Versioning](https://semver.org/spec/v2.0.0.html) kullanmak
 
 ## [Unreleased]
 
+### Added
+
+- **`POST /v1/usercountersign` — entegratör seri imzası (counter signature).**
+  Entegratörün kendi aktif sertifikasını alt kullanıcı gibi kullanarak
+  CounterSignature atabilmesi (GİB'de kendi kullanıcısını açma /
+  self-activation, ör. e-MM HrXml akışı) için geliştirilmiştir. İmza ana
+  `SigningMaterial` ile atılır; PFX ve HSM (PKCS#11) backend'lerinin ikisini
+  de destekler.
+- **Feature flag — varsayılan KAPALI:** endpoint yalnızca
+  `INTEGRATOR_COUNTERSIGN_ENABLED=true` /
+  `mersel.signer.integrator-countersign.enabled=true` verildiğinde oluşur;
+  aksi halde 404 döner. Self-activation tamamlandıktan sonra tekrar
+  kapatılması önerilir.
+
 ## [2.0.0] - 2026-10-01
 
 ### Changed (BREAKING — bu sürüm MAJOR'dur: 2.0.0)
