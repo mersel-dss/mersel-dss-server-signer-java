@@ -173,11 +173,17 @@ public class SignatureValidationService {
                 }
             }
 
-            return false; // Conservative: allow if inconclusive
+            // Fail-closed: DSS zaten TOTAL_PASSED dışı bir sonuç döndürdü ve imza
+            // sertifikasının güvenilir köke ulaştığını gösteremedik. Bu durumu
+            // "kabul edilebilir" saymak fail-open olurdu; imza zinciri sorunu say.
+            LOGGER.error("Signing certificate chain could not be established to a trusted root");
+            return true;
 
         } catch (Exception e) {
-            LOGGER.warn("Error checking signing certificate chain: {}", e.getMessage());
-            return false; // Don't block on analysis errors
+            // Fail-closed: güvenlik analizi sırasında hata olması "geçerli" anlamına
+            // gelmez. Doğrulayamadığımız bir zinciri reddediyoruz.
+            LOGGER.error("Error checking signing certificate chain, treating as invalid: {}", e.getMessage(), e);
+            return true;
         }
     }
 

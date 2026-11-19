@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import io.mersel.dss.signer.api.config.LogHeadersFilter;
 import io.mersel.dss.signer.api.config.SignerNotificationConfiguration;
 import io.mersel.dss.signer.api.exceptions.SignatureException;
+import io.mersel.dss.signer.api.util.CryptoUtils;
 import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.MediaType;
@@ -1054,11 +1055,7 @@ public class SignerNotifier {
             Mac mac = Mac.getInstance(HMAC_ALGORITHM);
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
             byte[] raw = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(raw.length * 2);
-            for (byte b : raw) {
-                hex.append(String.format("%02x", b & 0xff));
-            }
-            return hex.toString();
+            return CryptoUtils.bytesToHex(raw);
         } catch (Exception e) {
             logger.warn("HMAC-SHA256 hesaplanamadı: {}", e.getMessage());
             return null;
@@ -1090,11 +1087,7 @@ public class SignerNotifier {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] hash = md.digest(bytes);
-            StringBuilder sb = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                sb.append(String.format("%02x", b & 0xff));
-            }
-            return sb.toString();
+            return CryptoUtils.bytesToHex(hash);
         } catch (NoSuchAlgorithmException e) {
             // SHA-256 her JRE'de zorunlu — pratikte buraya düşmez.
             return null;

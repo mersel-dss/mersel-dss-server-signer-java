@@ -43,6 +43,16 @@ public class KamuSMXmlDepoOnlineResolver extends AbstractKamuSMXmlDepoResolver {
                 .build();
         this.resourceLoader = resourceLoader;
         this.rootUrl = rootUrl;
+
+        // Güven listesi (trust anchor) düz HTTP üzerinden çekiliyorsa uyar: bu kanal
+        // MITM'e açıktır — saldırgan yanıtı değiştirip sahte bir kök enjekte ederse
+        // ona zincirlenen sahte imzalar "geçerli" görünebilir. Kalıcı çözüm HTTPS +
+        // imza/pin doğrulaması ya da çevrimdışı (dosya) resolver kullanmaktır.
+        if (rootUrl != null && rootUrl.toLowerCase().startsWith("http://")) {
+            logger.warn("GUVENLIK UYARISI: KamuSM kok sertifika deposu duz HTTP uzerinden cekiliyor ({}). "
+                    + "MITM riski var; 'kamusm.root.url' degerini mumkunse HTTPS bir kaynaga alin "
+                    + "veya cevrimdisi resolver kullanin.", rootUrl);
+        }
     }
 
     @Override

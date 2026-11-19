@@ -5,7 +5,6 @@ import io.mersel.dss.signer.api.models.configurations.SignatureServiceConfigurat
 import io.mersel.dss.signer.api.services.CertificateInfoService;
 import io.mersel.dss.signer.api.services.keystore.KeyStoreProvider;
 import io.mersel.dss.signer.api.services.keystore.PKCS11KeyStoreProvider;
-import io.mersel.dss.signer.api.services.keystore.PfxKeyStoreProvider;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -90,7 +89,8 @@ public class CertificateInfoController {
 
             Map<String, Object> errorResponse = new HashMap<>();
             errorResponse.put("success", false);
-            errorResponse.put("error", e.getMessage());
+            // Ham exception mesajı istemciye sızdırılmaz (iç detay ifşasını önlemek için)
+            errorResponse.put("error", "Sertifika listesi alınamadı.");
 
             return ResponseEntity.status(500).body(errorResponse);
         }
@@ -116,19 +116,20 @@ public class CertificateInfoController {
             info.put("success", true);
             info.put("keystoreType", keyStoreProvider.getType());
 
+            // NOT: Dosya sistemi (pfxPath) ve HSM kütüphane yolu (library) bilinçli
+            // olarak yanıta konmaz — bunlar sunucunun iç yerleşimini ifşa eder ve
+            // saldırgan için keşif değeri taşır. Yalnızca fonksiyonel kimlikler döner.
             if (keyStoreProvider instanceof PKCS11KeyStoreProvider) {
-                info.put("library", config.getPkcs11LibraryPath());
                 info.put("slot", config.getPkcs11Slot());
-            } else if (keyStoreProvider instanceof PfxKeyStoreProvider) {
-                info.put("pfxPath", config.getPfxPath());
             }
 
             info.put("certificateAlias", config.getCertificateAlias());
             info.put("certificateSerialNumber", config.getCertificateSerialNumber());
 
         } catch (Exception e) {
+            LOGGER.error("Keystore bilgisi alınamadı", e);
             info.put("success", false);
-            info.put("error", e.getMessage());
+            info.put("error", "Keystore bilgisi alınamadı.");
         }
 
         return ResponseEntity.ok(info);

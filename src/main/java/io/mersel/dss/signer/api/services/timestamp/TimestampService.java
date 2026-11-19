@@ -20,7 +20,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.security.MessageDigest;
-import java.text.SimpleDateFormat;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 /**
@@ -32,10 +33,16 @@ import java.util.*;
 public class TimestampService {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(TimestampService.class);
-    private static final SimpleDateFormat ISO_DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-    
-    static {
-        ISO_DATE_FORMAT.setTimeZone(TimeZone.getTimeZone("UTC"));
+
+    // SimpleDateFormat thread-safe degildir; bu servis singleton olup timestamp
+    // uclari paralel isteklerde ayni ornek uzerinden format() cagirdigi icin
+    // immutable ve thread-safe DateTimeFormatter kullaniliyor. Pattern'deki 'Z'
+    // literal olup cikti bicimi (yyyy-MM-dd'T'HH:mm:ss'Z', UTC) aynen korunur.
+    private static final DateTimeFormatter ISO_DATE_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC);
+
+    private static String formatIsoUtc(Date date) {
+        return ISO_DATE_FORMAT.format(date.toInstant());
     }
 
     private final TimestampConfigurationService timestampConfigurationService;
@@ -98,7 +105,7 @@ public class TimestampService {
             // Response DTO'yu oluştur
             TimestampResponseDto response = new TimestampResponseDto();
             response.setTimestampToken(Base64.getEncoder().encodeToString(timestampBytes));
-            response.setTimestamp(ISO_DATE_FORMAT.format(dssToken.getGenerationTime()));
+            response.setTimestamp(formatIsoUtc(dssToken.getGenerationTime()));
             response.setHashAlgorithm(digestAlgorithm.getName());
             response.setSerialNumber(dssToken.getDSSIdAsString());
             
@@ -171,7 +178,7 @@ public class TimestampService {
             }
             
             // Temel bilgileri doldur (BouncyCastle token'dan)
-            response.setTimestamp(ISO_DATE_FORMAT.format(bcToken.getTimeStampInfo().getGenTime()));
+            response.setTimestamp(formatIsoUtc(bcToken.getTimeStampInfo().getGenTime()));
             
             // Hash algoritmasını hem isim hem OID olarak set et
             String hashAlgOid = bcToken.getTimeStampInfo().getHashAlgorithm().getAlgorithm().getId();
@@ -244,8 +251,8 @@ public class TimestampService {
                 
                 // Sertifika geçerlilik tarihlerini kontrol et
                 Date now = new Date();
-                response.setCertificateNotBefore(ISO_DATE_FORMAT.format(signerCert.getNotBefore()));
-                response.setCertificateNotAfter(ISO_DATE_FORMAT.format(signerCert.getNotAfter()));
+                response.setCertificateNotBefore(formatIsoUtc(signerCert.getNotBefore()));
+                response.setCertificateNotAfter(formatIsoUtc(signerCert.getNotAfter()));
                 
                 boolean certValid = now.after(signerCert.getNotBefore()) && now.before(signerCert.getNotAfter());
                 response.setCertificateValid(certValid);

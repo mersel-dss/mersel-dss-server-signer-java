@@ -2,9 +2,8 @@ package io.mersel.dss.signer.api.services;
 
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
+import io.mersel.dss.signer.api.util.SecurityProviderInitializer;
 import io.mersel.dss.signer.api.util.xml.SecureXmlFactories;
-import org.apache.commons.io.IOUtils;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -14,7 +13,7 @@ import org.w3c.dom.NodeList;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.ByteArrayInputStream;
-import java.security.Security;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -34,10 +33,10 @@ public abstract class AbstractKamuSMXmlDepoResolver implements TrustedRootCertif
     protected final AtomicReference<List<X509Certificate>> trustedRoots = new AtomicReference<>(Collections.emptyList());
     protected final AtomicReference<List<CertificateToken>> trustedRootTokens = new AtomicReference<>(Collections.emptyList());
     
-    protected CommonTrustedCertificateSource trustedCertificateSource;
+    protected volatile CommonTrustedCertificateSource trustedCertificateSource;
 
     static {
-        Security.addProvider(new BouncyCastleProvider());
+        SecurityProviderInitializer.ensureBouncyCastle();
     }
 
     /**
@@ -54,7 +53,7 @@ public abstract class AbstractKamuSMXmlDepoResolver implements TrustedRootCertif
         // yine kapalı (DOCTYPE reddedilir).
         DocumentBuilderFactory dbf = SecureXmlFactories.newDocumentBuilderFactory(false);
         DocumentBuilder builder = dbf.newDocumentBuilder();
-        Document document = builder.parse(new ByteArrayInputStream(xmlBody.getBytes()));
+        Document document = builder.parse(new ByteArrayInputStream(xmlBody.getBytes(StandardCharsets.UTF_8)));
 
         List<String> values = new ArrayList<String>();
 
@@ -109,17 +108,19 @@ public abstract class AbstractKamuSMXmlDepoResolver implements TrustedRootCertif
      * Trusted certificate source'u gunceller
      */
     protected void updateTrustedCertificateSource() {
-        if (trustedCertificateSource == null) {
-            trustedCertificateSource = new CommonTrustedCertificateSource();
-        }
-        
-        // KamuSM sertifikalarini ekle
+        // Her yenilemede sıfırdan bir kaynak kurulup atomik olarak yayımlanır:
+        //  (1) request thread'leri mutasyona uğrayan bir koleksiyonu okumaz
+        //      (volatile alana tek atama ile güvenli yayım),
+        //  (2) depodan kaldırılan kökler bir sonraki yenilemede güven listesinden
+        //      gerçekten düşer (eskisi additive olduğu için düşmüyordu).
+        CommonTrustedCertificateSource newSource = new CommonTrustedCertificateSource();
         for (CertificateToken token : trustedRootTokens.get()) {
-            trustedCertificateSource.addCertificate(token);
+            newSource.addCertificate(token);
         }
-        
-        logger.info("Trusted certificate source updated with {} certificates", 
-            trustedCertificateSource.getCertificates().size());
+        this.trustedCertificateSource = newSource;
+
+        logger.info("Trusted certificate source updated with {} certificates",
+            newSource.getCertificates().size());
     }
 
     @Override
@@ -134,18 +135,22 @@ public abstract class AbstractKamuSMXmlDepoResolver implements TrustedRootCertif
 
     @Override
     public CommonTrustedCertificateSource getTrustedCertificateSource() {
-        if (trustedCertificateSource == null) {
+        CommonTrustedCertificateSource local = trustedCertificateSource;
+        if (local == null) {
             updateTrustedCertificateSource();
+            local = trustedCertificateSource;
         }
-        return trustedCertificateSource;
+        return local;
     }
 
     @Override
-    public void addTrustedCertificate(CertificateToken certificate) {
-        if (trustedCertificateSource == null) {
-            trustedCertificateSource = new CommonTrustedCertificateSource();
+    public synchronized void addTrustedCertificate(CertificateToken certificate) {
+        CommonTrustedCertificateSource local = trustedCertificateSource;
+        if (local == null) {
+            local = new CommonTrustedCertificateSource();
+            trustedCertificateSource = local;
         }
-        trustedCertificateSource.addCertificate(certificate);
+        local.addCertificate(certificate);
         logger.info("Added trusted certificate: {}", certificate.getSubject());
     }
 

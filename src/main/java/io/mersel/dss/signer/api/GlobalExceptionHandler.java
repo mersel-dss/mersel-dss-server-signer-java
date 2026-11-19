@@ -54,9 +54,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(io.mersel.dss.signer.api.exceptions.KeyStoreException.class)
     public ResponseEntity<ErrorModel> handleKeyStoreException(
             io.mersel.dss.signer.api.exceptions.KeyStoreException ex) {
+        // Tam detay (keystore yolu, alias, serial vb.) yalnızca sunucu log'una;
+        // HTTP yanıtına konmaz — aksi halde dosya sistemi/HSM yerleşimi ifşa olur.
         LOGGER.error("KeyStore işlemi başarısız: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorModel(ex.getErrorCode(), ex.getMessage()));
+            .body(new ErrorModel(ex.getErrorCode(), "Anahtar deposu işlemi başarısız oldu."));
     }
 
     /**
@@ -111,10 +113,11 @@ public class GlobalExceptionHandler {
         UnrecoverableKeyException.class
     })
     public ResponseEntity<ErrorModel> handleSecurityException(Exception ex) {
+        // Sertifika/anahtar hatalarının ayrıntısı (yanlış PIN, alias, algoritma vb.)
+        // istemciye sızdırılmaz; yalnızca sunucu log'una yazılır.
         LOGGER.error("Güvenlik işlemi başarısız: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-            .body(new ErrorModel("SECURITY_ERROR", 
-                "Bir güvenlik hatası oluştu: " + ex.getMessage()));
+            .body(new ErrorModel("SECURITY_ERROR", "Bir güvenlik hatası oluştu."));
     }
 
     /**

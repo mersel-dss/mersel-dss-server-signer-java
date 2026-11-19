@@ -2,7 +2,8 @@ package io.mersel.dss.signer.api.services;
 
 import eu.europa.esig.dss.model.x509.CertificateToken;
 import eu.europa.esig.dss.spi.x509.CommonTrustedCertificateSource;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import io.mersel.dss.signer.api.util.SecurityProviderInitializer;
+import io.mersel.dss.signer.api.util.Utilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,7 +14,6 @@ import org.springframework.stereotype.Service;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.security.Security;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -36,46 +36,17 @@ public class CertificateFolderResolver implements TrustedRootCertificateResolver
     private final AtomicReference<List<X509Certificate>> trustedRoots = new AtomicReference<>(Collections.emptyList());
     private final AtomicReference<List<CertificateToken>> trustedRootTokens = new AtomicReference<>(Collections.emptyList());
     
-    private CommonTrustedCertificateSource trustedCertificateSource;
+    private volatile CommonTrustedCertificateSource trustedCertificateSource;
 
     static {
-        Security.addProvider(new BouncyCastleProvider());
+        SecurityProviderInitializer.ensureBouncyCastle();
     }
 
     public CertificateFolderResolver(ResourceLoader resourceLoader,
                                      @Value("${trusted.root.cert.folder.path:}") String folderPath) {
         this.resourceLoader = resourceLoader;
-        // Path'teki baştaki ve sondaki tırnakları temizle (Spring properties'te çift tırnak kullanımı için)
-        if (folderPath != null) {
-            folderPath = folderPath.trim();
-            // Çift tırnak veya tek tırnak ile başlayıp bitiyorsa kaldır
-            if ((folderPath.startsWith("\"") && folderPath.endsWith("\"")) ||
-                (folderPath.startsWith("'") && folderPath.endsWith("'"))) {
-                folderPath = folderPath.substring(1, folderPath.length() - 1);
-            }
-            // Encoding sorununu çöz: Eğer path ISO-8859-1 olarak yanlış okunduysa UTF-8'e çevir
-            try {
-                // ISO-8859-1 olarak yanlış okunmuş gibi görünen karakterleri UTF-8'e çevir
-                // Örnek: "Ãn" -> "Ön", "HazÄ±rlÄ±k" -> "Hazırlık"
-                if (folderPath.contains("Ã") || folderPath.contains("Ä")) {
-                    byte[] bytes = folderPath.getBytes("ISO-8859-1");
-                    String correctedPath = new String(bytes, "UTF-8");
-                    // Eğer düzeltilmiş path Türkçe karakterler içeriyorsa kullan
-                    if (correctedPath.contains("Ö") || correctedPath.contains("ö") || 
-                        correctedPath.contains("ı") || correctedPath.contains("İ") ||
-                        correctedPath.contains("ş") || correctedPath.contains("Ş") ||
-                        correctedPath.contains("ğ") || correctedPath.contains("Ğ") ||
-                        correctedPath.contains("ü") || correctedPath.contains("Ü") ||
-                        correctedPath.contains("ç") || correctedPath.contains("Ç")) {
-                        folderPath = correctedPath;
-                        LOGGER.debug("Path encoding düzeltildi: {}", folderPath);
-                    }
-                }
-            } catch (Exception e) {
-                LOGGER.debug("Path encoding düzeltme hatası: {}", e.getMessage());
-            }
-        }
-        this.folderPath = folderPath;
+        // Tırnak temizleme + ISO-8859-1/UTF-8 mojibake onarımı ortak yardımcıda
+        this.folderPath = Utilities.sanitizeConfiguredPath(folderPath);
     }
 
     @Override
@@ -205,17 +176,19 @@ public class CertificateFolderResolver implements TrustedRootCertificateResolver
      * Trusted certificate source'u gunceller
      */
     private void updateTrustedCertificateSource() {
-        if (trustedCertificateSource == null) {
-            trustedCertificateSource = new CommonTrustedCertificateSource();
-        }
-        
-        // Klasörden yüklenen sertifikaları ekle
+        // Her yenilemede sıfırdan bir kaynak kurulup atomik olarak yayımlanır:
+        //  (1) request thread'leri mutasyona uğrayan bir koleksiyonu okumaz
+        //      (volatile alana tek atama ile güvenli yayım),
+        //  (2) klasörden kaldırılan sertifikalar bir sonraki yenilemede güven
+        //      listesinden gerçekten düşer (eskisi additive olduğu için düşmüyordu).
+        CommonTrustedCertificateSource newSource = new CommonTrustedCertificateSource();
         for (CertificateToken token : trustedRootTokens.get()) {
-            trustedCertificateSource.addCertificate(token);
+            newSource.addCertificate(token);
         }
-        
-        LOGGER.info("Trusted certificate source updated with {} certificates", 
-            trustedCertificateSource.getCertificates().size());
+        this.trustedCertificateSource = newSource;
+
+        LOGGER.info("Trusted certificate source updated with {} certificates",
+            newSource.getCertificates().size());
     }
 
     @Override
@@ -230,18 +203,22 @@ public class CertificateFolderResolver implements TrustedRootCertificateResolver
 
     @Override
     public CommonTrustedCertificateSource getTrustedCertificateSource() {
-        if (trustedCertificateSource == null) {
+        CommonTrustedCertificateSource local = trustedCertificateSource;
+        if (local == null) {
             updateTrustedCertificateSource();
+            local = trustedCertificateSource;
         }
-        return trustedCertificateSource;
+        return local;
     }
 
     @Override
-    public void addTrustedCertificate(CertificateToken certificate) {
-        if (trustedCertificateSource == null) {
-            trustedCertificateSource = new CommonTrustedCertificateSource();
+    public synchronized void addTrustedCertificate(CertificateToken certificate) {
+        CommonTrustedCertificateSource local = trustedCertificateSource;
+        if (local == null) {
+            local = new CommonTrustedCertificateSource();
+            trustedCertificateSource = local;
         }
-        trustedCertificateSource.addCertificate(certificate);
+        local.addCertificate(certificate);
         LOGGER.info("Added trusted certificate: {}", certificate.getSubject());
     }
 

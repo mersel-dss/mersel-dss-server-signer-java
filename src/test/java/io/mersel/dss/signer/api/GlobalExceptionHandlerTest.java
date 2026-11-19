@@ -232,5 +232,45 @@ class GlobalExceptionHandlerTest {
         assertTrue(response.getBody().getMessage().contains("multipart/form-data"),
             "Client'a doğru Content-Type'ı işaret eden mesaj olmalı");
     }
+
+    /**
+     * G-6: Uygulama {@link io.mersel.dss.signer.api.exceptions.KeyStoreException}
+     * mesajı keystore dosya yolu/alias gibi iç detay taşısa bile HTTP yanıtına
+     * bu detay sızmamalı (sadece sunucu log'una gider).
+     */
+    @Test
+    void testHandleKeyStoreException_doesNotLeakInternalDetail() {
+        io.mersel.dss.signer.api.exceptions.KeyStoreException exception =
+            new io.mersel.dss.signer.api.exceptions.KeyStoreException(
+                "PFX keystore yüklenemedi: /etc/secrets/kurum01.pfx");
+
+        ResponseEntity<ErrorModel> response =
+            exceptionHandler.handleKeyStoreException(exception);
+
+        assertEquals("KEYSTORE_ERROR", response.getBody().getCode());
+        assertFalse(response.getBody().getMessage().contains("/etc/secrets"),
+            "Dosya sistemi yolu HTTP yanıtına sızmamalı");
+        assertFalse(response.getBody().getMessage().contains(".pfx"),
+            "Keystore dosya adı HTTP yanıtına sızmamalı");
+    }
+
+    /**
+     * G-7: JCA güvenlik exception'larının ham mesajı (yanlış PIN, alias vb.)
+     * HTTP yanıtında ifşa edilmemeli.
+     */
+    @Test
+    void testHandleSecurityException_doesNotLeakExceptionMessage() {
+        Exception exception =
+            new UnrecoverableKeyException("alias=muhur-2024 icin yanlis PIN girildi");
+
+        ResponseEntity<ErrorModel> response =
+            exceptionHandler.handleSecurityException(exception);
+
+        assertEquals("SECURITY_ERROR", response.getBody().getCode());
+        assertFalse(response.getBody().getMessage().contains("PIN"),
+            "Ham güvenlik hatası detayı HTTP yanıtına sızmamalı");
+        assertFalse(response.getBody().getMessage().contains("alias"),
+            "Alias bilgisi HTTP yanıtına sızmamalı");
+    }
 }
 

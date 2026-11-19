@@ -1,5 +1,6 @@
 package io.mersel.dss.signer.api.services;
 
+import io.mersel.dss.signer.api.util.Utilities;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
@@ -31,37 +32,8 @@ public class KamuSMXmlDepoOfflineResolver extends AbstractKamuSMXmlDepoResolver 
     public KamuSMXmlDepoOfflineResolver(ResourceLoader resourceLoader,
                                           @Value("${kamusm.root.offline.path:}") String xmlFilePath) {
         this.resourceLoader = resourceLoader;
-        // Path'teki baştaki ve sondaki tırnakları temizle (Spring properties'te çift tırnak kullanımı için)
-        if (xmlFilePath != null) {
-            xmlFilePath = xmlFilePath.trim();
-            // Çift tırnak veya tek tırnak ile başlayıp bitiyorsa kaldır
-            if ((xmlFilePath.startsWith("\"") && xmlFilePath.endsWith("\"")) ||
-                (xmlFilePath.startsWith("'") && xmlFilePath.endsWith("'"))) {
-                xmlFilePath = xmlFilePath.substring(1, xmlFilePath.length() - 1);
-            }
-            // Encoding sorununu çöz: Eğer path ISO-8859-1 olarak yanlış okunduysa UTF-8'e çevir
-            try {
-                // ISO-8859-1 olarak yanlış okunmuş gibi görünen karakterleri UTF-8'e çevir
-                // Örnek: "Ãn" -> "Ön", "HazÄ±rlÄ±k" -> "Hazırlık"
-                if (xmlFilePath.contains("Ã") || xmlFilePath.contains("Ä")) {
-                    byte[] bytes = xmlFilePath.getBytes("ISO-8859-1");
-                    String correctedPath = new String(bytes, "UTF-8");
-                    // Eğer düzeltilmiş path Türkçe karakterler içeriyorsa kullan
-                    if (correctedPath.contains("Ö") || correctedPath.contains("ö") || 
-                        correctedPath.contains("ı") || correctedPath.contains("İ") ||
-                        correctedPath.contains("ş") || correctedPath.contains("Ş") ||
-                        correctedPath.contains("ğ") || correctedPath.contains("Ğ") ||
-                        correctedPath.contains("ü") || correctedPath.contains("Ü") ||
-                        correctedPath.contains("ç") || correctedPath.contains("Ç")) {
-                        xmlFilePath = correctedPath;
-                        logger.debug("Path encoding düzeltildi: {}", xmlFilePath);
-                    }
-                }
-            } catch (Exception e) {
-                logger.debug("Path encoding düzeltme hatası: {}", e.getMessage());
-            }
-        }
-        this.xmlFilePath = xmlFilePath;
+        // Tırnak temizleme + ISO-8859-1/UTF-8 mojibake onarımı ortak yardımcıda
+        this.xmlFilePath = Utilities.sanitizeConfiguredPath(xmlFilePath);
     }
 
     @Override
@@ -121,7 +93,7 @@ public class KamuSMXmlDepoOfflineResolver extends AbstractKamuSMXmlDepoResolver 
         // - C:/path/to/file.xml (Windows absolute path with forward slash)
         boolean isDirectFileSystemPath = xmlFilePath.startsWith("file:") || 
                                          xmlFilePath.startsWith("/") || 
-                                         (xmlFilePath.length() >= 2 && xmlFilePath.charAt(1) == ':' && 
+                                         (xmlFilePath.length() >= 3 && xmlFilePath.charAt(1) == ':' &&
                                           (xmlFilePath.charAt(2) == '\\' || xmlFilePath.charAt(2) == '/')) ||
                                          (!xmlFilePath.startsWith("classpath:") && !xmlFilePath.startsWith("http"));
         

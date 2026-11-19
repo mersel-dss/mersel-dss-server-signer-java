@@ -117,19 +117,13 @@ public class PAdESSignatureService {
                                byte[] attachment,
                                String attachmentFileName,
                                boolean appendMode,
-                               SigningMaterial material,
-                               PadesSignatureLevel signatureLevel) {
+                               SigningMaterial material) {
+        PdfReader reader = null;
         try {
-            // TSA gerektiren seviyelerde TSP source'u fail-fast olarak doğrula ve bağla —
-            // input okuma / attachment gömme gibi maliyetli işlerden ÖNCE.
-            if (signatureLevel != PadesSignatureLevel.PADES_BES) {
-                if (!timestampService.isAvailable()) {
-                    throw new TimestampException(signatureLevel
-                            + " profili istendi ancak timestamp sunucusu yapılandırılmamış. "
-                            + "TS_SERVER_HOST property'sini ayarlayın.");
-                }
-                padesService.setTspSource(timestampService.getTspSource());
-            }
+            reader = new PdfReader(pdfInputStream);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            PdfStamper stamper = PdfStamper.createSignature(
+                reader, outputStream, '\0', null, appendMode);
 
             byte[] pdfBytes = IOUtils.toByteArray(pdfInputStream);
 
@@ -171,6 +165,13 @@ public class PAdESSignatureService {
         } catch (Exception e) {
             LOGGER.error("PAdES imzası oluşturulurken hata", e);
             throw new SignatureException("PAdES imzası oluşturulamadı", e);
+        } finally {
+            // PdfReader alttaki multipart temp-file handle'ını tutar; başarı ve
+            // hata yolunun her ikisinde de kapatılmalı (aksi halde özellikle
+            // Windows'ta temp dosya silinemez / handle sızar).
+            if (reader != null) {
+                reader.close();
+            }
         }
     }
 
